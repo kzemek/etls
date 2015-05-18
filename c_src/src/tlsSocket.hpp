@@ -9,4 +9,14 @@
 #ifndef ERLANG_TLS_TLS_SOCKET_HPP
 #define ERLANG_TLS_TLS_SOCKET_HPP
 
+namespace one {
+namespace etls {
+
+class TLSSocket {
+
+};
+
+} // namespace etls
+} // namespace one
+
 #endif // ERLANG_TLS_TLS_SOCKET_HPP

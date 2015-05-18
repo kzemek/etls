@@ -4,8 +4,6 @@
 # This software is released under the MIT license cited in 'LICENSE.txt'
 #
 
-cmake_minimum_required(VERSION 3.0.0)
-project(erlang_tls C CXX)
+enable_testing()
 
-add_subdirectory(src)
-add_subdirectory(test) # TODO: EXCLUDE_FROM_ALL
+add_library(test_server OBJECT testServer.cpp)
