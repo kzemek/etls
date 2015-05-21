@@ -7,5 +7,16 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(erlang_tls C CXX)
 
+find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+set(Boost_USE_STATIC_LIBS    OFF)
+set(Boost_USE_MULTITHREADED   ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
+find_package(Boost COMPONENTS coroutine system REQUIRED)
+
+add_library(compile_options INTERFACE)
+target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)
+
 add_subdirectory(src)
 add_subdirectory(test) # TODO: EXCLUDE_FROM_ALL

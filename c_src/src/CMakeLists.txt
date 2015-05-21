@@ -10,4 +10,4 @@ set(SOURCES
     wrapper.cpp)
 
 add_library(erlang_tls SHARED ${SOURCES})
-target_compile_options(erlang_tls PRIVATE -std=c++14 -Wall -Wpedantic)
+target_link_libraries(erlang_tls PRIVATE compile_options)
