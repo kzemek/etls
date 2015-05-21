@@ -18,5 +18,14 @@ find_package(Boost COMPONENTS coroutine system REQUIRED)
 add_library(compile_options INTERFACE)
 target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)
 
+add_library(common_libraries INTERFACE)
+target_link_libraries(common_libraries INTERFACE
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${OPENSSL_LIBRARIES}
+    ${Boost_LIBRARIES})
+target_include_directories(common_libraries INTERFACE
+    ${OPENSSL_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIRS})
+
 add_subdirectory(src)
 add_subdirectory(test) # TODO: EXCLUDE_FROM_ALL

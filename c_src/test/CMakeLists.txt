@@ -9,10 +9,20 @@ enable_testing()
 
 file(COPY server.pem DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-add_library(test_server OBJECT testServer.cpp)
-target_include_directories(test_server SYSTEM PRIVATE
-    gmock/include
-    gtest/include)
+set(TESTS
+    tlsSocket_test.cpp)
 
-set_target_properties(gmock gmock_main gtest gtest_main test_server PROPERTIES
-    COMPILE_OPTIONS "$<TARGET_PROPERTY:compile_options,INTERFACE_COMPILE_OPTIONS>")
+foreach(TEST_FILE ${TESTS})
+    get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
+    add_executable(${TEST_NAME} ${TEST_FILE} testServer.hpp)
+    target_include_directories(${TEST_NAME} PRIVATE
+        gmock/include
+        gtest/include)
+    target_link_libraries(${TEST_NAME} PRIVATE
+        gtest_main
+        gmock
+        compile_options
+        common_libraries)
+
+    add_test(${TEST_NAME} ${TEST_NAME})
+endforeach()
