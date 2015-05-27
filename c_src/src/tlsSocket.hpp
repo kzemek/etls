@@ -9,11 +9,37 @@
 #ifndef ERLANG_TLS_TLS_SOCKET_HPP
 #define ERLANG_TLS_TLS_SOCKET_HPP
 
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/spawn.hpp>
+#include <boost/asio/ssl/stream.hpp>
+
+#include <memory>
+#include <string>
+
 namespace one {
 namespace etls {
 
 class TLSSocket {
+public:
+    using Ptr = std::shared_ptr<TLSSocket>;
 
+    TLSSocket(boost::asio::io_service &ioService);
+    void connectAsync(Ptr self, std::string host, const unsigned short port,
+        std::function<void(Ptr)> success,
+        std::function<void(std::string)> error);
+
+private:
+    void connect(Ptr self, std::string host, const unsigned short port,
+        boost::asio::yield_context yield);
+
+    std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
+    shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator);
+
+    boost::asio::ssl::context m_context;
+    boost::asio::io_service::strand m_strand;
+    boost::asio::ip::tcp::resolver m_resolver;
+    boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;
 };
 
 } // namespace etls

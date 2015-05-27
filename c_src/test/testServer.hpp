@@ -33,6 +33,7 @@ public:
 
     void send(boost::asio::const_buffer buffer);
     void receive(boost::asio::mutable_buffer buffer);
+    void fail();
 
 private:
     void startAccept(boost::asio::yield_context yield);
@@ -45,6 +46,7 @@ private:
     std::vector<std::unique_ptr<SSLSocket>> m_sessions;
 
     std::atomic<std::size_t> m_sessionsSize{0};
+    std::atomic<bool> m_fail{false};
 };
 
 TestServer::TestServer(const unsigned short port)
@@ -52,13 +54,22 @@ TestServer::TestServer(const unsigned short port)
     , m_acceptor{m_ioService,
           boost::asio::ip::tcp::endpoint{boost::asio::ip::tcp::v4(), port}}
     , m_context{boost::asio::ssl::context::tlsv12_server}
-    , m_thread{[=] { m_ioService.run(); }}
 {
+    m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+
     m_context.set_options(boost::asio::ssl::context::default_workarounds);
     m_context.set_verify_mode(boost::asio::ssl::context::verify_none);
     m_context.use_certificate_chain_file("server.pem");
     m_context.use_private_key_file(
-        "server.pem", boost::asio::ssl::context::pem);
+        "server.key", boost::asio::ssl::context::pem);
+
+    m_thread = std::thread{[this] {
+        try {
+            m_ioService.run();
+        }
+        catch (...) {
+        }
+    }};
 
     boost::asio::spawn(m_ioService, [=](auto y) { this->startAccept(y); });
 }
@@ -74,7 +85,7 @@ bool TestServer::waitForConnections(
 {
     const auto start = std::chrono::steady_clock::now();
     while (m_sessionsSize < number) {
-        if (std::chrono::steady_clock::now() < start + timeout)
+        if (std::chrono::steady_clock::now() > start + timeout)
             return false;
 
         std::this_thread::yield();
@@ -113,6 +124,8 @@ void TestServer::receive(boost::asio::mutable_buffer buffer)
         std::this_thread::yield();
 }
 
+void TestServer::fail() { m_fail = true; }
+
 void TestServer::startAccept(boost::asio::yield_context yield)
 {
     while (true) {
@@ -120,6 +133,11 @@ void TestServer::startAccept(boost::asio::yield_context yield)
 
         m_acceptor.async_accept(socket->lowest_layer(), yield);
         socket->lowest_layer().set_option(boost::asio::ip::tcp::no_delay{});
+
+        if (m_fail) {
+            socket->shutdown();
+            continue;
+        }
 
         socket->async_handshake(boost::asio::ssl::stream_base::server, yield);
         m_sessions.emplace_back(std::move(socket));
