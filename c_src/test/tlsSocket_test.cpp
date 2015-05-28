@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <string>
 #include <thread>
 #include <vector>
@@ -54,13 +55,18 @@ std::vector<char> randomData()
     return data;
 }
 
-bool waitFor(std::atomic<bool> &predicate)
+template <typename Pred> bool waitFor(Pred &&predicate)
 {
     const auto timeout = std::chrono::steady_clock::now() + 5s;
-    while (!predicate && std::chrono::steady_clock::now() < timeout)
+    while (!predicate() && std::chrono::steady_clock::now() < timeout)
         std::this_thread::yield();
 
-    return predicate;
+    return predicate();
+}
+
+template <> bool waitFor<>(std::atomic<bool> &predicate)
+{
+    return waitFor([&]() { return static_cast<bool>(predicate); });
 }
 
 } // namespace
@@ -107,7 +113,9 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionSuccess)
 {
     std::atomic<bool> called{false};
 
-    socket->connectAsync(socket, "127.0.0.1"s, port, [&] { called = true; });
+    socket->connectAsync(
+        socket, "127.0.0.1"s, port, [&](auto) { called = true; });
+
     ASSERT_TRUE(waitFor(called));
 }
 
@@ -117,7 +125,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
     std::atomic<bool> called{false};
 
     socket->connectAsync(
-        socket, "127.0.0.1"s, port, [] {}, [&](auto) { called = true; });
+        socket, "127.0.0.1"s, port, [](auto) {}, [&](auto) { called = true; });
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -154,4 +162,113 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSendError)
         socket, boost::asio::buffer(data), [] {}, [&](auto) { called = true; });
 
     ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTestC, shouldReceiveMessages)
+{
+    std::atomic<bool> called{false};
+
+    const auto data = randomData();
+    server.send(boost::asio::buffer(data));
+
+    std::vector<char> received(data.size());
+    socket->recvAsync(
+        socket, boost::asio::buffer(received), [&](auto) { called = true; });
+
+    waitFor(called);
+
+    ASSERT_EQ(data, received);
+}
+
+TEST_F(TLSSocketTestC, shouldNotifyOnRecvSuccess)
+{
+    std::atomic<bool> called{false};
+    auto data = randomData();
+
+    server.send(boost::asio::buffer(data));
+
+    socket->recvAsync(
+        socket, boost::asio::buffer(data), [&](auto) { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTestC, shouldNotifyOnRecvError)
+{
+    std::atomic<bool> called{false};
+    auto data = randomData();
+
+    server.fail();
+
+    socket->recvAsync(socket, boost::asio::buffer(data), [](auto) {},
+        [&](auto) { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTestC, shouldReceiveMessagesAsTheyCome)
+{
+    std::atomic<bool> called{false};
+    boost::asio::mutable_buffer buffer;
+
+    const auto data = randomData();
+    server.send(boost::asio::buffer(data));
+
+    std::vector<char> received(data.size() + 1024);
+
+    auto pred = [&] {
+        socket->recvAnyAsync(
+            socket, boost::asio::buffer(received), [&](auto b) {
+                buffer = b;
+                called = true;
+            });
+
+        return called && boost::asio::buffer_size(buffer) != 0;
+    };
+
+    waitFor(pred);
+
+    ASSERT_NE(data, received);
+    ASSERT_LT(0u, boost::asio::buffer_size(buffer));
+    ASSERT_EQ(0, memcmp(boost::asio::buffer_cast<char *>(buffer), data.data(),
+                     boost::asio::buffer_size(buffer)));
+}
+
+TEST_F(TLSSocketTestC, shouldNotifyOnRecvAnySuccess)
+{
+    std::atomic<bool> called{false};
+    auto data = randomData();
+
+    server.send(boost::asio::buffer(data));
+
+    socket->recvAnyAsync(
+        socket, boost::asio::buffer(data), [&](auto) { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
+{
+    std::atomic<bool> called{false};
+    auto data = randomData();
+
+    socket->recvAnyAsync(socket, boost::asio::buffer(data), [](auto) {},
+        [&](auto) { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTestC, shouldReturnEmptyBufferIfNoDataWasAvailable)
+{
+    std::atomic<bool> called{false};
+    boost::asio::mutable_buffer buffer;
+
+    std::vector<char> received(1024);
+    socket->recvAnyAsync(socket, boost::asio::buffer(received), [&](auto b) {
+        buffer = b;
+        called = true;
+    });
+
+    ASSERT_TRUE(waitFor(called));
+    ASSERT_EQ(0u, boost::asio::buffer_size(buffer));
 }

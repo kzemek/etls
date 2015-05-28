@@ -35,6 +35,7 @@ public:
     void send(boost::asio::const_buffer buffer);
     void receive(boost::asio::mutable_buffer buffer);
     void failConnection();
+    void fail();
 
 private:
     void startAccept(boost::asio::yield_context yield);
@@ -126,6 +127,11 @@ void TestServer::receive(boost::asio::mutable_buffer buffer)
 }
 
 void TestServer::failConnection() { m_failConnection = true; }
+
+void TestServer::fail()
+{
+    m_sessions.clear();
+}
 
 void TestServer::startAccept(boost::asio::yield_context yield)
 {

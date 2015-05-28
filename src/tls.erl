@@ -11,7 +11,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([connect/3, connect/4, send/2]).
+-export([connect/3, connect/4, send/2, recv/2, recv/3]).
 
 -type ipaddress() :: {_, _, _, _} | {_, _, _, _, _, _, _, _}.
 -type hostname() :: string().
@@ -51,12 +51,36 @@ send(Sock, Data) ->
     end.
 
 
-send_nif(_Ref, _Sock, _Data) ->
-    error(tls_nif_not_loaded).
+recv(Sock, Size) ->
+    recv(Sock, Size, infinity).
+
+recv(Sock, Size, Timeout) ->
+    Ref = make_ref(),
+    ok = recv_nif(Ref, Sock, Size),
+    receive
+        {Ref, Result} ->
+            Result
+    after Timeout ->
+        {error, timeout}
+    end.
+
+
+%%%===================================================================
+%%% NIF stubs
+%%%===================================================================
 
 connect_nif(_Ref, _Host, _Port) ->
     error(tls_nif_not_loaded).
 
+send_nif(_Ref, _Sock, _Data) ->
+    error(tls_nif_not_loaded).
+
+recv_nif(_Ref, _Sock, _Size) ->
+    error(tls_nif_not_loaded).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 init() ->
     LibName = "liberlang_tls",
