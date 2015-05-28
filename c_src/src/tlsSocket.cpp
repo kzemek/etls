@@ -18,6 +18,19 @@
 namespace one {
 namespace etls {
 
+template <typename... Args1, typename... Args2>
+void TLSSocket::notifying(SuccessFun &&success, ErrorFun &&error,
+    void (TLSSocket::*method)(Args1...), Args2 &&... args)
+{
+    try {
+        (this->*method)(std::forward<Args2>(args)...);
+        success();
+    }
+    catch (const std::exception &e) {
+        error(e.what());
+    }
+}
+
 TLSSocket::TLSSocket(boost::asio::io_service &ioService)
     : m_context{boost::asio::ssl::context::tlsv12_client}
     , m_strand{ioService}
@@ -27,22 +40,31 @@ TLSSocket::TLSSocket(boost::asio::io_service &ioService)
 }
 
 void TLSSocket::connectAsync(Ptr self, std::string host,
-    const unsigned short port, std::function<void(Ptr)> success,
-    std::function<void(std::string)> error)
+    const unsigned short port, SuccessFun success, ErrorFun error)
 {
     boost::asio::spawn(m_strand, [
         =,
+        self = std::move(self),
         host = std::move(host),
         success = std::move(success),
         error = std::move(error)
     ](boost::asio::yield_context yield) mutable {
-        try {
-            connect(self, std::move(host), port, yield);
-            success(std::move(self));
-        }
-        catch (const std::exception &e) {
-            error(e.what());
-        }
+        notifying(std::move(success), std::move(error), &TLSSocket::connect,
+            std::move(self), std::move(host), port, yield);
+    });
+}
+
+void TLSSocket::sendAsync(Ptr self, boost::asio::const_buffer buffer,
+    SuccessFun success, ErrorFun error)
+{
+    boost::asio::spawn(m_strand, [
+        =,
+        self = std::move(self),
+        success = std::move(success),
+        error = std::move(error)
+    ](boost::asio::yield_context yield) mutable {
+        notifying(std::move(success), std::move(error), &TLSSocket::send,
+            std::move(self), buffer, yield);
     });
 }
 
@@ -58,6 +80,13 @@ void TLSSocket::connect(Ptr self, std::string host, const unsigned short port,
         m_socket.lowest_layer(), endpoints.begin(), endpoints.end(), yield);
 
     m_socket.async_handshake(boost::asio::ssl::stream_base::client, yield);
+}
+
+void TLSSocket::send(TLSSocket::Ptr self, boost::asio::const_buffer buffer,
+    boost::asio::yield_context yield)
+{
+    boost::asio::async_write(
+        m_socket, boost::asio::const_buffers_1{buffer}, yield);
 }
 
 std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>

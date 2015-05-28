@@ -13,22 +13,46 @@
 #include <boost/asio/ssl/context.hpp>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
+#include <vector>
 
 using namespace std::literals;
 using namespace testing;
 
+namespace {
+
+std::default_random_engine &engine()
+{
+    thread_local std::random_device rd;
+    thread_local std::default_random_engine engine{rd()};
+    return engine;
+}
+
 unsigned short randomPort()
 {
-    static thread_local std::random_device rd;
-    static thread_local std::default_random_engine engine{rd()};
     static thread_local std::uniform_int_distribution<unsigned short> dist{
         49152, 65535};
+    return dist(engine());
+}
 
-    return dist(engine);
+std::vector<char> randomData()
+{
+    static thread_local std::uniform_int_distribution<std::size_t> lenDist{
+        1, 255};
+    static thread_local std::uniform_int_distribution<char> dist;
+
+    const auto len = lenDist(engine());
+    std::vector<char> data;
+    data.reserve(len);
+    std::generate_n(
+        std::back_inserter(data), len, [&] { return dist(engine()); });
+
+    return data;
+}
 }
 
 struct TLSSocketTest : public Test {
@@ -57,7 +81,7 @@ struct TLSSocketTest : public Test {
 
 TEST_F(TLSSocketTest, shouldConnectToTheServer)
 {
-    socket->connectAsync(socket, "127.0.0.1"s, port, [](auto) {}, [](auto) {});
+    socket->connectAsync(socket, "127.0.0.1"s, port);
     ASSERT_TRUE(server.waitForConnections(1, 5s));
 }
 
@@ -65,8 +89,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionSuccess)
 {
     std::atomic<bool> called{false};
 
-    socket->connectAsync(
-        socket, "127.0.0.1"s, port, [&](auto) { called = true; }, [](auto) {});
+    socket->connectAsync(socket, "127.0.0.1"s, port, [&] { called = true; });
 
     const auto timeout = std::chrono::steady_clock::now() + 5s;
     while (!called && std::chrono::steady_clock::now() < timeout)
@@ -81,11 +104,25 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
     std::atomic<bool> called{false};
 
     socket->connectAsync(
-        socket, "127.0.0.1"s, port, [](auto) {}, [&](auto) { called = true; });
+        socket, "127.0.0.1"s, port, [] {}, [&](auto) { called = true; });
 
     const auto timeout = std::chrono::steady_clock::now() + 5s;
     while (!called && std::chrono::steady_clock::now() < timeout)
         std::this_thread::yield();
 
     ASSERT_TRUE(called);
+}
+
+TEST_F(TLSSocketTest, shouldSendMessages)
+{
+    socket->connectAsync(socket, "127.0.0.1"s, port);
+    server.waitForConnections(1, 5s);
+
+    const auto data = randomData();
+    socket->sendAsync(socket, boost::asio::buffer(data));
+
+    std::vector<char> received(data.size());
+    server.receive(boost::asio::buffer(received));
+
+    ASSERT_EQ(data, received);
 }

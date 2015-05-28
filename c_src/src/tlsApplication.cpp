@@ -19,10 +19,12 @@ TLSApplication::TLSApplication()
     m_threads.reserve(threadsNo);
     std::generate_n(std::back_inserter(m_threads), threadsNo, [this] {
         return std::thread{[this] {
-            try {
-                m_ioService.run();
-            }
-            catch (...) {
+            while (!m_ioService.stopped()) {
+                try {
+                    m_ioService.run();
+                }
+                catch (...) {
+                }
             }
         }};
     });

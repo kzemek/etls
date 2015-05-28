@@ -34,5 +34,7 @@ target_include_directories(common_libraries SYSTEM INTERFACE
     ${Boost_INCLUDE_DIRS}
     ${ERLANG_ERTS_INCLUDE_PATH})
 
+enable_testing()
 add_subdirectory(src)
 add_subdirectory(test) # TODO: EXCLUDE_FROM_ALL
+

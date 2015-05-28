@@ -23,14 +23,26 @@ namespace etls {
 class TLSSocket {
 public:
     using Ptr = std::shared_ptr<TLSSocket>;
+    using SuccessFun = std::function<void()>;
+    using ErrorFun = std::function<void(std::string)>;
 
     TLSSocket(boost::asio::io_service &ioService);
+
     void connectAsync(Ptr self, std::string host, const unsigned short port,
-        std::function<void(Ptr)> success,
-        std::function<void(std::string)> error);
+        SuccessFun success = [] {}, ErrorFun error = [](auto) {});
+
+    void sendAsync(Ptr self, boost::asio::const_buffer buffer,
+        SuccessFun success = [] {}, ErrorFun error = [](auto) {});
 
 private:
+    template <typename... Args1, typename... Args2>
+    void notifying(SuccessFun &&success, ErrorFun &&error,
+        void (TLSSocket::*method)(Args1...), Args2 &&... args);
+
     void connect(Ptr self, std::string host, const unsigned short port,
+        boost::asio::yield_context yield);
+
+    void send(Ptr self, boost::asio::const_buffer buffer,
         boost::asio::yield_context yield);
 
     std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>

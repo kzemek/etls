@@ -5,7 +5,6 @@
 #
 
 add_subdirectory(gmock)
-enable_testing()
 
 file(COPY server.pem server.key DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)

@@ -9,6 +9,7 @@
 #ifndef ERLANG_TLS_TEST_SERVER_HPP
 #define ERLANG_TLS_TEST_SERVER_HPP
 
+#include <boost/asio/read.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/context.hpp>
@@ -114,7 +115,7 @@ void TestServer::receive(boost::asio::mutable_buffer buffer)
 {
     std::atomic<bool> done{false};
     boost::asio::spawn(m_ioService, [&, this](auto yield) mutable {
-        boost::asio::async_write(*this->m_sessions.front(),
+        boost::asio::async_read(*this->m_sessions.front(),
             boost::asio::mutable_buffers_1{buffer}, yield);
 
         done = true;

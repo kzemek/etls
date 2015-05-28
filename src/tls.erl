@@ -11,7 +11,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([start/0, start/1, connect/3, connect/4]).
+-export([start/0, start/1, connect/3, connect/4, send/2]).
 
 -type ipaddress() :: {_, _, _, _} | {_, _, _, _, _, _, _, _}.
 -type hostname() :: string().
@@ -64,10 +64,36 @@ connect(Host, Port, Options, Timeout) ->
         {error, timeout}
     end.
 
+send(Sock, Data) ->
+    Ref = make_ref(),
+    ok = send_nif(Ref, Sock, Data),
+    receive
+        {Ref, Result} ->
+            Result
+    end.
 
-connect_nif(Ref, Host, Port) ->
-    error(nif_not_loaded).
+
+send_nif(_Ref, _Sock, _Data) ->
+    error(tls_nif_not_loaded).
+
+connect_nif(_Ref, _Host, _Port) ->
+    error(tls_nif_not_loaded).
 
 
 init() ->
-    erlang:load_nif("/home/konrad/plgrid/erlang_tls/liberlang_tls", 0).
+    LibName = "liberlang_tls",
+    LibPath =
+        case code:priv_dir(tls) of
+            {error, bad_name} ->
+                case filelib:is_dir(filename:join(["..", priv])) of
+                    true ->
+                        filename:join(["..", priv, LibName]);
+                    _ ->
+                        filename:join([priv, LibName])
+                end;
+
+            Dir ->
+                filename:join(Dir, LibName)
+        end,
+
+    erlang:load_nif(LibPath, 0).
