@@ -34,6 +34,8 @@ public:
     void sendAsync(Ptr self, boost::asio::const_buffer buffer,
         SuccessFun success = [] {}, ErrorFun error = [](auto) {});
 
+    void close();
+
 private:
     template <typename... Args1, typename... Args2>
     void notifying(SuccessFun &&success, ErrorFun &&error,

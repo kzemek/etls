@@ -53,7 +53,17 @@ std::vector<char> randomData()
 
     return data;
 }
+
+bool waitFor(std::atomic<bool> &predicate)
+{
+    const auto timeout = std::chrono::steady_clock::now() + 5s;
+    while (!predicate && std::chrono::steady_clock::now() < timeout)
+        std::this_thread::yield();
+
+    return predicate;
 }
+
+} // namespace
 
 struct TLSSocketTest : public Test {
     std::string host{"127.0.0.1"};
@@ -79,6 +89,14 @@ struct TLSSocketTest : public Test {
     }
 };
 
+struct TLSSocketTestC : public TLSSocketTest {
+    TLSSocketTestC()
+    {
+        socket->connectAsync(socket, "127.0.0.1"s, port);
+        server.waitForConnections(1, 5s);
+    }
+};
+
 TEST_F(TLSSocketTest, shouldConnectToTheServer)
 {
     socket->connectAsync(socket, "127.0.0.1"s, port);
@@ -90,34 +108,22 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionSuccess)
     std::atomic<bool> called{false};
 
     socket->connectAsync(socket, "127.0.0.1"s, port, [&] { called = true; });
-
-    const auto timeout = std::chrono::steady_clock::now() + 5s;
-    while (!called && std::chrono::steady_clock::now() < timeout)
-        std::this_thread::yield();
-
-    ASSERT_TRUE(called);
+    ASSERT_TRUE(waitFor(called));
 }
 
 TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
 {
-    server.fail();
+    server.failConnection();
     std::atomic<bool> called{false};
 
     socket->connectAsync(
         socket, "127.0.0.1"s, port, [] {}, [&](auto) { called = true; });
 
-    const auto timeout = std::chrono::steady_clock::now() + 5s;
-    while (!called && std::chrono::steady_clock::now() < timeout)
-        std::this_thread::yield();
-
-    ASSERT_TRUE(called);
+    ASSERT_TRUE(waitFor(called));
 }
 
-TEST_F(TLSSocketTest, shouldSendMessages)
+TEST_F(TLSSocketTestC, shouldSendMessages)
 {
-    socket->connectAsync(socket, "127.0.0.1"s, port);
-    server.waitForConnections(1, 5s);
-
     const auto data = randomData();
     socket->sendAsync(socket, boost::asio::buffer(data));
 
@@ -125,4 +131,27 @@ TEST_F(TLSSocketTest, shouldSendMessages)
     server.receive(boost::asio::buffer(received));
 
     ASSERT_EQ(data, received);
+}
+
+TEST_F(TLSSocketTestC, shouldNotifyOnSuccessfulSend)
+{
+    std::atomic<bool> called{false};
+    const auto data = randomData();
+
+    socket->sendAsync(
+        socket, boost::asio::buffer(data), [&] { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
+}
+
+TEST_F(TLSSocketTestC, shouldNotifyOnSendError)
+{
+    std::atomic<bool> called{false};
+    const auto data = randomData();
+
+    socket->close();
+    socket->sendAsync(
+        socket, boost::asio::buffer(data), [] {}, [&](auto) { called = true; });
+
+    ASSERT_TRUE(waitFor(called));
 }

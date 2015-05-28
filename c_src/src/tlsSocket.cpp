@@ -68,6 +68,11 @@ void TLSSocket::sendAsync(Ptr self, boost::asio::const_buffer buffer,
     });
 }
 
+void TLSSocket::close()
+{
+    m_socket.lowest_layer().close();
+}
+
 void TLSSocket::connect(Ptr self, std::string host, const unsigned short port,
     boost::asio::yield_context yield)
 {

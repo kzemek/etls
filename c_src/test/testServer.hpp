@@ -34,7 +34,7 @@ public:
 
     void send(boost::asio::const_buffer buffer);
     void receive(boost::asio::mutable_buffer buffer);
-    void fail();
+    void failConnection();
 
 private:
     void startAccept(boost::asio::yield_context yield);
@@ -47,7 +47,7 @@ private:
     std::vector<std::unique_ptr<SSLSocket>> m_sessions;
 
     std::atomic<std::size_t> m_sessionsSize{0};
-    std::atomic<bool> m_fail{false};
+    std::atomic<bool> m_failConnection{false};
 };
 
 TestServer::TestServer(const unsigned short port)
@@ -125,7 +125,7 @@ void TestServer::receive(boost::asio::mutable_buffer buffer)
         std::this_thread::yield();
 }
 
-void TestServer::fail() { m_fail = true; }
+void TestServer::failConnection() { m_failConnection = true; }
 
 void TestServer::startAccept(boost::asio::yield_context yield)
 {
@@ -135,7 +135,7 @@ void TestServer::startAccept(boost::asio::yield_context yield)
         m_acceptor.async_accept(socket->lowest_layer(), yield);
         socket->lowest_layer().set_option(boost::asio::ip::tcp::no_delay{});
 
-        if (m_fail) {
+        if (m_failConnection) {
             socket->shutdown();
             continue;
         }
