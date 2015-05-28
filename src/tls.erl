@@ -11,7 +11,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([start/0, start/1, connect/3, connect/4, send/2]).
+-export([connect/3, connect/4, send/2]).
 
 -type ipaddress() :: {_, _, _, _} | {_, _, _, _, _, _, _, _}.
 -type hostname() :: string().
@@ -23,28 +23,6 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Utility function that starts the tls application. Default type is temporary.
-%% @see application(3)
-%% @end
-%%--------------------------------------------------------------------
--spec start() -> ok | {error, Reason :: term()}.
-start() ->
-    start(temporary).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Utility function that starts the tls application.
-%% @see application(3)
-%% @end
-%%--------------------------------------------------------------------
--spec start(permanent | transient | temporary) ->
-    ok | {error, Reason :: term()}.
-start(Type) ->
-    application:start(tls, Type).
-
 
 -spec connect(host(), port(), Options :: proplists:proplist()) ->
     {ok, tlssocket()} | {error, Reason :: any()}.

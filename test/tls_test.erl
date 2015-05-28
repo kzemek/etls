@@ -18,13 +18,6 @@
 %%% Test generators
 %%%===================================================================
 
-api_test_() ->
-    [
-        fun tls_can_be_started/0,
-        fun tls_application_can_be_started/0,
-        fun tls_can_be_started_with_type/0
-    ].
-
 communication_test_() ->
     [{foreach, fun start_communication_test/0, fun stop_communication_test/1, [
         fun connect_establishes_a_secure_connection/1,
@@ -34,15 +27,6 @@ communication_test_() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
-tls_can_be_started() ->
-    [?_assertEqual(ok, tls:start())].
-
-tls_can_be_started_with_type() ->
-    [?_assertEqual(ok, tls:start(temporary))].
-
-tls_application_can_be_started() ->
-    [?_assertEqual(ok, application:start(tls))].
 
 connect_establishes_a_secure_connection({Ref, _Server, Port}) ->
     tls:connect("localhost", Port, [], ?TIMEOUT),
@@ -54,9 +38,7 @@ connect_establishes_a_secure_connection({Ref, _Server, Port}) ->
 send_sends_a_message({Ref, Server, Port}) ->
     Data = random_data(),
     {ok, Sock} = tls:connect("localhost", Port, [], ?TIMEOUT),
-    io:format(user, "omg", []),
     ok = tls:send(Sock, Data),
-    io:format(user, "omg2", []),
     Server ! {'receive', byte_size(Data)},
     receive
         {Ref, 'receive', Result} ->
@@ -69,7 +51,6 @@ send_sends_a_message({Ref, Server, Port}) ->
 
 start_communication_test() ->
     ssl:start(),
-    tls:start(),
 
     Self = self(),
     Ref = make_ref(),
@@ -113,7 +94,8 @@ start_communication_test() ->
     end.
 
 stop_communication_test({_Ref, Server, _Port}) ->
-    Server ! stop.
+    Server ! stop,
+    ssl:stop().
 
 %%%===================================================================
 %%% Helper functions
