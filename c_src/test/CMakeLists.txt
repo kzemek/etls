@@ -14,11 +14,12 @@ add_library(erlang_tls_test SHARED
 target_link_libraries(erlang_tls_test PRIVATE compile_options common_libraries)
 
 set(TESTS
+    tlsAcceptor_test.cpp
     tlsSocket_test.cpp)
 
 foreach(TEST_FILE ${TESTS})
     get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
-    add_executable(${TEST_NAME} ${TEST_FILE} testServer.hpp)
+    add_executable(${TEST_NAME} ${TEST_FILE} testServer.hpp testUtils.hpp)
     target_include_directories(${TEST_NAME} PRIVATE
 	${PROJECT_SOURCE_DIR}/src)
     target_include_directories(${TEST_NAME} PRIVATE SYSTEM

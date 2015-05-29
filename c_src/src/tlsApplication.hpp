@@ -6,8 +6,8 @@
  * 'LICENSE.txt'
  */
 
-#ifndef ERLANG_TLS_TLS_APPLICATION_HPP
-#define ERLANG_TLS_TLS_APPLICATION_HPP
+#ifndef ONE_ETLS_TLS_APPLICATION_HPP
+#define ONE_ETLS_TLS_APPLICATION_HPP
 
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ssl/context.hpp>
@@ -35,4 +35,4 @@ private:
 } // namespace etls
 } // namespace one
 
-#endif // ERLANG_TLS_TLS_APPLICATION_HPP
+#endif // ONE_ETLS_TLS_APPLICATION_HPP

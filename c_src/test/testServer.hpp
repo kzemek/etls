@@ -6,8 +6,8 @@
  * 'LICENSE.txt'
  */
 
-#ifndef ERLANG_TLS_TEST_SERVER_HPP
-#define ERLANG_TLS_TEST_SERVER_HPP
+#ifndef ONE_ETLS_TEST_SERVER_HPP
+#define ONE_ETLS_TEST_SERVER_HPP
 
 #include <boost/asio/read.hpp>
 #include <boost/asio/io_service.hpp>
@@ -152,4 +152,4 @@ void TestServer::startAccept(boost::asio::yield_context yield)
     }
 }
 
-#endif // ERLANG_TLS_TEST_SERVER_HPP
+#endif // ONE_ETLS_TEST_SERVER_HPP

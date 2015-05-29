@@ -6,6 +6,7 @@
  * 'LICENSE.txt'
  */
 
+#include "commonDefs.hpp"
 #include "nifpp.h"
 #include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
@@ -33,8 +34,7 @@ nifpp::str_atom error{"error"};
 
 one::etls::TLSApplication app;
 
-one::etls::TLSSocket::ErrorFun onError(
-    Env localEnv, ErlNifPid pid, nifpp::TERM ref)
+one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
 {
     return [=](std::string reason) mutable {
         auto message = nifpp::make(
@@ -89,6 +89,9 @@ static ERL_NIF_TERM connect_nif(
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
     }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
 }
 
 static ERL_NIF_TERM send_nif(
@@ -121,6 +124,9 @@ static ERL_NIF_TERM send_nif(
     }
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
     }
 }
 
@@ -165,6 +171,9 @@ static ERL_NIF_TERM recv_nif(
     }
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
     }
 }
 

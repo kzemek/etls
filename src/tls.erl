@@ -11,7 +11,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([connect/3, connect/4, send/2, recv/2, recv/3]).
+-export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2]).
 
 -type ipaddress() :: {_, _, _, _} | {_, _, _, _, _, _, _, _}.
 -type hostname() :: string().
@@ -63,6 +63,9 @@ recv(Sock, Size, Timeout) ->
     after Timeout ->
         {error, timeout}
     end.
+
+listen(Port, Options) ->
+    {error, not_implemented}.
 
 
 %%%===================================================================

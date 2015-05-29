@@ -18,22 +18,33 @@
 %%% Test generators
 %%%===================================================================
 
+api_test_() ->
+    [fun listen_should_be_callable/0].
+
 connection_test_() ->
-    [{foreach, fun start_connection_test/0, fun stop_connection_test/1, [
+    [{foreach, fun start_server/0, fun stop_server/1, [
         fun connect_should_establish_a_secure_connection/1
     ]}].
 
 communication_test_() ->
-    [{foreach, fun start_communication_test/0, fun stop_communication_test/1, [
+    [{foreach, fun start_connection/0, fun stop_connection/1, [
         fun send_should_send_a_message/1,
         fun receive_should_receive_a_message/1,
         fun receive_should_receive_a_message_when_size_is_zero/1,
         fun receive_should_receive_nil_when_size_is_zero_and_no_data/1
     ]}].
 
+server_test_() ->
+    [{foreach, fun start_server_test/0, fun stop_server_test/1, [
+        fun accept_should_accept_connections/1
+    ]}].
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
+
+listen_should_be_callable() ->
+    tls:listen(12345, []).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
     tls:connect("localhost", Port, [], ?TIMEOUT),
@@ -75,17 +86,33 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
             ]
     end.
 
-receive_should_receive_nil_when_size_is_zero_and_no_data({Ref, Server, Sock}) ->
+receive_should_receive_nil_when_size_is_zero_and_no_data({_Ref, _Server, Sock}) ->
     RecvResult = tls:recv(Sock, 0, ?TIMEOUT),
-    [
-        ?_assertEqual({ok, <<>>}, RecvResult)
-    ].
+    [?_assertEqual({ok, <<>>}, RecvResult)].
+
+accept_should_accept_connections({Ref, Port}) ->
+    Self = self(),
+
+    {ok, ListenSock} = tls:listen(Port, []),
+
+    spawn(
+        fun() ->
+            Self ! {Ref, ssl:connect("localhost", Port, [], ?TIMEOUT)}
+        end),
+
+    {ok, _Sock} = tls:accept(ListenSock, ?TIMEOUT),
+
+    receive
+        {Ref, Result} ->
+            [?_assertMatch({ok, _}, Result)]
+    end.
+
 
 %%%===================================================================
 %%% Test fixtures
 %%%===================================================================
 
-start_connection_test() ->
+start_server() ->
     ssl:start(),
 
     Self = self(),
@@ -98,16 +125,22 @@ start_connection_test() ->
             {Ref, Server, Port}
     end.
 
-stop_connection_test({_Ref, Server, _Port}) ->
+stop_server({_Ref, Server, _Port}) ->
     Server ! stop.
 
-start_communication_test() ->
-    {Ref, Server, Port} = start_connection_test(),
+start_connection() ->
+    {Ref, Server, Port} = start_server(),
     {ok, Sock} = tls:connect("localhost", Port, [], ?TIMEOUT),
     {Ref, Server, Sock}.
 
-stop_communication_test({_Ref, Server, _Sock}) ->
+stop_connection({_Ref, Server, _Sock}) ->
     Server ! stop.
+
+start_server_test() ->
+    {make_ref(), random_port()}.
+
+stop_server_test({_Ref, _Port}) ->
+    ok.
 
 %%%===================================================================
 %%% Helper functions
@@ -152,3 +185,12 @@ server_loop(Pid, Ref, Sock) ->
         stop ->
             ok
     end.
+
+%% run_client(Ref, Port) ->
+%%     try
+%%         {ok, Sock} = tls:connect("localhost")
+%%         catch
+%%         end.
+
+server_test__test() ->
+    ?assertEqual(expected, expr).

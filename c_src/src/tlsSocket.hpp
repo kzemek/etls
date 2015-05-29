@@ -6,8 +6,10 @@
  * 'LICENSE.txt'
  */
 
-#ifndef ERLANG_TLS_TLS_SOCKET_HPP
-#define ERLANG_TLS_TLS_SOCKET_HPP
+#ifndef ONE_ETLS_TLS_SOCKET_HPP
+#define ONE_ETLS_TLS_SOCKET_HPP
+
+#include "commonDefs.hpp"
 
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -21,38 +23,28 @@ namespace one {
 namespace etls {
 
 class TLSSocket {
+    friend class TLSAcceptor;
+
 public:
     using Ptr = std::shared_ptr<TLSSocket>;
-    template <typename... Args> using SuccessFun = std::function<void(Args...)>;
-    using ErrorFun = std::function<void(std::string)>;
 
     TLSSocket(boost::asio::io_service &ioService);
 
     void connectAsync(Ptr self, std::string host, const unsigned short port,
-        SuccessFun<Ptr> success = [](auto) {}, ErrorFun error = [](auto) {});
+        SuccessFun<Ptr> success, ErrorFun error);
 
     void sendAsync(Ptr self, boost::asio::const_buffer buffer,
-        SuccessFun<> success = [] {}, ErrorFun error = [](auto) {});
+        SuccessFun<> success, ErrorFun error);
 
     void recvAsync(Ptr self, boost::asio::mutable_buffer buffer,
-        SuccessFun<boost::asio::mutable_buffer> success = [](auto) {},
-        ErrorFun error = [](auto) {});
+        SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error);
 
     void recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
-        SuccessFun<boost::asio::mutable_buffer> success = [](auto) {},
-        ErrorFun error = [](auto) {});
+        SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error);
 
     void close();
 
 private:
-    template <typename Res, typename... Args1, typename... Args2>
-    void notifying(SuccessFun<Res> &&success, ErrorFun &&error,
-        Res (TLSSocket::*method)(Args1...), Args2 &&... args);
-
-    template <typename Res, typename... Args1, typename... Args2>
-    void notifying(SuccessFun<> &&success, ErrorFun &&error,
-        Res (TLSSocket::*method)(Args1...), Args2 &&... args);
-
     Ptr connect(Ptr self, std::string host, const unsigned short port,
         boost::asio::yield_context yield);
 
@@ -77,4 +69,4 @@ private:
 } // namespace etls
 } // namespace one
 
-#endif // ERLANG_TLS_TLS_SOCKET_HPP
+#endif // ONE_ETLS_TLS_SOCKET_HPP
