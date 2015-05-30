@@ -53,7 +53,7 @@ template <typename Pred> bool waitFor(Pred &&predicate)
 {
     const auto timeout = std::chrono::steady_clock::now() + 5s;
     while (!predicate() && std::chrono::steady_clock::now() < timeout)
-        std::this_thread::yield();
+        std::this_thread::sleep_for(1ms);
 
     return predicate();
 }

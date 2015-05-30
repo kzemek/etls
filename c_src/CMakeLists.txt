@@ -12,11 +12,7 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Erlang REQUIRED)
-
-set(Boost_USE_STATIC_LIBS    OFF)
-set(Boost_USE_MULTITHREADED   ON)
-set(Boost_USE_STATIC_RUNTIME OFF)
-find_package(Boost COMPONENTS coroutine REQUIRED)
+find_package(Boost REQUIRED)
 
 add_library(compile_options INTERFACE)
 target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)

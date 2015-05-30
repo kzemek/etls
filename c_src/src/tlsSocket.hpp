@@ -13,8 +13,8 @@
 
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/spawn.hpp>
 #include <boost/asio/ssl/stream.hpp>
+#include <boost/asio/strand.hpp>
 
 #include <memory>
 #include <string>
@@ -45,18 +45,6 @@ public:
     void close();
 
 private:
-    Ptr connect(Ptr self, std::string host, const unsigned short port,
-        boost::asio::yield_context yield);
-
-    void send(Ptr self, boost::asio::const_buffer buffer,
-        boost::asio::yield_context yield);
-
-    boost::asio::mutable_buffer recv(Ptr self,
-        boost::asio::mutable_buffer buffer, boost::asio::yield_context yield);
-
-    boost::asio::mutable_buffer recvAny(Ptr self,
-        boost::asio::mutable_buffer buffer, boost::asio::yield_context yield);
-
     std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
     shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator);
 

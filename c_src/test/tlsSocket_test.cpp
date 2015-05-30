@@ -53,14 +53,14 @@ struct TLSSocketTestC : public TLSSocketTest {
     TLSSocketTestC()
     {
         socket->connectAsync(socket, host, port, [](auto) {}, [](auto) {});
-        server.waitForConnections(1, 5s);
+        server.waitForConnection(5s);
     }
 };
 
 TEST_F(TLSSocketTest, shouldConnectToTheServer)
 {
     socket->connectAsync(socket, host, port, [](auto) {}, [](auto) {});
-    ASSERT_TRUE(server.waitForConnections(1, 5s));
+    ASSERT_TRUE(server.waitForConnection(5s));
 }
 
 TEST_F(TLSSocketTest, shouldNotifyOnConnectionSuccess)
@@ -168,20 +168,16 @@ TEST_F(TLSSocketTestC, shouldReceiveMessagesAsTheyCome)
     const auto data = randomData();
     server.send(boost::asio::buffer(data));
 
-    std::vector<char> received(data.size() + 1024);
+    std::vector<char> received(data.size() + 100);
 
-    auto pred = [&] {
-        socket->recvAnyAsync(socket, boost::asio::buffer(received),
-            [&](auto b) {
-                buffer = b;
-                called = true;
-            },
-            [](auto) {});
+    socket->recvAnyAsync(socket, boost::asio::buffer(received),
+        [&](auto b) {
+            buffer = b;
+            called = true;
+        },
+        [](auto) {});
 
-        return called && boost::asio::buffer_size(buffer) != 0;
-    };
-
-    waitFor(pred);
+    waitFor(called);
 
     ASSERT_NE(data, received);
     ASSERT_LT(0u, boost::asio::buffer_size(buffer));
