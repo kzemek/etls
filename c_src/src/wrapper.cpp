@@ -8,6 +8,7 @@
 
 #include "commonDefs.hpp"
 #include "nifpp.h"
+#include "tlsAcceptor.hpp"
 #include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
 
@@ -52,6 +53,9 @@ static int load(ErlNifEnv *env, void ** /*priv*/, ERL_NIF_TERM /*load_info*/)
 {
     nifpp::register_resource<one::etls::TLSSocket::Ptr>(
         env, nullptr, "TLSSocket");
+
+    nifpp::register_resource<one::etls::TLSAcceptor::Ptr>(
+        env, nullptr, "TLSAcceptor");
 
     return 0;
 }
@@ -177,8 +181,68 @@ static ERL_NIF_TERM recv_nif(
     }
 }
 
+static ERL_NIF_TERM listen_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        const unsigned short port = nifpp::get<int>(env, argv[0]);
+
+        auto acceptor =
+            std::make_shared<one::etls::TLSAcceptor>(app.ioService(), port);
+
+        auto res =
+            nifpp::construct_resource<one::etls::TLSAcceptor::Ptr>(acceptor);
+
+        return nifpp::make(env, std::make_tuple(ok, res));
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
+static ERL_NIF_TERM accept_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        Env localEnv;
+
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto acceptor =
+            *nifpp::get<one::etls::TLSAcceptor::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=](one::etls::TLSSocket::Ptr sock) mutable {
+            auto resource =
+                nifpp::construct_resource<one::etls::TLSSocket::Ptr>(sock);
+
+            auto message = nifpp::make(localEnv,
+                std::make_tuple(ref, std::make_tuple(
+                                         ok, nifpp::make(localEnv, resource))));
+
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        acceptor->acceptAsync(
+            acceptor, std::move(onSuccess), onError(localEnv, pid, ref));
+
+        return nifpp::make(env, ok);
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
 static ErlNifFunc nif_funcs[] = {{"connect_nif", 3, connect_nif},
-    {"send_nif", 3, send_nif}, {"recv_nif", 3, recv_nif}};
+    {"send_nif", 3, send_nif}, {"recv_nif", 3, recv_nif},
+    {"listen_nif", 1, listen_nif}, {"accept_nif", 2, accept_nif}};
 
 ERL_NIF_INIT(tls, nif_funcs, load, NULL, NULL, NULL)
 

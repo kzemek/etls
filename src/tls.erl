@@ -11,7 +11,7 @@
 -author("Konrad Zemek").
 
 %% API
--export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2]).
+-export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2, accept/1, accept/2]).
 
 -type ipaddress() :: {_, _, _, _} | {_, _, _, _, _, _, _, _}.
 -type hostname() :: string().
@@ -34,20 +34,30 @@ connect(Host, Port, Options) ->
     {ok, tlssocket()} | {error, Reason :: any()}.
 connect(Host, Port, Options, Timeout) ->
     Ref = make_ref(),
-    ok = connect_nif(Ref, Host, Port),
-    receive
-        {Ref, Result} ->
-            Result
-    after Timeout ->
-        {error, timeout}
+    case connect_nif(Ref, Host, Port) of
+        ok ->
+            receive
+                {Ref, Result} ->
+                    Result
+            after Timeout ->
+                {error, timeout}
+            end;
+
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 send(Sock, Data) ->
     Ref = make_ref(),
-    ok = send_nif(Ref, Sock, Data),
-    receive
-        {Ref, Result} ->
-            Result
+    case send_nif(Ref, Sock, Data) of
+        ok ->
+            receive
+                {Ref, Result} ->
+                    Result
+            end;
+
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 
@@ -56,17 +66,39 @@ recv(Sock, Size) ->
 
 recv(Sock, Size, Timeout) ->
     Ref = make_ref(),
-    ok = recv_nif(Ref, Sock, Size),
-    receive
-        {Ref, Result} ->
-            Result
-    after Timeout ->
-        {error, timeout}
+    case recv_nif(Ref, Sock, Size) of
+        ok ->
+            receive
+                {Ref, Result} ->
+                    Result
+            after Timeout ->
+                {error, timeout}
+            end;
+
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 listen(Port, Options) ->
-    {error, not_implemented}.
+    listen_nif(Port).
 
+accept(Acceptor) ->
+    accept(Acceptor, infinity).
+
+accept(Acceptor, Timeout) ->
+    Ref = make_ref(),
+    case accept_nif(Ref, Acceptor) of
+        ok ->
+            receive
+                {Ref, Result} ->
+                    Result
+            after Timeout ->
+                {error, timeout}
+            end;
+
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%%===================================================================
 %%% NIF stubs
@@ -79,6 +111,12 @@ send_nif(_Ref, _Sock, _Data) ->
     error(tls_nif_not_loaded).
 
 recv_nif(_Ref, _Sock, _Size) ->
+    error(tls_nif_not_loaded).
+
+listen_nif(_Port) ->
+    error(tls_nif_not_loaded).
+
+accept_nif(_Ref, _Acceptor) ->
     error(tls_nif_not_loaded).
 
 %%%===================================================================

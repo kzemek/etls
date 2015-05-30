@@ -30,8 +30,7 @@ communication_test_() ->
     [{foreach, fun start_connection/0, fun stop_connection/1, [
         fun send_should_send_a_message/1,
         fun receive_should_receive_a_message/1,
-        fun receive_should_receive_a_message_when_size_is_zero/1,
-        fun receive_should_receive_nil_when_size_is_zero_and_no_data/1
+        fun receive_should_receive_a_message_when_size_is_zero/1
     ]}].
 
 server_test_() ->
@@ -86,10 +85,6 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
             ]
     end.
 
-receive_should_receive_nil_when_size_is_zero_and_no_data({_Ref, _Server, Sock}) ->
-    RecvResult = tls:recv(Sock, 0, ?TIMEOUT),
-    [?_assertEqual({ok, <<>>}, RecvResult)].
-
 accept_should_accept_connections({Ref, Port}) ->
     Self = self(),
 
@@ -97,7 +92,7 @@ accept_should_accept_connections({Ref, Port}) ->
 
     spawn(
         fun() ->
-            Self ! {Ref, ssl:connect("localhost", Port, [], ?TIMEOUT)}
+            Self ! {Ref, gen_tcp:connect("localhost", Port, [], ?TIMEOUT)}
         end),
 
     {ok, _Sock} = tls:accept(ListenSock, ?TIMEOUT),
@@ -191,6 +186,3 @@ server_loop(Pid, Ref, Sock) ->
 %%         {ok, Sock} = tls:connect("localhost")
 %%         catch
 %%         end.
-
-server_test__test() ->
-    ?assertEqual(expected, expr).
