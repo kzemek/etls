@@ -186,9 +186,11 @@ static ERL_NIF_TERM listen_nif(
 {
     try {
         const unsigned short port = nifpp::get<int>(env, argv[0]);
+        const auto certPath = nifpp::get<std::string>(env, argv[1]);
+        const auto keyPath = nifpp::get<std::string>(env, argv[2]);
 
-        auto acceptor =
-            std::make_shared<one::etls::TLSAcceptor>(app.ioService(), port);
+        auto acceptor = std::make_shared<one::etls::TLSAcceptor>(
+            app.ioService(), port, certPath, keyPath);
 
         auto res =
             nifpp::construct_resource<one::etls::TLSAcceptor::Ptr>(acceptor);
@@ -242,7 +244,7 @@ static ERL_NIF_TERM accept_nif(
 
 static ErlNifFunc nif_funcs[] = {{"connect_nif", 3, connect_nif},
     {"send_nif", 3, send_nif}, {"recv_nif", 3, recv_nif},
-    {"listen_nif", 1, listen_nif}, {"accept_nif", 2, accept_nif}};
+    {"listen_nif", 3, listen_nif}, {"accept_nif", 2, accept_nif}};
 
 ERL_NIF_INIT(tls, nif_funcs, load, NULL, NULL, NULL)
 

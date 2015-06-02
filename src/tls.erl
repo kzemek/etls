@@ -80,7 +80,10 @@ recv(Sock, Size, Timeout) ->
     end.
 
 listen(Port, Options) ->
-    listen_nif(Port).
+    true = proplists:is_defined(certfile, Options),
+    CertPath = proplists:get_value(certfile, Options),
+    KeyPath = proplists:get_value(keyfile, Options, CertPath),
+    listen_nif(Port, CertPath, KeyPath).
 
 accept(Acceptor) ->
     accept(Acceptor, infinity).
@@ -113,7 +116,7 @@ send_nif(_Ref, _Sock, _Data) ->
 recv_nif(_Ref, _Sock, _Size) ->
     error(tls_nif_not_loaded).
 
-listen_nif(_Port) ->
+listen_nif(_Port, _CertPath, _KeyPath) ->
     error(tls_nif_not_loaded).
 
 accept_nif(_Ref, _Acceptor) ->

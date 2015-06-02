@@ -30,6 +30,9 @@ public:
 
     TLSSocket(boost::asio::io_service &ioService);
 
+    TLSSocket(
+        boost::asio::io_service &ioService, boost::asio::ssl::context &context);
+
     void connectAsync(Ptr self, std::string host, const unsigned short port,
         SuccessFun<Ptr> success, ErrorFun error);
 
@@ -42,13 +45,17 @@ public:
     void recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
         SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error);
 
+    void handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
+
     void close();
 
 private:
     std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
     shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator);
 
-    boost::asio::ssl::context m_context;
+    boost::asio::ssl::context m_clientContext{
+        boost::asio::ssl::context::tlsv12_client};
+
     boost::asio::io_service::strand m_strand;
     boost::asio::ip::tcp::resolver m_resolver;
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;

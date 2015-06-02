@@ -18,10 +18,17 @@ namespace one {
 namespace etls {
 
 TLSSocket::TLSSocket(boost::asio::io_service &ioService)
-    : m_context{boost::asio::ssl::context::tlsv12}
-    , m_strand{ioService}
+    : m_strand{ioService}
     , m_resolver{ioService}
-    , m_socket{ioService, m_context}
+    , m_socket{ioService, m_clientContext}
+{
+}
+
+TLSSocket::TLSSocket(
+    boost::asio::io_service &ioService, boost::asio::ssl::context &context)
+    : m_strand{ioService}
+    , m_resolver{ioService}
+    , m_socket{ioService, context}
 {
 }
 
@@ -143,6 +150,29 @@ void TLSSocket::recvAnyAsync(TLSSocket::Ptr self,
                 error(ec.message());
             else
                 success(boost::asio::buffer(buffer, read));
+        });
+    });
+}
+
+void TLSSocket::handshakeAsync(
+    TLSSocket::Ptr self, SuccessFun<> success, ErrorFun error)
+{
+    m_strand.post([
+        =,
+        self = std::move(self),
+        success = std::move(success),
+        error = std::move(error)
+    ]() mutable {
+        m_socket.async_handshake(boost::asio::ssl::stream_base::server, [
+            =,
+            self = std::move(self),
+            success = std::move(success),
+            error = std::move(error)
+        ](const auto ec) {
+            if (ec)
+                error(ec.message());
+            else
+                success();
         });
     });
 }

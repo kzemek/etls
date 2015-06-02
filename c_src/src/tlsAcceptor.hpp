@@ -14,8 +14,10 @@
 
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/context.hpp>
 
 #include <memory>
+#include <string>
 
 namespace one {
 namespace etls {
@@ -24,15 +26,18 @@ class TLSAcceptor {
 public:
     using Ptr = std::shared_ptr<TLSAcceptor>;
 
-    TLSAcceptor(boost::asio::io_service &ioService, const unsigned short port);
+    TLSAcceptor(boost::asio::io_service &ioService, const unsigned short port,
+        const std::string &certPath, const std::string &keyPath);
 
-    void acceptAsync(Ptr self, SuccessFun<TLSSocket::Ptr> success,
-        ErrorFun error = [](auto) {});
+    void acceptAsync(
+        Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error);
 
 private:
     boost::asio::io_service &m_ioService;
     boost::asio::io_service::strand m_strand{m_ioService};
     boost::asio::ip::tcp::acceptor m_acceptor;
+    boost::asio::ssl::context m_context{
+        boost::asio::ssl::context::tlsv12_server};
 };
 
 } // namespace etls

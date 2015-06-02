@@ -43,7 +43,7 @@ server_test_() ->
 %%%===================================================================
 
 listen_should_be_callable() ->
-    tls:listen(12345, []).
+    tls:listen(12345, [{certfile, "server.pem"}]).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
     tls:connect("localhost", Port, [], ?TIMEOUT),
@@ -88,7 +88,7 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
 accept_should_accept_connections({Ref, Port}) ->
     Self = self(),
 
-    {ok, ListenSock} = tls:listen(Port, []),
+    {ok, ListenSock} = tls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
 
     spawn(
         fun() ->
