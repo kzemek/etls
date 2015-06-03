@@ -35,7 +35,8 @@ communication_test_() ->
 
 server_test_() ->
     [{foreach, fun start_server_test/0, fun stop_server_test/1, [
-        fun accept_should_accept_connections/1
+        fun accept_should_accept_connections/1,
+        fun sockets_should_communicate/1
     ]}].
 
 %%%===================================================================
@@ -102,6 +103,37 @@ accept_should_accept_connections({Ref, Port}) ->
             [?_assertMatch({ok, _}, Result)]
     end.
 
+sockets_should_communicate({Ref, Port}) ->
+    Self = self(),
+
+    {ok, ListenSock} = tls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    spawn(
+        fun() ->
+            Self ! {Ref, tls:connect("localhost", Port, [], ?TIMEOUT)}
+        end),
+
+    {ok, ServerSock} = tls:accept(ListenSock, ?TIMEOUT),
+    ok = tls:handshake(ServerSock, ?TIMEOUT),
+
+    {ok, ClientSock} =
+        receive
+            {Ref, Result} ->
+                Result
+        end,
+
+    ServerSend = random_data(),
+    ClientSend = random_data(),
+
+    ok = tls:send(ServerSock, ServerSend),
+    ok = tls:send(ClientSock, ClientSend),
+
+    ServerRecv = tls:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
+    ClientRecv = tls:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, ClientSend}, ServerRecv),
+        ?_assertEqual({ok, ServerSend}, ClientRecv)
+    ].
 
 %%%===================================================================
 %%% Test fixtures

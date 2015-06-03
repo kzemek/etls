@@ -242,9 +242,40 @@ static ERL_NIF_TERM accept_nif(
     }
 }
 
+static ERL_NIF_TERM handshake_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        Env localEnv;
+
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=]() mutable {
+            auto message = nifpp::make(localEnv, std::make_tuple(ref, ok));
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        sock->handshakeAsync(
+            sock, std::move(onSuccess), onError(localEnv, pid, ref));
+
+        return nifpp::make(env, ok);
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
 static ErlNifFunc nif_funcs[] = {{"connect_nif", 3, connect_nif},
     {"send_nif", 3, send_nif}, {"recv_nif", 3, recv_nif},
-    {"listen_nif", 3, listen_nif}, {"accept_nif", 2, accept_nif}};
+    {"listen_nif", 3, listen_nif}, {"accept_nif", 2, accept_nif},
+    {"handshake_nif", 2, handshake_nif}};
 
 ERL_NIF_INIT(tls, nif_funcs, load, NULL, NULL, NULL)
 
