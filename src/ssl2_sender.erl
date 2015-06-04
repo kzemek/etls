@@ -17,13 +17,13 @@
 
 %% gen_fsm callbacks
 -export([init/1,
-    idle/2,
-    idle/3,
+    idle/2, idle/3,
+    sending/2, sending/3,
     handle_event/3,
     handle_sync_event/4,
     handle_info/3,
     terminate/3,
-    code_change/4, sending/2, sending/3]).
+    code_change/4]).
 
 -define(SERVER, ?MODULE).
 
@@ -113,7 +113,9 @@ idle(_Event, State) ->
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
         NewState :: #state{}}).
-idle({send, Data}, From, #state{socket = Sock, packet = Packet} = State) ->
+idle({send, Data}, From, State) ->
+    #state{socket = Sock, packet = Packet} = State,
+
     SendData =
         case Packet of
             0 -> Data;
@@ -126,6 +128,7 @@ idle({send, Data}, From, #state{socket = Sock, packet = Packet} = State) ->
         ok -> {next_state, sending, State#state{caller = From}};
         {error, Reason} -> {stop, Reason, {error, Reason}, State}
     end;
+
 idle(Event, _From, State) ->
     {reply, {error, {bad_event_for_state, idle, Event}}, State}.
 
@@ -145,9 +148,6 @@ idle(Event, _From, State) ->
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #state{}}).
-sending({timeout, _, _}, #state{caller = Caller} = State) ->
-    gen_fsm:send_all_state_event(self(), {reply, Caller, {error, timeout}}),
-    {next_state, sending, State#state{caller = undefined}};
 sending(_Event, State) ->
     {next_state, sending, State}.
 
@@ -192,15 +192,13 @@ sending(Event, _From, State) ->
         timeout() | hibernate} |
     {stop, Reason :: term(), NewStateData :: #state{}}).
 handle_event({setopts, Opts}, StateName, State) ->
-    Packet =
-        case proplists:get_value(packet, Opts, 0) of
-            raw -> 0;
-            Other -> Other
-        end,
+    Packet = get_packet(Opts),
     {next_state, StateName, State#state{packet = Packet}};
+
 handle_event({reply, Msg}, StateName, #state{caller = Caller} = State) ->
-    gen_fsm:reply(Caller, Msg),
+    reply(Caller, Msg),
     {next_state, StateName, State#state{caller = undefined}};
+
 handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
@@ -223,9 +221,8 @@ handle_event(_Event, StateName, State) ->
         timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewStateData :: term()} |
     {stop, Reason :: term(), NewStateData :: term()}).
-handle_sync_event(_Event, _From, StateName, State) ->
-    Reply = ok,
-    {reply, Reply, StateName, State}.
+handle_sync_event(Event, _From, StateName, State) ->
+    {reply, {error, {bad_event_for_state, StateName, Event}}, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -242,15 +239,12 @@ handle_sync_event(_Event, _From, StateName, State) ->
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewStateData :: term()}).
-handle_info(ok, _StateName, #state{caller = undefined} = State) ->
-    {next_state, idle, State};
 handle_info(ok, _StateName, State) ->
     gen_fsm:send_all_state_event(self(), {reply, ok}),
     {next_state, idle, State};
-handle_info({error, Reason}, _StateName, #state{caller = undefined} = State) ->
-    {stop, Reason, State};
+
 handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
-    gen_fsm:reply(Caller, {error, Reason}),
+    reply(Caller, {error, Reason}),
     {stop, Reason, State}.
 
 %%--------------------------------------------------------------------
@@ -284,3 +278,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+get_packet(Opts) ->
+    case proplists:get_value(packet, Opts, 0) of
+        raw -> 0;
+        Other -> Other
+    end.
+
+reply(undefined, _Msg) -> ok;
+reply(Caller, Msg) ->
+    gen_fsm:reply(Caller, Msg).

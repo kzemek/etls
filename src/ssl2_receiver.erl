@@ -39,7 +39,7 @@
     active = false :: false | once | true,
     controlling_pid :: pid(),
     sock_ref :: term(),
-    packet = 0 :: raw | 0 | 1 | 2 | 4
+    packet = 0 :: 0 | 1 | 2 | 4
 }).
 
 %%%===================================================================
@@ -343,8 +343,8 @@ handle_event(_Event, StateName, State) ->
         timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewStateData :: term()} |
     {stop, Reason :: term(), NewStateData :: term()}).
-handle_sync_event(_Event, _From, StateName, State) ->
-    {reply, {error, unknown_event}, StateName, State}.
+handle_sync_event(Event, _From, StateName, State) ->
+    {reply, {error, {bad_event_for_state, StateName, Event}}, State}.
 
 %%--------------------------------------------------------------------
 %% @private
