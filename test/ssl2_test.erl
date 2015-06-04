@@ -37,7 +37,9 @@ communication_test_() ->
         fun setopts_should_honor_active_once/1,
         fun setopts_should_honor_active_true/1,
         fun socket_should_notify_about_closure_when_active/1,
-        fun setopts_should_respect_packet_options/1
+        fun setopts_should_respect_packet_options/1,
+        fun recv_should_allow_for_new_caller_after_timeout/1,
+        fun recv_should_allow_for_recv_while_active/1
     ]}].
 
 server_test_() ->
@@ -292,6 +294,42 @@ setopts_should_respect_packet_options({Ref, Server, Sock}) ->
             [
                 ?_assertEqual({ok, ExpectedData}, Result),
                 ?_assertEqual({ok, Data}, Received)
+            ]
+    end.
+
+recv_should_allow_for_new_caller_after_timeout({_Ref, Server, Sock}) ->
+    Data = random_data(),
+    {error, timeout} = ssl2:recv(Sock, byte_size(Data), 0),
+    Server ! {send, Data},
+    Result = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
+    [?_assertEqual({ok, Data}, Result)].
+
+recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{active, true}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+    Self = self(),
+    SpawnRef = make_ref(),
+
+    spawn(fun() ->
+        Self ! {SpawnRef, ssl2:recv(Sock, byte_size(Data1), ?TIMEOUT)} end),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    receive
+        {SpawnRef, Result} ->
+            Result2 =
+                receive
+                    {ssl2, Sock, Data2} -> Data2
+                after ?TIMEOUT ->
+                    {error, test_timeout}
+                end,
+
+            [
+                ?_assertEqual({ok, Data1}, Result),
+                ?_assertEqual(Data2, Result2)
             ]
     end.
 

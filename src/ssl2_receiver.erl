@@ -19,13 +19,14 @@
 
 %% gen_fsm callbacks
 -export([init/1,
-    idle/2,
-    idle/3,
+    idle/2, idle/3,
+    receiving/2, receiving/3,
+    receiving_header/2, receiving_header/3,
     handle_event/3,
     handle_sync_event/4,
     handle_info/3,
     terminate/3,
-    code_change/4, receiving/2, receiving/3]).
+    code_change/4]).
 
 -define(SERVER, ?MODULE).
 
@@ -34,11 +35,11 @@
     buffer = <<>> :: binary(),
     caller :: pid(),
     needed :: integer(),
-    timer :: timer:timers(),
+    timer = make_ref() :: timer:timers(),
     active = false :: false | once | true,
     controlling_pid :: pid(),
     sock_ref :: term(),
-    packet = raw :: raw | 0 | 1 | 2 | 4
+    packet = 0 :: raw | 0 | 1 | 2 | 4
 }).
 
 %%%===================================================================
@@ -121,36 +122,40 @@ idle(_Event, State) ->
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
         NewState :: #state{}}).
-idle({recv, Size, Timeout}, From, State) ->
-    #state{buffer = Buffer, packet = Packet} = State,
+idle({recv, Size, Timeout}, From, #state{packet = 0} = State) ->
+    #state{buffer = Buffer} = State,
+    case {Size, byte_size(Buffer)} of
+        {_, 0} ->
+            Timer = create_timer(Timeout),
+            recv_body(Size,
+                State#state{timer = Timer, caller = From, needed = Size});
 
-    Timer =
-        case Timeout of
-            infinity -> undefined;
-            _ -> gen_fsm:start_timer(Timeout, timeout)
-        end,
-
-    case {Size, Packet, Buffer} of
-        {0, 0, <<>>} ->
-            recv(Size, Size, From, idle, State#state{timer = Timer});
-
-        {_, _, _} when (Size =:= 0 orelse Packet > 0)
-            andalso erlang:byte_size(Buffer) > 0 ->
+        {0, _} ->
             {reply, {ok, Buffer}, idle, State#state{buffer = <<>>}};
 
-        _ ->
-            case byte_size(Buffer) of
-                BS when BS >= Size ->
-                    <<SubBin:Size/binary, Rest/binary>> = Buffer,
-                    gen_fsm:cancel_timer(Timer),
-                    {reply, {ok, SubBin}, idle, State#state{buffer = Rest}};
+        {_, BS} when BS >= Size ->
+            <<SubBin:Size/binary, Rest/binary>> = Buffer,
+            {reply, {ok, SubBin}, idle, State#state{buffer = Rest}};
 
-                BS ->
-                    NeedToFetch = Size - BS,
-                    recv(NeedToFetch, Size, From, idle,
-                        State#state{timer = Timer})
-            end
+        {_, BS} ->
+            Timer = create_timer(Timeout),
+            RecvSize = Size - BS,
+            recv_body(RecvSize,
+                State#state{timer = Timer, caller = From, needed = Size})
     end;
+
+idle({recv, _Size, Timeout}, From, State) ->
+    #state{buffer = Buffer, packet = Packet} = State,
+    case Buffer of
+        <<>> ->
+            Timer = create_timer(Timeout),
+            recv_header(
+                State#state{timer = Timer, caller = From, needed = Packet});
+
+        _ ->
+            {reply, {ok, Buffer}, idle, State#state{buffer = <<>>}}
+    end;
+
 idle(Event, _From, State) ->
     {reply, {error, {bad_event_for_state, idle, Event}}, State}.
 
@@ -171,9 +176,6 @@ idle(Event, _From, State) ->
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #state{}}).
-receiving({timeout, _, _}, State) ->
-    gen_fsm:send_all_state_event(self(), {reply, {error, timeout}}),
-    {next_state, receiving, State};
 receiving(_Event, State) ->
     {next_state, receiving, State}.
 
@@ -199,8 +201,69 @@ receiving(_Event, State) ->
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
         NewState :: #state{}}).
+receiving({recv, Size, Timeout}, From,
+    #state{caller = undefined, packet = 0} = State) ->
+
+    Timer = create_timer(Timeout),
+    {next_state, receiving,
+        State#state{caller = From, needed = Size, timer = Timer}};
+
+receiving({recv, _Size, Timeout}, From, #state{caller = undefined} = State) ->
+    Timer = create_timer(Timeout),
+    {next_state, receiving, State#state{caller = From, timer = Timer}};
+
 receiving(Event, _From, State) ->
     {reply, {error, {bad_event_for_state, receiving, Event}}, State}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% There should be one instance of this function for each possible
+%% state name. Whenever a gen_fsm receives an event sent using
+%% gen_fsm:send_event/2, the instance of this function with the same
+%% name as the current state name StateName is called to handle
+%% the event. It is also called if a timeout occurs.
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec(receiving_header(Event :: term(), State :: #state{}) ->
+    {next_state, NextStateName :: atom(), NextState :: #state{}} |
+    {next_state, NextStateName :: atom(), NextState :: #state{},
+        timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: #state{}}).
+receiving_header(_Event, State) ->
+    {next_state, receiving_header, State}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% There should be one instance of this function for each possible
+%% state name. Whenever a gen_fsm receives an event sent using
+%% gen_fsm:sync_send_event/[2,3], the instance of this function with
+%% the same name as the current state name StateName is called to
+%% handle the event.
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec(receiving_header(Event :: term(), From :: {pid(), term()},
+    State :: #state{}) ->
+    {next_state, NextStateName :: atom(), NextState :: #state{}} |
+    {next_state, NextStateName :: atom(), NextState :: #state{},
+        timeout() | hibernate} |
+    {reply, Reply, NextStateName :: atom(), NextState :: #state{}} |
+    {reply, Reply, NextStateName :: atom(), NextState :: #state{},
+        timeout() | hibernate} |
+    {stop, Reason :: normal | term(), NewState :: #state{}} |
+    {stop, Reason :: normal | term(), Reply :: term(),
+        NewState :: #state{}}).
+receiving_header({recv, _Size, Timeout}, From,
+    #state{caller = undefined} = State) ->
+
+    Timer = create_timer(Timeout),
+    {next_state, receiving_header, State#state{caller = From, timer = Timer}};
+
+receiving_header(Event, _From, State) ->
+    {reply, {error, {bad_event_for_state, receiving_header, Event}}, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -219,44 +282,45 @@ receiving(Event, _From, State) ->
     {stop, Reason :: term(), NewStateData :: #state{}}).
 handle_event({sock_ref, SockRef}, StateName, State) ->
     {next_state, StateName, State#state{sock_ref = SockRef}};
-handle_event({setopts, Opts}, StateName, State) ->
+
+handle_event({setopts, Opts}, idle, State) ->
     #state{active = OldActive, buffer = Buffer, sock_ref = Ref} = State,
-
-    Packet =
-        case proplists:get_value(packet, Opts, 0) of
-            raw -> 0;
-            Other -> Other
-        end,
-
-    UpdatedState = State#state{packet = Packet},
+    Packet = get_packet(Opts),
     Active = proplists:get_value(active, Opts, false),
+    UpdatedState = State#state{packet = Packet},
 
-    case OldActive of
-        false when Active =:= once andalso Buffer =/= <<>> ->
+    case {OldActive, Active, Buffer} of
+        {false, _, <<>>} when Active =:= once; Active =:= true ->
+            recv_packet(UpdatedState#state{active = Active});
+
+        {false, once, _} ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
             {next_state, idle, UpdatedState#state{buffer = <<>>}};
 
-        false when Active =:= true andalso Buffer =/= <<>> ->
+        {false, true, _} ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
-            recv(0, 0, undefined, StateName,
-                UpdatedState#state{buffer = <<>>, active = Active});
-
-        false when Active =:= once orelse Active =:= true ->
-            recv(0, 0, undefined, StateName,
-                UpdatedState#state{active = Active});
+            recv_packet(UpdatedState#state{buffer = <<>>, active = true});
 
         _ ->
-            {next_state, StateName, UpdatedState#state{active = Active}}
+            {next_state, idle, UpdatedState#state{active = Active}}
     end;
+
+handle_event({setopts, Opts}, StateName, State) ->
+    Packet = get_packet(Opts),
+    Active = proplists:get_value(active, Opts, false),
+    {next_state, StateName, State#state{active = Active, packet = Packet}};
+
 handle_event({notify, Msg}, StateName, #state{controlling_pid = Pid} = State) ->
     Pid ! Msg,
     {next_state, StateName, State};
+
 handle_event({reply, Msg}, StateName, State) ->
     #state{timer = Timer, caller = Caller} = State,
     gen_fsm:cancel_timer(Timer),
-    gen_fsm:reply(Caller, Msg),
+    reply(Caller, Msg),
     {next_state, StateName,
-        State#state{timer = undefined, caller = undefined, needed = undefined}};
+        State#state{timer = make_ref(), caller = undefined}};
+
 handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
@@ -280,8 +344,7 @@ handle_event(_Event, StateName, State) ->
     {stop, Reason :: term(), Reply :: term(), NewStateData :: term()} |
     {stop, Reason :: term(), NewStateData :: term()}).
 handle_sync_event(_Event, _From, StateName, State) ->
-    Reply = ok,
-    {reply, Reply, StateName, State}.
+    {reply, {error, unknown_event}, StateName, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -298,13 +361,21 @@ handle_sync_event(_Event, _From, StateName, State) ->
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewStateData :: term()}).
-handle_info({ok, Data}, idle, State) ->
-    OldBuffer = State#state.buffer,
-    {next_state, idle, State#state{buffer = <<OldBuffer/binary, Data/binary>>}};
+handle_info(timeout, StateName, State) ->
+    gen_fsm:send_all_state_event(self(), {reply, {error, timeout}}),
+    {next_state, StateName, State};
 
-handle_info({ok, Data}, receiving_header, #state{packet = Packet} = State) ->
-    <<SizeToRead:Packet/big-unsigned-integer-unit:8>> = Data,
-    recv(SizeToRead, SizeToRead, State#state.caller, receiving_header, State);
+handle_info({ok, Data}, receiving_header, State) ->
+    #state{packet = Packet, caller = Caller} = State,
+
+    case Data of
+        <<SizeToRead:Packet/big-unsigned-integer-unit:8>> ->
+            recv_body(SizeToRead, State#state{needed = SizeToRead});
+
+        _ ->
+            reply(Caller, {error, bad_header}),
+            {stop, bad_header, State}
+    end;
 
 handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
     #state{buffer = Buffer, sock_ref = Ref, active = Active} = State,
@@ -317,39 +388,43 @@ handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
 
         true ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, AData}}),
-            recv(0, 0, undefined, receiving, State#state{buffer = <<>>});
+            recv_packet(State#state{buffer = <<>>});
 
         false ->
             {next_state, idle, State#state{buffer = AData}}
     end;
 
 handle_info({ok, Data}, receiving, State) ->
-    #state{needed = Needed, buffer = Buffer, caller = Caller} = State,
+    #state{needed = Needed, buffer = Buffer, active = Active} = State,
     AData = <<Buffer/binary, Data/binary>>,
+
+    Return = fun(NewBuffer) ->
+        case Active of
+            false ->
+                {next_state, idle, State#state{buffer = NewBuffer, needed = 0}};
+
+            _ ->
+                recv_packet(State#state{buffer = NewBuffer})
+        end
+    end,
 
     case byte_size(AData) of
         BS when BS =:= Needed orelse Needed =:= 0 ->
             gen_fsm:send_all_state_event(self(), {reply, {ok, AData}}),
-            {next_state, idle, State#state{buffer = <<>>}};
+            Return(<<>>);
 
-    % Following should logically not be possible, but let's handle it anyway
         TooMuch when TooMuch > Needed ->
             <<ReplyData:Needed/binary, Rest/binary>> = AData,
-            Reply = {ok, ReplyData},
-            gen_fsm:send_all_state_event(self(), {reply, Reply}),
-            {next_state, idle, State#state{buffer = Rest}};
+            gen_fsm:send_all_state_event(self(), {reply, {ok, ReplyData}}),
+            Return(Rest);
 
-    % What is even happening
         TooLittle ->
             ReallyNeeded = Needed - TooLittle,
-            recv(ReallyNeeded, Needed, Caller, receiving,
-                State#state{buffer = AData})
+            recv_body(ReallyNeeded, State#state{buffer = AData})
     end;
 
-handle_info({error, Reason}, _StateName, #state{caller = undefined} = State) ->
-    {stop, parse_reason(Reason), State};
 handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
-    gen_fsm:reply(Caller, {error, Reason}),
+    reply(Caller, {error, Reason}),
     {stop, parse_reason(Reason), State}.
 
 %%--------------------------------------------------------------------
@@ -398,27 +473,43 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-recv(Size, Needed, From, CurrentState, State) ->
-    #state{socket = Sock, packet = Packet} = State,
+recv_packet(#state{packet = 0} = NextState) ->
+    recv_body(0, NextState#state{needed = 0});
+recv_packet(#state{packet = Packet} = NextState) ->
+    recv_header(NextState#state{needed = Packet}).
 
-    {RecvSize, NewState} =
-        case {Packet, CurrentState} of
-            {0, _} -> {Size, receiving};
-            {_, receiving_header} -> {Size, receiving};
-            _ -> {Packet, receiving_header}
-        end,
-
-    case ssl2_nif:recv(Sock, RecvSize) of
+recv_header(State) ->
+    #state{socket = Sock, packet = Packet, caller = Caller} = State,
+    case ssl2_nif:recv(Sock, Packet) of
+        ok -> {next_state, receiving_header, State};
         {error, Reason} ->
-            gen_fsm:reply(From, {error, Reason}),
-            {stop, Reason, State};
-
-        ok ->
-            {next_state, NewState, State#state{caller = From, needed = Needed}}
+            reply(Caller, {error, Reason}),
+            {stop, Reason, State}
     end.
 
+recv_body(Size, State) ->
+    #state{socket = Sock, caller = Caller} = State,
+    case ssl2_nif:recv(Sock, Size) of
+        ok -> {next_state, receiving, State};
+        {error, Reason} ->
+            reply(Caller, {error, Reason}),
+            {stop, Reason, State}
+    end.
+
+parse_reason("End of file" = Reason) -> {shutdown, Reason};
 parse_reason(Reason) ->
-    case Reason of
-        "End of file" -> {shutdown, Reason};
-        _ -> Reason
+    Reason.
+
+create_timer(infinity) -> make_ref();
+create_timer(Timeout) ->
+    erlang:send_after(Timeout, self(), timeout).
+
+get_packet(Opts) ->
+    case proplists:get_value(packet, Opts, 0) of
+        raw -> 0;
+        Other -> Other
     end.
+
+reply(undefined, _Msg) -> ok;
+reply(Caller, Msg) ->
+    gen_fsm:reply(Caller, Msg).
