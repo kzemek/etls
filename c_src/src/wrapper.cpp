@@ -45,6 +45,14 @@ one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
     };
 }
 
+one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
+{
+    return [=](std::string reason) mutable {
+        auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
+        enif_send(nullptr, &pid, localEnv, message);
+    };
+}
+
 } // namespace
 
 extern "C" {
@@ -104,9 +112,8 @@ static ERL_NIF_TERM send_nif(
     try {
         Env localEnv;
 
-        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
-        nifpp::TERM data{enif_make_copy(localEnv, argv[2])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
+        nifpp::TERM data{enif_make_copy(localEnv, argv[1])};
 
         ErlNifBinary bin;
         enif_inspect_iolist_as_binary(localEnv, data, &bin);
@@ -117,12 +124,12 @@ static ERL_NIF_TERM send_nif(
         enif_self(env, &pid);
 
         auto onSuccess = [=]() mutable {
-            auto message = nifpp::make(localEnv, std::make_tuple(ref, ok));
+            auto message = nifpp::make(localEnv, ok);
             enif_send(nullptr, &pid, localEnv, message);
         };
 
         sock->sendAsync(
-            sock, buffer, std::move(onSuccess), onError(localEnv, pid, ref));
+            sock, buffer, std::move(onSuccess), onError(localEnv, pid));
 
         return nifpp::make(env, ok);
     }
@@ -140,9 +147,8 @@ static ERL_NIF_TERM recv_nif(
     try {
         Env localEnv;
 
-        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
-        auto size = nifpp::get<std::size_t>(env, argv[2]);
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
+        auto size = nifpp::get<std::size_t>(env, argv[1]);
 
         ErlNifPid pid;
         enif_self(env, &pid);
@@ -154,21 +160,20 @@ static ERL_NIF_TERM recv_nif(
                 enif_realloc_binary(
                     bin.get(), boost::asio::buffer_size(buffer));
 
-            auto message = nifpp::make(localEnv,
-                std::make_tuple(ref, std::make_tuple(
-                                         ok, nifpp::make(localEnv, *bin))));
+            auto message = nifpp::make(
+                localEnv, std::make_tuple(ok, nifpp::make(localEnv, *bin)));
 
             enif_send(nullptr, &pid, localEnv, message);
         };
 
         boost::asio::mutable_buffer buffer{bin->data, bin->size};
         if (size == 0) {
-            sock->recvAnyAsync(sock, buffer, std::move(onSuccess),
-                onError(localEnv, pid, ref));
+            sock->recvAnyAsync(
+                sock, buffer, std::move(onSuccess), onError(localEnv, pid));
         }
         else {
-            sock->recvAsync(sock, buffer, std::move(onSuccess),
-                onError(localEnv, pid, ref));
+            sock->recvAsync(
+                sock, buffer, std::move(onSuccess), onError(localEnv, pid));
         }
 
         return nifpp::make(env, ok);
@@ -272,11 +277,10 @@ static ERL_NIF_TERM handshake_nif(
     }
 }
 
-static ErlNifFunc nif_funcs[] = {{"connect_nif", 3, connect_nif},
-    {"send_nif", 3, send_nif}, {"recv_nif", 3, recv_nif},
-    {"listen_nif", 3, listen_nif}, {"accept_nif", 2, accept_nif},
-    {"handshake_nif", 2, handshake_nif}};
+static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
+    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
+    {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif}};
 
-ERL_NIF_INIT(tls, nif_funcs, load, NULL, NULL, NULL)
+ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)
 
 } // extern C

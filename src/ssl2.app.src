@@ -1,4 +1,4 @@
-{application, tls,
+{application, ssl2,
     [
         {description, ""},
         {vsn, "1"},
@@ -7,5 +7,6 @@
             kernel,
             stdlib
         ]},
+        {mod, {ssl2_app, []}},
         {env, []}
     ]}.

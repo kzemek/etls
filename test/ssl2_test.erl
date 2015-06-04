@@ -5,9 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc tls module tests.
+%%% @doc ssl2 module tests.
 %%%--------------------------------------------------------------------
--module(tls_test).
+-module(ssl2_test).
 -author("Konrad Zemek").
 
 -include_lib("eunit/include/eunit.hrl").
@@ -23,18 +23,22 @@ api_test_() ->
 
 connection_test_() ->
     [{foreach, fun start_server/0, fun stop_server/1, [
-        fun connect_should_establish_a_secure_connection/1
+        fun connect_should_establish_a_secure_connection/1,
+        fun connect_should_honor_active_once/1,
+        fun connect_should_honor_active_true/1
     ]}].
 
 communication_test_() ->
     [{foreach, fun start_connection/0, fun stop_connection/1, [
         fun send_should_send_a_message/1,
         fun receive_should_receive_a_message/1,
-        fun receive_should_receive_a_message_when_size_is_zero/1
+        fun receive_should_receive_a_message_when_size_is_zero/1,
+        fun setopts_should_honor_active_once/1,
+        fun setopts_should_honor_active_true/1
     ]}].
 
 server_test_() ->
-    [{foreach, fun start_server_test/0, fun stop_server_test/1, [
+    [{foreach, fun prepare_args/0, fun cleanup/1, [
         fun accept_should_accept_connections/1,
         fun sockets_should_communicate/1
     ]}].
@@ -44,10 +48,10 @@ server_test_() ->
 %%%===================================================================
 
 listen_should_be_callable() ->
-    tls:listen(12345, [{certfile, "server.pem"}]).
+    ssl2:listen(12345, [{certfile, "server.pem"}]).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
-    tls:connect("localhost", Port, [], ?TIMEOUT),
+    ssl2:connect("localhost", Port, [], ?TIMEOUT),
     receive
         {Ref, Result} ->
             [?_assertEqual(connected, Result)]
@@ -55,7 +59,7 @@ connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
 
 send_should_send_a_message({Ref, Server, Sock}) ->
     Data = random_data(),
-    ok = tls:send(Sock, Data),
+    ok = ssl2:send(Sock, Data),
     Server ! {'receive', byte_size(Data)},
     receive
         {Ref, 'receive', Result} ->
@@ -67,7 +71,7 @@ receive_should_receive_a_message({Ref, Server, Sock}) ->
     Server ! {send, Data},
     receive
         {Ref, send, Result} ->
-            RecvResult = tls:recv(Sock, byte_size(Data), ?TIMEOUT),
+            RecvResult = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
             [
                 ?_assertEqual(ok, Result),
                 ?_assertEqual({ok, Data}, RecvResult)
@@ -79,7 +83,7 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
     Server ! {send, Data},
     receive
         {Ref, send, Result} ->
-            RecvResult = tls:recv(Sock, 0, ?TIMEOUT),
+            RecvResult = ssl2:recv(Sock, 0, ?TIMEOUT),
             [
                 ?_assertEqual(ok, Result),
                 ?_assertEqual({ok, Data}, RecvResult)
@@ -89,14 +93,14 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
 accept_should_accept_connections({Ref, Port}) ->
     Self = self(),
 
-    {ok, ListenSock} = tls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
 
     spawn(
         fun() ->
             Self ! {Ref, gen_tcp:connect("localhost", Port, [], ?TIMEOUT)}
         end),
 
-    {ok, _Sock} = tls:accept(ListenSock, ?TIMEOUT),
+    {ok, _Sock} = ssl2:accept(ListenSock, ?TIMEOUT),
 
     receive
         {Ref, Result} ->
@@ -106,14 +110,14 @@ accept_should_accept_connections({Ref, Port}) ->
 sockets_should_communicate({Ref, Port}) ->
     Self = self(),
 
-    {ok, ListenSock} = tls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
     spawn(
         fun() ->
-            Self ! {Ref, tls:connect("localhost", Port, [], ?TIMEOUT)}
+            Self ! {Ref, ssl2:connect("localhost", Port, [], ?TIMEOUT)}
         end),
 
-    {ok, ServerSock} = tls:accept(ListenSock, ?TIMEOUT),
-    ok = tls:handshake(ServerSock, ?TIMEOUT),
+    {ok, ServerSock} = ssl2:accept(ListenSock, ?TIMEOUT),
+    ok = ssl2:handshake(ServerSock, ?TIMEOUT),
 
     {ok, ClientSock} =
         receive
@@ -124,15 +128,115 @@ sockets_should_communicate({Ref, Port}) ->
     ServerSend = random_data(),
     ClientSend = random_data(),
 
-    ok = tls:send(ServerSock, ServerSend),
-    ok = tls:send(ClientSock, ClientSend),
+    ok = ssl2:send(ServerSock, ServerSend),
+    ok = ssl2:send(ClientSock, ClientSend),
 
-    ServerRecv = tls:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
-    ClientRecv = tls:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
+    ServerRecv = ssl2:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
+    ClientRecv = ssl2:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
 
     [
         ?_assertEqual({ok, ClientSend}, ServerRecv),
         ?_assertEqual({ok, ServerSend}, ClientRecv)
+    ].
+
+connect_should_honor_active_once({_Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{active, once}], ?TIMEOUT),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Result1 =
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+
+    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+connect_should_honor_active_true({_Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{active, true}], ?TIMEOUT),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Receive = fun() ->
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end
+    end,
+
+    Result1 = Receive(),
+    Result2 = Receive(),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+setopts_should_honor_active_once({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, once}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Result1 =
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+
+    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+setopts_should_honor_active_true({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, true}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Receive = fun() ->
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end
+    end,
+
+    Result1 = Receive(),
+    Result2 = Receive(),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
     ].
 
 %%%===================================================================
@@ -140,7 +244,8 @@ sockets_should_communicate({Ref, Port}) ->
 %%%===================================================================
 
 start_server() ->
-    ssl:start(),
+    ssl:start(temporary),
+    ssl2_app:start(temporary, []),
 
     Self = self(),
     Ref = make_ref(),
@@ -157,16 +262,17 @@ stop_server({_Ref, Server, _Port}) ->
 
 start_connection() ->
     {Ref, Server, Port} = start_server(),
-    {ok, Sock} = tls:connect("localhost", Port, [], ?TIMEOUT),
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
     {Ref, Server, Sock}.
 
 stop_connection({_Ref, Server, _Sock}) ->
     Server ! stop.
 
-start_server_test() ->
+prepare_args() ->
+    ssl2_app:start(temporary, []),
     {make_ref(), random_port()}.
 
-stop_server_test({_Ref, _Port}) ->
+cleanup({_Ref, _Port}) ->
     ok.
 
 %%%===================================================================
@@ -215,6 +321,6 @@ server_loop(Pid, Ref, Sock) ->
 
 %% run_client(Ref, Port) ->
 %%     try
-%%         {ok, Sock} = tls:connect("localhost")
+%%         {ok, Sock} = ssl2:connect("localhost")
 %%         catch
 %%         end.
