@@ -177,7 +177,14 @@ void TLSSocket::handshakeAsync(
     });
 }
 
-void TLSSocket::close() { m_socket.lowest_layer().close(); }
+void TLSSocket::close()
+{
+    boost::system::error_code ec;
+    m_socket.lowest_layer().shutdown(
+        boost::asio::ip::tcp::socket::shutdown_both, ec);
+
+    m_socket.lowest_layer().close();
+}
 
 boost::asio::ip::tcp::endpoint TLSSocket::localEndpoint() const
 {

@@ -42,7 +42,8 @@ communication_test_() ->
         fun setopts_should_respect_packet_options/1,
         fun recv_should_allow_for_new_caller_after_timeout/1,
         fun recv_should_allow_for_recv_while_active/1,
-        fun socket_should_allow_to_set_controlling_process/1
+        fun socket_should_allow_to_set_controlling_process/1,
+        fun socket_should_be_closeable/1
     ]}].
 
 server_test_() ->
@@ -360,14 +361,25 @@ socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
 
 socket_should_hold_peername({_Ref, _Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
-    [?_assertEqual({ok, {{127,0,0,1}, Port}}, ssl2:peername(Sock))].
+    [?_assertEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:peername(Sock))].
 
 socket_should_hold_sockname({_Ref, _Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
     [
-        ?_assertMatch({ok, {{127,0,0,1}, _}}, ssl2:sockname(Sock)),
-        ?_assertNotEqual({ok, {{127,0,0,1}, Port}}, ssl2:sockname(Sock))
+        ?_assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
+        ?_assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
     ].
+
+socket_should_be_closeable({_Ref, _Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, once}]),
+    ok = ssl2:close(Sock),
+    Result =
+        receive
+            {ssl2_closed, Sock} = R -> R
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+    [?_assertEqual({ssl2_closed, Sock}, Result)].
 
 %%%===================================================================
 %%% Test fixtures
@@ -388,22 +400,29 @@ start_server() ->
     end.
 
 stop_server({_Ref, Server, _Port}) ->
-    Server ! stop.
+    Server ! stop,
+    clear_queue().
 
 start_connection() ->
     {Ref, Server, Port} = start_server(),
     {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    receive
+        {Ref, connected} -> ok
+    after ?TIMEOUT ->
+        error(not_connected)
+    end,
     {Ref, Server, Sock}.
 
 stop_connection({_Ref, Server, _Sock}) ->
-    Server ! stop.
+    Server ! stop,
+    clear_queue().
 
 prepare_args() ->
     ssl2_app:start(temporary, []),
     {make_ref(), random_port()}.
 
 cleanup({_Ref, _Port}) ->
-    ok.
+    clear_queue().
 
 %%%===================================================================
 %%% Helper functions
@@ -447,4 +466,11 @@ server_loop(Pid, Ref, Sock) ->
 
         stop ->
             ok
+    end.
+
+clear_queue() ->
+    receive
+        _ -> clear_queue()
+    after 0 ->
+        ok
     end.

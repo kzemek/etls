@@ -14,7 +14,7 @@
 
 %% API
 -export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
-    peername/1, sockname/1]).
+    peername/1, sockname/1, close/1]).
 
 %%%===================================================================
 %%% API
@@ -42,6 +42,9 @@ peername(_Sock) ->
     error(ssl2_nif_not_loaded).
 
 sockname(_Sock) ->
+    error(ssl2_nif_not_loaded).
+
+close(_Sock) ->
     error(ssl2_nif_not_loaded).
 
 %%%===================================================================

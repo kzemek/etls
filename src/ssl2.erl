@@ -13,7 +13,7 @@
 %% API
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
-    controlling_process/2, peername/1, sockname/1]).
+    controlling_process/2, peername/1, sockname/1, close/1]).
 
 -record(sock_ref, {
     socket :: term(),
@@ -108,6 +108,13 @@ peername(#sock_ref{socket = Sock}) ->
 
 sockname(#sock_ref{socket = Sock}) ->
     parse_name_result(ssl2_nif:sockname(Sock)).
+
+close(#sock_ref{socket = Sock, supervisor = Sup}) ->
+    ok = supervisor:terminate_child(ssl2_sup, Sup),
+    case ssl2_nif:close(Sock) of
+        {error, Reason} -> {error, Reason};
+        Else -> Else
+    end.
 
 %%%===================================================================
 %%% Internal functions
