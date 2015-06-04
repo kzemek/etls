@@ -25,7 +25,8 @@ connection_test_() ->
     [{foreach, fun start_server/0, fun stop_server/1, [
         fun connect_should_establish_a_secure_connection/1,
         fun connect_should_honor_active_once/1,
-        fun connect_should_honor_active_true/1
+        fun connect_should_honor_active_true/1,
+        fun connect_should_respect_packet_options/1
     ]}].
 
 communication_test_() ->
@@ -35,7 +36,8 @@ communication_test_() ->
         fun receive_should_receive_a_message_when_size_is_zero/1,
         fun setopts_should_honor_active_once/1,
         fun setopts_should_honor_active_true/1,
-        fun socket_should_notify_about_closure_when_active/1
+        fun socket_should_notify_about_closure_when_active/1,
+        fun setopts_should_respect_packet_options/1
     ]}].
 
 server_test_() ->
@@ -251,6 +253,47 @@ socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
         end,
     [?_assertEqual(ok, Result)].
 
+connect_should_respect_packet_options({Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{packet, 2}]),
+
+    Data = random_data(),
+    DS = byte_size(Data),
+
+    ok = ssl2:send(Sock, Data),
+    ExpectedData = <<DS:2/big-unsigned-integer-unit:8, Data/binary>>,
+
+    Server ! {'receive', DS + 2},
+    Server ! {send, ExpectedData},
+
+    receive
+        {Ref, 'receive', Result} ->
+            Received = ssl2:recv(Sock, 12345, ?TIMEOUT),
+            [
+                ?_assertEqual({ok, ExpectedData}, Result),
+                ?_assertEqual({ok, Data}, Received)
+            ]
+    end.
+
+setopts_should_respect_packet_options({Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{packet, 4}]),
+
+    Data = random_data(),
+    DS = byte_size(Data),
+
+    ok = ssl2:send(Sock, Data),
+    ExpectedData = <<DS:4/big-unsigned-integer-unit:8, Data/binary>>,
+
+    Server ! {'receive', DS + 4},
+    Server ! {send, ExpectedData},
+
+    receive
+        {Ref, 'receive', Result} ->
+            Received = ssl2:recv(Sock, 54321, ?TIMEOUT),
+            [
+                ?_assertEqual({ok, ExpectedData}, Result),
+                ?_assertEqual({ok, Data}, Received)
+            ]
+    end.
 
 %%%===================================================================
 %%% Test fixtures

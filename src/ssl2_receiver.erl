@@ -37,7 +37,8 @@
     timer :: timer:timers(),
     active = false :: false | once | true,
     controlling_pid :: pid(),
-    sock_ref :: term()
+    sock_ref :: term(),
+    packet = raw :: raw | 0 | 1 | 2 | 4
 }).
 
 %%%===================================================================
@@ -121,7 +122,7 @@ idle(_Event, State) ->
     {stop, Reason :: normal | term(), Reply :: term(),
         NewState :: #state{}}).
 idle({recv, Size, Timeout}, From, State) ->
-    #state{buffer = Buffer, socket = Sock} = State,
+    #state{buffer = Buffer, packet = Packet} = State,
 
     Timer =
         case Timeout of
@@ -129,8 +130,14 @@ idle({recv, Size, Timeout}, From, State) ->
             _ -> gen_fsm:start_timer(Timeout, timeout)
         end,
 
-    case Size of
-        0 -> recv(Sock, Size, Size, From, State#state{timer = Timer});
+    case {Size, Packet, Buffer} of
+        {0, 0, <<>>} ->
+            recv(Size, Size, From, idle, State#state{timer = Timer});
+
+        {_, _, _} when (Size =:= 0 orelse Packet > 0)
+            andalso erlang:byte_size(Buffer) > 0 ->
+            {reply, {ok, Buffer}, idle, State#state{buffer = <<>>}};
+
         _ ->
             case byte_size(Buffer) of
                 BS when BS >= Size ->
@@ -140,7 +147,7 @@ idle({recv, Size, Timeout}, From, State) ->
 
                 BS ->
                     NeedToFetch = Size - BS,
-                    recv(Sock, NeedToFetch, Size, From,
+                    recv(NeedToFetch, Size, From, idle,
                         State#state{timer = Timer})
             end
     end;
@@ -213,26 +220,33 @@ receiving(Event, _From, State) ->
 handle_event({sock_ref, SockRef}, StateName, State) ->
     {next_state, StateName, State#state{sock_ref = SockRef}};
 handle_event({setopts, Opts}, StateName, State) ->
-    #state{active = OldActive, socket = Sock, buffer = Buffer,
-        sock_ref = Ref} = State,
+    #state{active = OldActive, buffer = Buffer, sock_ref = Ref} = State,
 
+    Packet =
+        case proplists:get_value(packet, Opts, 0) of
+            raw -> 0;
+            Other -> Other
+        end,
+
+    UpdatedState = State#state{packet = Packet},
     Active = proplists:get_value(active, Opts, false),
 
     case OldActive of
         false when Active =:= once andalso Buffer =/= <<>> ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
-            {next_state, idle, State#state{buffer = <<>>}};
+            {next_state, idle, UpdatedState#state{buffer = <<>>}};
 
         false when Active =:= true andalso Buffer =/= <<>> ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
-            recv(Sock, 0, 0, undefined,
-                State#state{buffer = <<>>, active = Active});
+            recv(0, 0, undefined, StateName,
+                UpdatedState#state{buffer = <<>>, active = Active});
 
         false when Active =:= once orelse Active =:= true ->
-            recv(Sock, 0, 0, undefined, State#state{active = Active});
+            recv(0, 0, undefined, StateName,
+                UpdatedState#state{active = Active});
 
         _ ->
-            {next_state, StateName, State#state{active = Active}}
+            {next_state, StateName, UpdatedState#state{active = Active}}
     end;
 handle_event({notify, Msg}, StateName, #state{controlling_pid = Pid} = State) ->
     Pid ! Msg,
@@ -288,11 +302,14 @@ handle_info({ok, Data}, idle, State) ->
     OldBuffer = State#state.buffer,
     {next_state, idle, State#state{buffer = <<OldBuffer/binary, Data/binary>>}};
 
-handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
-    #state{buffer = Buffer, sock_ref = Ref,
-        active = Active, socket = Sock} = State,
+handle_info({ok, Data}, receiving_header, #state{packet = Packet} = State) ->
+    <<SizeToRead:Packet/big-unsigned-integer-unit:8>> = Data,
+    recv(SizeToRead, SizeToRead, State#state.caller, receiving_header, State);
 
+handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
+    #state{buffer = Buffer, sock_ref = Ref, active = Active} = State,
     AData = <<Buffer/binary, Data/binary>>,
+
     case Active of
         once ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, AData}}),
@@ -300,16 +317,14 @@ handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
 
         true ->
             gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, AData}}),
-            recv(Sock, 0, 0, undefined, State#state{buffer = <<>>});
+            recv(0, 0, undefined, receiving, State#state{buffer = <<>>});
 
         false ->
             {next_state, idle, State#state{buffer = AData}}
     end;
 
 handle_info({ok, Data}, receiving, State) ->
-    #state{needed = Needed, buffer = Buffer,
-        caller = Caller, socket = Sock} = State,
-
+    #state{needed = Needed, buffer = Buffer, caller = Caller} = State,
     AData = <<Buffer/binary, Data/binary>>,
 
     case byte_size(AData) of
@@ -327,7 +342,7 @@ handle_info({ok, Data}, receiving, State) ->
     % What is even happening
         TooLittle ->
             ReallyNeeded = Needed - TooLittle,
-            recv(Sock, ReallyNeeded, Needed, Caller,
+            recv(ReallyNeeded, Needed, Caller, receiving,
                 State#state{buffer = AData})
     end;
 
@@ -383,12 +398,23 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-recv(Sock, Size, Needed, From, State) ->
-    case ssl2_nif:recv(Sock, Size) of
-        {error, Reason} -> {stop, Reason, {error, Reason}, State};
+recv(Size, Needed, From, CurrentState, State) ->
+    #state{socket = Sock, packet = Packet} = State,
+
+    {RecvSize, NewState} =
+        case {Packet, CurrentState} of
+            {0, _} -> {Size, receiving};
+            {_, receiving_header} -> {Size, receiving};
+            _ -> {Packet, receiving_header}
+        end,
+
+    case ssl2_nif:recv(Sock, RecvSize) of
+        {error, Reason} ->
+            gen_fsm:reply(From, {error, Reason}),
+            {stop, Reason, State};
+
         ok ->
-            NewState = State#state{caller = From, needed = Needed},
-            {next_state, receiving, NewState}
+            {next_state, NewState, State#state{caller = From, needed = Needed}}
     end.
 
 parse_reason(Reason) ->

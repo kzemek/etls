@@ -29,7 +29,8 @@
 
 -record(state, {
     socket :: term(),
-    caller :: term()
+    caller :: term(),
+    packet = 0 :: 0 | 1 | 2 | 4
 }).
 
 %%%===================================================================
@@ -112,8 +113,16 @@ idle(_Event, State) ->
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
         NewState :: #state{}}).
-idle({send, Data}, From, #state{socket = Sock} = State) ->
-    case ssl2_nif:send(Sock, Data) of
+idle({send, Data}, From, #state{socket = Sock, packet = Packet} = State) ->
+    SendData =
+        case Packet of
+            0 -> Data;
+            _ ->
+                DS = byte_size(Data),
+                <<DS:Packet/big-unsigned-integer-unit:8, Data/binary>>
+        end,
+
+    case ssl2_nif:send(Sock, SendData) of
         ok -> {next_state, sending, State#state{caller = From}};
         {error, Reason} -> {stop, Reason, {error, Reason}, State}
     end;
@@ -182,6 +191,13 @@ sending(Event, _From, State) ->
     {next_state, NextStateName :: atom(), NewStateData :: #state{},
         timeout() | hibernate} |
     {stop, Reason :: term(), NewStateData :: #state{}}).
+handle_event({setopts, Opts}, StateName, State) ->
+    Packet =
+        case proplists:get_value(packet, Opts, 0) of
+            raw -> 0;
+            Other -> Other
+        end,
+    {next_state, StateName, State#state{packet = Packet}};
 handle_event({reply, Msg}, StateName, #state{caller = Caller} = State) ->
     gen_fsm:reply(Caller, Msg),
     {next_state, StateName, State#state{caller = undefined}};
