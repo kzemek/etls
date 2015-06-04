@@ -11,6 +11,7 @@
 #include <boost/asio.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <random>
 #include <vector>
 
@@ -22,6 +23,10 @@ TLSSocket::TLSSocket(boost::asio::io_service &ioService)
     , m_resolver{ioService}
     , m_socket{ioService, m_clientContext}
 {
+    namespace p = std::placeholders;
+    m_socket.set_verify_mode(boost::asio::ssl::verify_none);
+    m_socket.set_verify_callback(
+        std::bind(&TLSSocket::saveCertificate, this, p::_1, p::_2));
 }
 
 TLSSocket::TLSSocket(
@@ -30,6 +35,10 @@ TLSSocket::TLSSocket(
     , m_resolver{ioService}
     , m_socket{ioService, context}
 {
+    namespace p = std::placeholders;
+    m_socket.set_verify_mode(boost::asio::ssl::verify_none);
+    m_socket.set_verify_callback(
+        std::bind(&TLSSocket::saveCertificate, this, p::_1, p::_2));
 }
 
 void TLSSocket::connectAsync(Ptr self, std::string host,
@@ -196,6 +205,12 @@ boost::asio::ip::tcp::endpoint TLSSocket::remoteEndpoint() const
     return m_socket.lowest_layer().remote_endpoint();
 }
 
+const std::vector<std::vector<unsigned char>> &
+TLSSocket::certificateChain() const
+{
+    return m_certificateChain;
+}
+
 std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
 TLSSocket::shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator)
 {
@@ -207,6 +222,26 @@ TLSSocket::shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator)
     std::shuffle(endpoints.begin(), endpoints.end(), engine);
 
     return endpoints;
+}
+
+bool TLSSocket::saveCertificate(bool, boost::asio::ssl::verify_context &ctx)
+{
+    auto cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+    if (!cert)
+        return true;
+
+    const auto dataLen = i2d_X509(cert, nullptr);
+    if (dataLen < 0)
+        return true;
+
+    std::vector<unsigned char> certificateData(dataLen);
+    auto p = certificateData.data();
+    if (i2d_X509(cert, &p) < 0)
+        return true;
+
+    m_certificateChain.emplace_back(std::move(certificateData));
+
+    return true;
 }
 
 } // namespace etls

@@ -12,8 +12,10 @@
 #include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <tuple>
+#include <vector>
 
 class Env {
 public:
@@ -333,11 +335,36 @@ static ERL_NIF_TERM close_nif(
     }
 }
 
+static ERL_NIF_TERM certificate_chain_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
+        auto &chain = sock->certificateChain();
+
+        std::vector<nifpp::TERM> terms;
+        std::transform(chain.begin(), chain.end(), std::back_inserter(terms),
+            [env](auto &cert) {
+                nifpp::binary bin{cert.size()};
+                std::memcpy(bin.data, cert.data(), bin.size);
+                return nifpp::TERM{nifpp::make(env, bin)};
+            });
+
+        return nifpp::make(env, std::make_tuple(ok, terms));
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
 static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
     {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
     {"peername", 1, peername_nif}, {"sockname", 1, sockname_nif},
-    {"close", 1, close_nif}};
+    {"close", 1, close_nif}, {"certificate_chain", 1, certificate_chain_nif}};
 
 ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)
 

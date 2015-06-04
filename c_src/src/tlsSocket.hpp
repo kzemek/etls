@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace one {
 namespace etls {
@@ -51,11 +52,15 @@ public:
 
     boost::asio::ip::tcp::endpoint remoteEndpoint() const;
 
+    const std::vector<std::vector<unsigned char>> &certificateChain() const;
+
     void close();
 
 private:
     std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
     shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator);
+
+    bool saveCertificate(bool, boost::asio::ssl::verify_context &ctx);
 
     boost::asio::ssl::context m_clientContext{
         boost::asio::ssl::context::tlsv12_client};
@@ -63,6 +68,7 @@ private:
     boost::asio::io_service::strand m_strand;
     boost::asio::ip::tcp::resolver m_resolver;
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;
+    std::vector<std::vector<unsigned char>> m_certificateChain;
 };
 
 } // namespace etls

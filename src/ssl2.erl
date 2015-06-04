@@ -13,7 +13,7 @@
 %% API
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
-    controlling_process/2, peername/1, sockname/1, close/1]).
+    controlling_process/2, peername/1, sockname/1, close/1, peercert/1]).
 
 -record(sock_ref, {
     socket :: term(),
@@ -114,6 +114,13 @@ close(#sock_ref{socket = Sock, supervisor = Sup}) ->
     case ssl2_nif:close(Sock) of
         {error, Reason} -> {error, Reason};
         Else -> Else
+    end.
+
+peercert(#sock_ref{socket = Sock}) ->
+    case ssl2_nif:certificate_chain(Sock) of
+        {ok, []} -> {error, no_peer_certificate};
+        {ok, Chain} -> {ok, lists:last(Chain)};
+        {error, Reason} -> {error, Reason}
     end.
 
 %%%===================================================================

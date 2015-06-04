@@ -11,6 +11,7 @@
 -author("Konrad Zemek").
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("public_key/include/public_key.hrl").
 
 -define(TIMEOUT, timer:seconds(10)).
 
@@ -43,7 +44,8 @@ communication_test_() ->
         fun recv_should_allow_for_new_caller_after_timeout/1,
         fun recv_should_allow_for_recv_while_active/1,
         fun socket_should_allow_to_set_controlling_process/1,
-        fun socket_should_be_closeable/1
+        fun socket_should_be_closeable/1,
+        fun socket_should_return_peer_certificate/1
     ]}].
 
 server_test_() ->
@@ -380,6 +382,13 @@ socket_should_be_closeable({_Ref, _Server, Sock}) ->
             {error, test_timeout}
         end,
     [?_assertEqual({ssl2_closed, Sock}, Result)].
+
+socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
+    {ok, Der} = ssl2:peercert(Sock),
+    Cert = public_key:pkix_decode_cert(Der, otp),
+    TBSCert = Cert#'OTPCertificate'.tbsCertificate,
+    Serial = TBSCert#'OTPTBSCertificate'.serialNumber,
+    [?_assertEqual(10728077368415183536, Serial)].
 
 %%%===================================================================
 %%% Test fixtures
