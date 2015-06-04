@@ -179,6 +179,16 @@ void TLSSocket::handshakeAsync(
 
 void TLSSocket::close() { m_socket.lowest_layer().close(); }
 
+boost::asio::ip::tcp::endpoint TLSSocket::localEndpoint() const
+{
+    return m_socket.lowest_layer().local_endpoint();
+}
+
+boost::asio::ip::tcp::endpoint TLSSocket::remoteEndpoint() const
+{
+    return m_socket.lowest_layer().remote_endpoint();
+}
+
 std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
 TLSSocket::shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator)
 {

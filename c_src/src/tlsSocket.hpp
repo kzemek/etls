@@ -47,6 +47,10 @@ public:
 
     void handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
 
+    boost::asio::ip::tcp::endpoint localEndpoint() const;
+
+    boost::asio::ip::tcp::endpoint remoteEndpoint() const;
+
     void close();
 
 private:

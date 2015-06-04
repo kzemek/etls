@@ -26,7 +26,9 @@ connection_test_() ->
         fun connect_should_establish_a_secure_connection/1,
         fun connect_should_honor_active_once/1,
         fun connect_should_honor_active_true/1,
-        fun connect_should_respect_packet_options/1
+        fun connect_should_respect_packet_options/1,
+        fun socket_should_hold_peername/1,
+        fun socket_should_hold_sockname/1
     ]}].
 
 communication_test_() ->
@@ -355,6 +357,17 @@ socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
         {NewRef, Res} ->
             [?_assertEqual(Data, Res)]
     end.
+
+socket_should_hold_peername({_Ref, _Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    [?_assertEqual({ok, {{127,0,0,1}, Port}}, ssl2:peername(Sock))].
+
+socket_should_hold_sockname({_Ref, _Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    [
+        ?_assertMatch({ok, {{127,0,0,1}, _}}, ssl2:sockname(Sock)),
+        ?_assertNotEqual({ok, {{127,0,0,1}, Port}}, ssl2:sockname(Sock))
+    ].
 
 %%%===================================================================
 %%% Test fixtures

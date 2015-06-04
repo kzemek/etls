@@ -277,9 +277,50 @@ static ERL_NIF_TERM handshake_nif(
     }
 }
 
+static ERL_NIF_TERM peername_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
+        auto endpoint = sock->remoteEndpoint();
+        auto address = endpoint.address().to_string();
+        auto port = endpoint.port();
+
+        return nifpp::make(
+            env, std::make_tuple(ok, std::make_tuple(address, port)));
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
+static ERL_NIF_TERM sockname_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
+        auto endpoint = sock->localEndpoint();
+        auto address = endpoint.address().to_string();
+        auto port = endpoint.port();
+
+        return nifpp::make(
+            env, std::make_tuple(ok, std::make_tuple(address, port)));
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
 static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
     {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
-    {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif}};
+    {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
+    {"peername", 1, peername_nif}, {"sockname", 1, sockname_nif}};
 
 ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)
 

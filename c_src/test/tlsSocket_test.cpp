@@ -208,3 +208,17 @@ TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
 
     ASSERT_TRUE(waitFor(called));
 }
+
+TEST_F(TLSSocketTestC, shouldReturnLocalEndpoint)
+{
+    auto endpoint = socket->localEndpoint();
+    ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
+    ASSERT_NE(port, endpoint.port());
+}
+
+TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
+{
+    auto endpoint = socket->remoteEndpoint();
+    ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
+    ASSERT_EQ(port, endpoint.port());
+}
