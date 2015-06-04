@@ -310,6 +310,9 @@ handle_event({setopts, Opts}, StateName, State) ->
     Active = proplists:get_value(active, Opts, false),
     {next_state, StateName, State#state{active = Active, packet = Packet}};
 
+handle_event({controlling_process, Pid}, StateName, State) ->
+    {next_state, StateName, State#state{controlling_pid = Pid}};
+
 handle_event({notify, Msg}, StateName, #state{controlling_pid = Pid} = State) ->
     Pid ! Msg,
     {next_state, StateName, State};

@@ -39,7 +39,8 @@ communication_test_() ->
         fun socket_should_notify_about_closure_when_active/1,
         fun setopts_should_respect_packet_options/1,
         fun recv_should_allow_for_new_caller_after_timeout/1,
-        fun recv_should_allow_for_recv_while_active/1
+        fun recv_should_allow_for_recv_while_active/1,
+        fun socket_should_allow_to_set_controlling_process/1
     ]}].
 
 server_test_() ->
@@ -331,6 +332,28 @@ recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
                 ?_assertEqual({ok, Data1}, Result),
                 ?_assertEqual(Data2, Result2)
             ]
+    end.
+
+socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{active, true}]),
+    Data = random_data(),
+    Self = self(),
+    NewRef = make_ref(),
+
+    Pid = spawn(fun() ->
+        receive
+            {ssl2, Sock, Result} -> Self ! {NewRef, Result}
+        after ?TIMEOUT ->
+            Self ! {NewRef, {error, test_timeout}}
+        end
+    end),
+
+    ok = ssl2:controlling_process(Sock, Pid),
+    Server ! {send, Data},
+
+    receive
+        {NewRef, Res} ->
+            [?_assertEqual(Data, Res)]
     end.
 
 %%%===================================================================
