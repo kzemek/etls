@@ -34,7 +34,8 @@ communication_test_() ->
         fun receive_should_receive_a_message/1,
         fun receive_should_receive_a_message_when_size_is_zero/1,
         fun setopts_should_honor_active_once/1,
-        fun setopts_should_honor_active_true/1
+        fun setopts_should_honor_active_true/1,
+        fun socket_should_notify_about_closure_when_active/1
     ]}].
 
 server_test_() ->
@@ -239,6 +240,18 @@ setopts_should_honor_active_true({_Ref, Server, Sock}) ->
         ?_assertEqual({ok, Data2}, Result2)
     ].
 
+socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, true}]),
+    Server ! stop,
+    Result =
+        receive
+            {ssl2_closed, Sock} -> ok
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+    [?_assertEqual(ok, Result)].
+
+
 %%%===================================================================
 %%% Test fixtures
 %%%===================================================================
@@ -318,9 +331,3 @@ server_loop(Pid, Ref, Sock) ->
         stop ->
             ok
     end.
-
-%% run_client(Ref, Port) ->
-%%     try
-%%         {ok, Sock} = ssl2:connect("localhost")
-%%         catch
-%%         end.
