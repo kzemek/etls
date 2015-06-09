@@ -32,8 +32,8 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(Sock :: term(), Options :: list(), CtrlPid :: pid()) ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+-spec start_link(Sock :: term(), Options :: list(), CtrlPid :: pid()) ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}.
 start_link(Sock, Options, CtrlPid) ->
     supervisor:start_link(?MODULE, [Sock, Options, CtrlPid]).
 
@@ -51,13 +51,12 @@ start_link(Sock, Options, CtrlPid) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(init(Args :: term()) ->
+-spec init(Args :: term()) ->
     {ok, {SupFlags :: {RestartStrategy :: supervisor:strategy(),
         MaxR :: non_neg_integer(), MaxT :: non_neg_integer()},
         [ChildSpec :: supervisor:child_spec()]
     }} |
-    ignore |
-    {error, Reason :: term()}).
+    ignore.
 init([Sock, Options, CtrlPid]) ->
     RestartStrategy = one_for_all,
     MaxRestarts = 0,

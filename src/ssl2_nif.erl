@@ -16,44 +16,74 @@
 -export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
     peername/1, sockname/1, close/1, certificate_chain/1]).
 
+-opaque socket() :: binary().
+-opaque acceptor() :: binary().
+
+-export_type([socket/0, acceptor/0]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
+-spec connect(Ref :: reference(), Host :: string(),
+    Port :: inet:port_number()) ->
+    ok | {error, Reason :: any()}.
 connect(_Ref, _Host, _Port) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec send(Socket :: socket(), Data :: iodata()) ->
+    ok | {error, Reason :: any()}.
 send(_Sock, _Data) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
+    ok | {error, Reason :: any()}.
 recv(_Sock, _Size) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec listen(Port :: inet:port_number(), CertPath :: string(),
+    KeyPath :: string()) ->
+    {ok, Acceptor :: acceptor()} |
+    {error, Reason :: any()}.
 listen(_Port, _CertPath, _KeyPath) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec accept(Ref :: reference(), Acceptor :: acceptor()) ->
+    ok | {error, Reason :: any()}.
 accept(_Ref, _Acceptor) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec handshake(Ref :: reference(), Socket :: socket()) ->
+    ok | {error, Reason :: any()}.
 handshake(_Ref, _Sock) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec peername(Socket :: socket()) ->
+    {ok, {StrAddress :: string(), Port :: inet:port_number()}} |
+    {error, Reason :: any()}.
 peername(_Sock) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec sockname(Socket :: socket()) ->
+    {ok, {StrAddress :: string(), Port :: inet:port_number()}} |
+    {error, Reason :: any()}.
 sockname(_Sock) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
 close(_Sock) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
+-spec certificate_chain(Socket :: socket()) ->
+    {ok, [binary()]} | {error, Reason :: any()}.
 certificate_chain(_Sock) ->
-    error(ssl2_nif_not_loaded).
+    erlang:nif_error(ssl2_nif_not_loaded).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
+-spec init() -> ok | {error, Reason :: any()}.
 init() ->
     LibName = "liberlang_tls",
     LibPath =

@@ -28,8 +28,8 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-    socket :: term(),
-    caller :: term(),
+    socket :: ssl2_nif:socket(),
+    caller :: {pid(), term()},
     packet = 0 :: 0 | 1 | 2 | 4
 }).
 
@@ -45,8 +45,8 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(Sock :: term(), Options :: list()) ->
-    {ok, pid()} | ignore | {error, Reason :: term()}).
+-spec start_link(Sock :: term(), Options :: list()) ->
+    {ok, pid()} | ignore | {error, Reason :: term()}.
 start_link(Sock, Options) ->
     gen_fsm:start_link(?MODULE, [Sock, Options], []).
 
@@ -63,10 +63,10 @@ start_link(Sock, Options) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(init(Args :: term()) ->
+-spec init(Args :: term()) ->
     {ok, StateName :: atom(), StateData :: #state{}} |
     {ok, StateName :: atom(), StateData :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term()} | ignore).
+    {stop, Reason :: term()} | ignore.
 init([Sock, Options]) ->
     process_flag(trap_exit, true),
     gen_fsm:send_all_state_event(self(), {setopts, Options}),
@@ -83,11 +83,11 @@ init([Sock, Options]) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(idle(Event :: term(), State :: #state{}) ->
+-spec idle(Event :: term(), State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    {stop, Reason :: term(), NewState :: #state{}}.
 idle(_Event, State) ->
     {next_state, idle, State}.
 
@@ -102,7 +102,7 @@ idle(_Event, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(idle(Event :: term(), From :: {pid(), term()},
+-spec idle(Event :: term(), From :: {pid(), term()},
     State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
@@ -112,7 +112,7 @@ idle(_Event, State) ->
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
-        NewState :: #state{}}).
+        NewState :: #state{}}.
 idle({send, Data}, From, State) ->
     #state{socket = Sock, packet = Packet} = State,
 
@@ -143,11 +143,11 @@ idle(Event, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(sending(Event :: term(), State :: #state{}) ->
+-spec sending(Event :: term(), State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    {stop, Reason :: term(), NewState :: #state{}}.
 sending(_Event, State) ->
     {next_state, sending, State}.
 
@@ -162,7 +162,7 @@ sending(_Event, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(sending(Event :: term(), From :: {pid(), term()},
+-spec sending(Event :: term(), From :: {pid(), term()},
     State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
@@ -172,9 +172,9 @@ sending(_Event, State) ->
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
-        NewState :: #state{}}).
+        NewState :: #state{}}.
 sending(Event, _From, State) ->
-    {reply, {error, {bad_event_for_state, sending, Event}}, State}.
+    {reply, {error, {bad_event_for_state, sending, Event}}, sending, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -185,12 +185,12 @@ sending(Event, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_event(Event :: term(), StateName :: atom(),
+-spec handle_event(Event :: term(), StateName :: atom(),
     StateData :: #state{}) ->
     {next_state, NextStateName :: atom(), NewStateData :: #state{}} |
     {next_state, NextStateName :: atom(), NewStateData :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewStateData :: #state{}}).
+    {stop, Reason :: term(), NewStateData :: #state{}}.
 handle_event({setopts, Opts}, StateName, State) ->
     Packet = get_packet(Opts),
     {next_state, StateName, State#state{packet = Packet}};
@@ -211,7 +211,7 @@ handle_event(_Event, StateName, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
+-spec handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
     StateName :: atom(), StateData :: term()) ->
     {reply, Reply :: term(), NextStateName :: atom(), NewStateData :: term()} |
     {reply, Reply :: term(), NextStateName :: atom(), NewStateData :: term(),
@@ -220,9 +220,9 @@ handle_event(_Event, StateName, State) ->
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewStateData :: term()} |
-    {stop, Reason :: term(), NewStateData :: term()}).
+    {stop, Reason :: term(), NewStateData :: term()}.
 handle_sync_event(Event, _From, StateName, State) ->
-    {reply, {error, {bad_event_for_state, StateName, Event}}, State}.
+    {reply, {error, {bad_event_for_state, StateName, Event}}, StateName, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -233,12 +233,12 @@ handle_sync_event(Event, _From, StateName, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_info(Info :: term(), StateName :: atom(),
+-spec handle_info(Info :: term(), StateName :: atom(),
     StateData :: term()) ->
     {next_state, NextStateName :: atom(), NewStateData :: term()} |
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
-    {stop, Reason :: normal | term(), NewStateData :: term()}).
+    {stop, Reason :: normal | term(), NewStateData :: term()}.
 handle_info(ok, _StateName, State) ->
     gen_fsm:send_all_state_event(self(), {reply, ok}),
     {next_state, idle, State};
@@ -257,8 +257,8 @@ handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(terminate(Reason :: normal | shutdown | {shutdown, term()}
-| term(), StateName :: atom(), StateData :: term()) -> term()).
+-spec terminate(Reason :: normal | shutdown | {shutdown, term()}
+| term(), StateName :: atom(), StateData :: term()) -> term().
 terminate(_Reason, _StateName, _State) ->
     ok.
 
@@ -269,9 +269,9 @@ terminate(_Reason, _StateName, _State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
+-spec code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
     StateData :: #state{}, Extra :: term()) ->
-    {ok, NextStateName :: atom(), NewStateData :: #state{}}).
+    {ok, NextStateName :: atom(), NewStateData :: #state{}}.
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
@@ -279,12 +279,15 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+-spec get_packet(Opts :: ssl2:connect_opts()) -> 0 | 1 | 2 | 4.
 get_packet(Opts) ->
     case proplists:get_value(packet, Opts, 0) of
         raw -> 0;
         Other -> Other
     end.
 
+-spec reply(Caller :: undefined | {pid(), term()}, Message :: term()) -> ok.
 reply(undefined, _Msg) -> ok;
 reply(Caller, Msg) ->
-    gen_fsm:reply(Caller, Msg).
+    gen_fsm:reply(Caller, Msg),
+    ok.

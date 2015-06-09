@@ -31,11 +31,11 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-    socket :: term(),
+    socket :: ssl2_nif:socket(),
     buffer = <<>> :: binary(),
-    caller :: pid(),
+    caller :: {pid(), term()},
     needed :: integer(),
-    timer = make_ref() :: timer:timers(),
+    timer = make_ref() :: reference(),
     active = false :: false | once | true,
     controlling_pid :: pid(),
     sock_ref :: term(),
@@ -54,8 +54,8 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(Sock :: term(), Options :: list(), Pid :: pid()) ->
-    {ok, pid()} | ignore | {error, Reason :: term()}).
+-spec start_link(Sock :: term(), Options :: list(), Pid :: pid()) ->
+    {ok, pid()} | ignore | {error, Reason :: term()}.
 start_link(Sock, Options, Pid) ->
     gen_fsm:start_link(?MODULE, [Sock, Options, Pid], []).
 
@@ -72,10 +72,10 @@ start_link(Sock, Options, Pid) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(init(Args :: term()) ->
+-spec init(Args :: term()) ->
     {ok, StateName :: atom(), StateData :: #state{}} |
     {ok, StateName :: atom(), StateData :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term()} | ignore).
+    {stop, Reason :: term()} | ignore.
 init([Sock, Options, Pid]) ->
     process_flag(trap_exit, true),
     gen_fsm:send_all_state_event(self(), {setopts, Options}),
@@ -92,11 +92,11 @@ init([Sock, Options, Pid]) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(idle(Event :: term(), State :: #state{}) ->
+-spec idle(Event :: term(), State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    {stop, Reason :: term(), NewState :: #state{}}.
 idle(_Event, State) ->
     {next_state, idle, State}.
 
@@ -111,7 +111,7 @@ idle(_Event, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(idle(Event :: term(), From :: {pid(), term()},
+-spec idle(Event :: term(), From :: {pid(), term()},
     State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
@@ -121,7 +121,7 @@ idle(_Event, State) ->
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
-        NewState :: #state{}}).
+        NewState :: #state{}}.
 idle({recv, Size, Timeout}, From, #state{packet = 0} = State) ->
     #state{buffer = Buffer} = State,
     case {Size, byte_size(Buffer)} of
@@ -171,11 +171,11 @@ idle(Event, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(receiving(Event :: term(), State :: #state{}) ->
+-spec receiving(Event :: term(), State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    {stop, Reason :: term(), NewState :: #state{}}.
 receiving(_Event, State) ->
     {next_state, receiving, State}.
 
@@ -190,7 +190,7 @@ receiving(_Event, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(receiving(Event :: term(), From :: {pid(), term()},
+-spec receiving(Event :: term(), From :: {pid(), term()},
     State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
@@ -200,7 +200,7 @@ receiving(_Event, State) ->
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
-        NewState :: #state{}}).
+        NewState :: #state{}}.
 receiving({recv, Size, Timeout}, From,
     #state{caller = undefined, packet = 0} = State) ->
 
@@ -226,11 +226,11 @@ receiving(Event, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(receiving_header(Event :: term(), State :: #state{}) ->
+-spec receiving_header(Event :: term(), State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+    {stop, Reason :: term(), NewState :: #state{}}.
 receiving_header(_Event, State) ->
     {next_state, receiving_header, State}.
 
@@ -245,7 +245,7 @@ receiving_header(_Event, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(receiving_header(Event :: term(), From :: {pid(), term()},
+-spec receiving_header(Event :: term(), From :: {pid(), term()},
     State :: #state{}) ->
     {next_state, NextStateName :: atom(), NextState :: #state{}} |
     {next_state, NextStateName :: atom(), NextState :: #state{},
@@ -255,7 +255,7 @@ receiving_header(_Event, State) ->
         timeout() | hibernate} |
     {stop, Reason :: normal | term(), NewState :: #state{}} |
     {stop, Reason :: normal | term(), Reply :: term(),
-        NewState :: #state{}}).
+        NewState :: #state{}}.
 receiving_header({recv, _Size, Timeout}, From,
     #state{caller = undefined} = State) ->
 
@@ -274,12 +274,12 @@ receiving_header(Event, _From, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_event(Event :: term(), StateName :: atom(),
+-spec handle_event(Event :: term(), StateName :: atom(),
     StateData :: #state{}) ->
     {next_state, NextStateName :: atom(), NewStateData :: #state{}} |
     {next_state, NextStateName :: atom(), NewStateData :: #state{},
         timeout() | hibernate} |
-    {stop, Reason :: term(), NewStateData :: #state{}}).
+    {stop, Reason :: term(), NewStateData :: #state{}}.
 handle_event({sock_ref, SockRef}, StateName, State) ->
     {next_state, StateName, State#state{sock_ref = SockRef}};
 
@@ -336,7 +336,7 @@ handle_event(_Event, StateName, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
+-spec handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
     StateName :: atom(), StateData :: term()) ->
     {reply, Reply :: term(), NextStateName :: atom(), NewStateData :: term()} |
     {reply, Reply :: term(), NextStateName :: atom(), NewStateData :: term(),
@@ -345,9 +345,9 @@ handle_event(_Event, StateName, State) ->
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
     {stop, Reason :: term(), Reply :: term(), NewStateData :: term()} |
-    {stop, Reason :: term(), NewStateData :: term()}).
+    {stop, Reason :: term(), NewStateData :: term()}.
 handle_sync_event(Event, _From, StateName, State) ->
-    {reply, {error, {bad_event_for_state, StateName, Event}}, State}.
+    {reply, {error, {bad_event_for_state, StateName, Event}}, StateName, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -358,12 +358,12 @@ handle_sync_event(Event, _From, StateName, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(handle_info(Info :: term(), StateName :: atom(),
+-spec handle_info(Info :: term(), StateName :: atom(),
     StateData :: term()) ->
     {next_state, NextStateName :: atom(), NewStateData :: term()} |
     {next_state, NextStateName :: atom(), NewStateData :: term(),
         timeout() | hibernate} |
-    {stop, Reason :: normal | term(), NewStateData :: term()}).
+    {stop, Reason :: normal | term(), NewStateData :: term()}.
 handle_info(timeout, StateName, State) ->
     gen_fsm:send_all_state_event(self(), {reply, {error, timeout}}),
     {next_state, StateName, State};
@@ -440,8 +440,8 @@ handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(terminate(Reason :: normal | shutdown | {shutdown, term()}
-| term(), StateName :: atom(), StateData :: term()) -> term()).
+-spec terminate(Reason :: normal | shutdown | {shutdown, term()}
+| term(), StateName :: atom(), StateData :: term()) -> term().
 terminate(Reason, _StateName, State) ->
     #state{controlling_pid = Pid, active = Active, sock_ref = Ref} = State,
     case Active of
@@ -466,9 +466,9 @@ terminate(Reason, _StateName, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
+-spec code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
     StateData :: #state{}, Extra :: term()) ->
-    {ok, NextStateName :: atom(), NewStateData :: #state{}}).
+    {ok, NextStateName :: atom(), NewStateData :: #state{}}.
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
@@ -476,11 +476,17 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+-spec recv_packet(State :: #state{}) ->
+    {next_state, receiving_header | receiving, NextState :: #state{}} |
+    {stop, Reason :: any(), State :: #state{}}.
 recv_packet(#state{packet = 0} = NextState) ->
     recv_body(0, NextState#state{needed = 0});
 recv_packet(#state{packet = Packet} = NextState) ->
     recv_header(NextState#state{needed = Packet}).
 
+-spec recv_header(State :: #state{}) ->
+    {next_state, receiving_header, NextState :: #state{}} |
+    {stop, Reason :: any(), State :: #state{}}.
 recv_header(State) ->
     #state{socket = Sock, packet = Packet, caller = Caller} = State,
     case ssl2_nif:recv(Sock, Packet) of
@@ -490,6 +496,9 @@ recv_header(State) ->
             {stop, Reason, State}
     end.
 
+-spec recv_body(Size :: non_neg_integer(), State :: #state{}) ->
+    {next_state, receiving, NextState :: #state{}} |
+    {stop, Reason :: any(), State :: #state{}}.
 recv_body(Size, State) ->
     #state{socket = Sock, caller = Caller} = State,
     case ssl2_nif:recv(Sock, Size) of
@@ -499,20 +508,25 @@ recv_body(Size, State) ->
             {stop, Reason, State}
     end.
 
+-spec parse_reason(Reason) -> {shutdown, Reason} | Reason when Reason :: term().
 parse_reason("End of file" = Reason) -> {shutdown, Reason};
 parse_reason(Reason) ->
     Reason.
 
+-spec create_timer(Timeout :: timeout()) -> Timer :: reference().
 create_timer(infinity) -> make_ref();
 create_timer(Timeout) ->
     erlang:send_after(Timeout, self(), timeout).
 
+-spec get_packet(Opts :: ssl2:connect_opts()) -> 0 | 1 | 2 | 4.
 get_packet(Opts) ->
     case proplists:get_value(packet, Opts, 0) of
         raw -> 0;
         Other -> Other
     end.
 
+-spec reply(Caller :: undefined | {pid(), term()}, Message :: term()) -> ok.
 reply(undefined, _Msg) -> ok;
 reply(Caller, Msg) ->
-    gen_fsm:reply(Caller, Msg).
+    gen_fsm:reply(Caller, Msg),
+    ok.

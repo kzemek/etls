@@ -1,8 +1,8 @@
 {application, ssl2,
     [
-        {description, ""},
+        {description, "A NIF-based replacement for OTP SSL module"},
         {vsn, "1"},
-        {registered, []},
+        {registered, [ssl2_sup]},
         {applications, [
             kernel,
             stdlib
