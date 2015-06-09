@@ -10,41 +10,46 @@
 -module(ssl2).
 -author("Konrad Zemek").
 
-%% API
--export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
-    accept/1, accept/2, handshake/1, handshake/2, setopts/2,
-    controlling_process/2, peername/1, sockname/1, close/1, peercert/1]).
-
 -record(sock_ref, {
-    socket :: term(),
+    socket :: ssl2_nif:socket(),
     supervisor :: pid(),
     receiver :: pid(),
     sender :: pid()
 }).
 
--type opt() :: {packet, raw | 0 | 1 | 2 | 4} | {active, false | once | true}.
--type opts() :: [opt()].
--type connect_opt() :: {certfile, string()} | {keyfile, string()} | opt().
--type connect_opts() :: [connect_opt()].
+%% API
+-export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
+    accept/1, accept/2, handshake/1, handshake/2, setopts/2,
+    controlling_process/2, peername/1, sockname/1, close/1, peercert/1]).
+
+%% Types
+-type opts() :: [{packet, raw | 0 | 1 | 2 | 4} | {active, false | once | true}].
+-type listen_opts() :: [{certfile, string()} | {keyfile, string()}].
 -opaque socket() :: #sock_ref{}.
 -opaque acceptor() :: ssl2_nif:acceptor().
 
--export_type([opt/0, opts/0, connect_opt/0, connect_opts/0, socket/0,
-    acceptor/0]).
+-export_type([opts/0, listen_opts/0, socket/0, acceptor/0]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
--spec connect(Host :: string(), Port :: inet:port_number(),
-    Opts :: connect_opts()) ->
+%%--------------------------------------------------------------------
+%% @equiv connect(Host, Port, Opts, infinity)
+%%--------------------------------------------------------------------
+-spec connect(Host :: string(), Port :: inet:port_number(), Opts :: opts()) ->
     {ok, Socket :: socket()} |
     {error, Reason :: any()}.
 connect(Host, Port, Options) ->
     connect(Host, Port, Options, infinity).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Opens an ssl connection to Host, Port.
+%% @end
+%%--------------------------------------------------------------------
 -spec connect(Host :: string(), Port :: inet:port_number(),
-    Opts :: connect_opts(), Timeout :: timeout()) ->
+    Opts :: opts(), Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
     {error, Reason :: any()}.
 connect(Host, Port, Options, Timeout) ->
@@ -62,23 +67,51 @@ connect(Host, Port, Options, Timeout) ->
             {error, Reason}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Writes Data to Socket.
+%% If the socket is closed, returns {error, closed}.
+%% @end
+%%--------------------------------------------------------------------
 -spec send(Socket :: socket(), Data :: iodata()) ->
-    ok | {error, Reason :: any()}.
+    ok | {error, Reason :: closed | any()}.
 send(#sock_ref{sender = Sender}, Data) ->
-    gen_fsm:sync_send_event(Sender, {send, Data}, infinity).
+    try
+        gen_fsm:sync_send_event(Sender, {send, Data}, infinity)
+    catch
+        exit:{noproc, _} -> {error, closed}
+    end.
 
+%%--------------------------------------------------------------------
+%% @equiv recv(Socket, Size, infinity)
+%%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
-    ok | {error, Reason :: any()}.
+    ok | {error, Reason :: closed | timeout | any()}.
 recv(SockRef, Size) ->
     recv(SockRef, Size, infinity).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Receives a packet from a socket in passive mode.
+%% If the socket is closed, returns {error, closed}.
+%% @end
+%%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer(),
     Timeout :: timeout()) ->
-    ok | {error, Reason :: any()}.
+    ok | {error, Reason :: closed | timeout | any()}.
 recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
-    gen_fsm:sync_send_event(Receiver, {recv, Size, Timeout}, infinity).
+    try
+        gen_fsm:sync_send_event(Receiver, {recv, Size, Timeout}, infinity)
+    catch
+        exit:{noproc, _} -> {error, closed}
+    end.
 
--spec listen(Port :: inet:port_number(), Opts :: connect_opts()) ->
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates an acceptor (listen socket).
+%% @end
+%%--------------------------------------------------------------------
+-spec listen(Port :: inet:port_number(), Opts :: listen_opts()) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: any()}.
 listen(Port, Options) ->
@@ -87,15 +120,25 @@ listen(Port, Options) ->
     KeyPath = proplists:get_value(keyfile, Options, CertPath),
     ssl2_nif:listen(Port, CertPath, KeyPath).
 
+%%--------------------------------------------------------------------
+%% @equiv accept(Acceptor, infinity)
+%%--------------------------------------------------------------------
 -spec accept(Acceptor :: acceptor()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: any()}.
+    {error, Reason :: timeout | any()}.
 accept(Acceptor) ->
     accept(Acceptor, infinity).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Accepts an incoming connection on an acceptor.
+%% The returned socket should be passed to ssl2:handshake to establish
+%% the secure connection.
+%% @end
+%%--------------------------------------------------------------------
 -spec accept(Acceptor :: acceptor(), Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: any()}.
+    {error, Reason :: timeout | any()}.
 accept(Acceptor, Timeout) ->
     Ref = make_ref(),
     case ssl2_nif:accept(Ref, Acceptor) of
@@ -111,12 +154,22 @@ accept(Acceptor, Timeout) ->
             {error, Reason}
     end.
 
+%%--------------------------------------------------------------------
+%% @equiv handshake(Socket, infinity)
+%%--------------------------------------------------------------------
 -spec handshake(Socket :: socket()) -> ok | {error, Reason :: any()}.
 handshake(Socket) ->
     handshake(Socket, infinity).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Accepts an incoming connection on an acceptor.
+%% The returned socket should be passed to ssl2:handshake to establish the
+%% secure connection.
+%% @end
+%%--------------------------------------------------------------------
 -spec handshake(Socket :: socket(), Timeout :: timeout()) ->
-    ok | {error, Reason :: any()}.
+    ok | {error, Reason :: timeout | any()}.
 handshake(#sock_ref{socket = Sock}, Timeout) ->
     Ref = make_ref(),
     case ssl2_nif:handshake(Ref, Sock) of
@@ -131,30 +184,56 @@ handshake(#sock_ref{socket = Sock}, Timeout) ->
             {error, Reason}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets options according to Options for the socket Socket.
+%% @end
+%%--------------------------------------------------------------------
 -spec setopts(Socket :: socket(), Opts :: opts()) -> ok.
 setopts(#sock_ref{receiver = Receiver, sender = Sender}, Options) ->
     gen_fsm:send_all_state_event(Receiver, {setopts, Options}),
     gen_fsm:send_all_state_event(Sender, {setopts, Options}),
     ok.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Assigns a new controlling process to the socket.
+%% A controlling process receives all messages from the socket.
+%% @end
+%%--------------------------------------------------------------------
 -spec controlling_process(Socket :: socket(), NewControllingProcess :: pid()) ->
     ok.
 controlling_process(#sock_ref{receiver = Receiver}, Pid) ->
     gen_fsm:send_all_state_event(Receiver, {controlling_process, Pid}),
     ok.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the address and port number of the peer.
+%% @end
+%%--------------------------------------------------------------------
 -spec peername(Socket :: socket()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, Reason :: any()}.
 peername(#sock_ref{socket = Sock}) ->
     parse_name_result(ssl2_nif:peername(Sock)).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the address and port number of the socket.
+%% @end
+%%--------------------------------------------------------------------
 -spec sockname(Socket :: socket()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, Reason :: any()}.
 sockname(#sock_ref{socket = Sock}) ->
     parse_name_result(ssl2_nif:sockname(Sock)).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Gracefully closes the socket.
+%% @end
+%%--------------------------------------------------------------------
 -spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
 close(#sock_ref{socket = Sock, supervisor = Sup}) ->
     ok = supervisor:terminate_child(ssl2_sup, Sup),
@@ -163,6 +242,11 @@ close(#sock_ref{socket = Sock, supervisor = Sup}) ->
         Else -> Else
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a DER-encoded public certificate of the peer.
+%% @end
+%%--------------------------------------------------------------------
 -spec peercert(Socket :: socket()) ->
     {ok, binary()} |
     {error, Reason :: no_peer_certificate | any()}.
@@ -177,8 +261,14 @@ peercert(#sock_ref{socket = Sock}) ->
 %%% Internal functions
 %%%===================================================================
 
--spec start_socket_processes(Socket :: ssl2_nif:socket(),
-    Options :: connect_opts()) ->
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Starts process supervisor for the NIF socket.
+%% Returns a reference for the socket that is usable by the client.
+%% @end
+%%--------------------------------------------------------------------
+-spec start_socket_processes(Socket :: ssl2_nif:socket(), Options :: opts()) ->
     {ok, SockRef :: socket()}.
 start_socket_processes(Sock, Options) ->
     Args = [Sock, Options, self()],
@@ -195,6 +285,12 @@ start_socket_processes(Sock, Options) ->
 
     {ok, SockRef}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Parses the results of ssl2_nif:peername and ssl2_nif:sockname functions.
+%% @end
+%%--------------------------------------------------------------------
 -spec parse_name_result({ok, {StrAddress :: string(),
     Port :: inet:port_number()}}) ->
     {ok, {inet:ip_address(), inet:port_number()}};

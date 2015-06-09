@@ -45,7 +45,8 @@ communication_test_() ->
         fun recv_should_allow_for_recv_while_active/1,
         fun socket_should_allow_to_set_controlling_process/1,
         fun socket_should_be_closeable/1,
-        fun socket_should_return_peer_certificate/1
+        fun socket_should_return_peer_certificate/1,
+        fun socket_should_return_error_closed_when_closed/1
     ]}].
 
 server_test_() ->
@@ -389,6 +390,15 @@ socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
     TBSCert = Cert#'OTPCertificate'.tbsCertificate,
     Serial = TBSCert#'OTPTBSCertificate'.serialNumber,
     [?_assertEqual(10728077368415183536, Serial)].
+
+socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
+    ok = ssl2:close(Sock),
+    SendResult = ssl2:send(Sock, random_data()),
+    RecvResult = ssl2:recv(Sock, 1234),
+    [
+        ?_assertEqual({error, closed}, SendResult),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
 
 %%%===================================================================
 %%% Test fixtures

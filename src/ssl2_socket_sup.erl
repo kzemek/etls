@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc A supervisor responsible for managing send and receive gen_fsms
+%%% @doc
+%%% A supervisor responsible for managing send and receive gen_fsms
 %%% for a single socket.
 %%% @end
 %%%--------------------------------------------------------------------

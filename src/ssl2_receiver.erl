@@ -5,7 +5,8 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc A gen_fsm responsible for receive-related actions on a socket,
+%%% @doc
+%%% A gen_fsm responsible for receive-related actions on a socket,
 %%% including active notifications.
 %%% @end
 %%%--------------------------------------------------------------------
