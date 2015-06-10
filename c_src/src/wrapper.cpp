@@ -18,13 +18,23 @@
 #include <vector>
 #include <iostream>
 
+/**
+ * A shared pointer wrapper to help with Erlang NIF environment management.
+ */
 class Env {
 public:
+    /**
+     * Creates a new environment by creating a @c shared_ptr with a custom
+     * deleter.
+     */
     Env()
         : env{enif_alloc_env(), enif_free_env}
     {
     }
 
+    /**
+     * Implicit conversion operator to @cErlNifEnv* .
+     */
     operator ErlNifEnv *() { return env.get(); }
 
 private:
@@ -33,11 +43,43 @@ private:
 
 namespace {
 
+/**
+ * A statically created 'ok' atom for easy usage.
+ */
 nifpp::str_atom ok{"ok"};
+
+/**
+ * A statically created 'error' atom for easy usage.
+ */
 nifpp::str_atom error{"error"};
 
+/**
+ * The @c TLSApplication object has a static lifetime; it will live as long
+ * as the shared library is loaded into the memory and can be simultaneously
+ * used by multiple multi-threaded applications.
+ * The object has no external dependencies, including any lifetime dependencies.
+ */
 one::etls::TLSApplication app;
 
+/**
+ * Creates an error callback.
+ * An error callback implementation is shared between multiple NIF functions.
+ * @param localEnv A local NIF environment.
+ * @param pid A PID to which an error message will be sent.
+ * @return An instance of created error callback for the parameters.
+ */
+one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
+{
+    return [=](std::string reason) mutable {
+        auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
+        enif_send(nullptr, &pid, localEnv, message);
+    };
+}
+
+/**
+ * @copydoc onError(Env, ErlNifPid)
+ * @param ref A custom Erlang reference for this call.
+ */
 one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
 {
     return [=](std::string reason) mutable {
@@ -48,16 +90,11 @@ one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
     };
 }
 
-one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
-{
-    return [=](std::string reason) mutable {
-        auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
-        enif_send(nullptr, &pid, localEnv, message);
-    };
-}
-
 } // namespace
 
+/**
+ * NIF functions.
+ */
 extern "C" {
 
 static int load(ErlNifEnv *env, void ** /*priv*/, ERL_NIF_TERM /*load_info*/)

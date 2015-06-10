@@ -15,8 +15,14 @@
 namespace one {
 namespace etls {
 
+/**
+ * A function type used to indicate asynchronous operation success.
+ */
 template <typename... Args> using SuccessFun = std::function<void(Args...)>;
 
+/**
+ * A function type used to indicate asynchronous operation error.
+ */
 using ErrorFun = std::function<void(std::string)>;
 
 } // namespace etls

@@ -18,11 +18,27 @@
 namespace one {
 namespace etls {
 
+/**
+ * The @c TLSApplication class stores persistent objects required for
+ * uninterrupted application functioning.
+ */
 class TLSApplication {
 public:
+    /**
+     * Constructor.
+     * Starts N threads where N is the result of @c std::hardware_concurrency().
+     */
     TLSApplication();
+
+    /**
+     * Destructor.
+     * Stops the @c io_service and joins all managed threads.
+     */
     ~TLSApplication();
 
+    /**
+     * @returns An @c io_service object managed by this.
+     */
     boost::asio::io_service &ioService();
 
 private:
