@@ -14,7 +14,7 @@
 
 %% API
 -export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
-    peername/1, sockname/1, close/1, certificate_chain/1]).
+    peername/1, sockname/1, close/1, certificate_chain/1, shutdown/2]).
 
 -opaque socket() :: binary().
 -opaque acceptor() :: binary().
@@ -77,6 +77,11 @@ close(_Sock) ->
 -spec certificate_chain(Socket :: socket()) ->
     {ok, [binary()]} | {error, Reason :: any()}.
 certificate_chain(_Sock) ->
+    erlang:nif_error(ssl2_nif_not_loaded).
+
+-spec shutdown(Socket :: socket(), Type :: read | write | read_write) ->
+    ok | {error, Reason :: any()}.
+shutdown(_Sock, _Type) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 %%%===================================================================

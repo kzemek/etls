@@ -65,7 +65,7 @@ init([Sock, Options, CtrlPid]) ->
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-    Restart = permanent,
+    Restart = transient,
     Shutdown = 2000,
     Type = worker,
 

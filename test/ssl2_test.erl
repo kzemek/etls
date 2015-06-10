@@ -46,7 +46,10 @@ communication_test_() ->
         fun socket_should_allow_to_set_controlling_process/1,
         fun socket_should_be_closeable/1,
         fun socket_should_return_peer_certificate/1,
-        fun socket_should_return_error_closed_when_closed/1
+        fun socket_should_return_error_closed_when_closed/1,
+        fun socket_should_be_read_shutdownable/1,
+        fun socket_should_close_on_remote_write_shutdown/1,
+        fun socket_should_not_close_on_shutdown_when_no_exit_on_close/1
     ]}].
 
 server_test_() ->
@@ -400,6 +403,41 @@ socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
         ?_assertEqual({error, closed}, RecvResult)
     ].
 
+socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
+    ok = ssl2:shutdown(Sock, read),
+    SendResult = ssl2:send(Sock, random_data()),
+    RecvResult = ssl2:recv(Sock, 1234),
+    [
+        ?_assertEqual(ok, SendResult),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
+    {_, _, Supervisor, _, _} = Sock,
+    Server ! {shutdown, write},
+    RecvResult = ssl2:recv(Sock, 1234),
+
+    timer:sleep(250),
+
+    [
+        ?_assertEqual(false, is_process_alive(Supervisor)),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{exit_on_close, false}]),
+
+    {_, _, Supervisor, _, _} = Sock,
+    Server ! {shutdown, write},
+    RecvResult = ssl2:recv(Sock, 1234),
+
+    timer:sleep(250),
+
+    [
+        ?_assertEqual(true, is_process_alive(Supervisor)),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
 %%%===================================================================
 %%% Test fixtures
 %%%===================================================================
@@ -481,6 +519,10 @@ server_loop(Pid, Ref, Sock) ->
 
         {send, Data} ->
             Pid ! {Ref, send, ssl:send(Sock, Data)},
+            server_loop(Pid, Ref, Sock);
+
+        {shutdown, write} ->
+            ssl:shutdown(Sock, write),
             server_loop(Pid, Ref, Sock);
 
         stop ->

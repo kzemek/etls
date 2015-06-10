@@ -192,7 +192,7 @@ sending(Event, _From, State) ->
         timeout() | hibernate} |
     {stop, Reason :: term(), NewStateData :: #state{}}.
 handle_event({setopts, Opts}, StateName, State) ->
-    Packet = get_packet(Opts),
+    Packet = get_packet(Opts, State),
     {next_state, StateName, State#state{packet = Packet}};
 
 handle_event({reply, Msg}, StateName, #state{caller = Caller} = State) ->
@@ -279,9 +279,10 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
--spec get_packet(Opts :: ssl2:connect_opts()) -> 0 | 1 | 2 | 4.
-get_packet(Opts) ->
-    case proplists:get_value(packet, Opts, 0) of
+-spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
+    0 | 1 | 2 | 4.
+get_packet(Opts, #state{packet = OldPacket}) ->
+    case proplists:get_value(packet, Opts, OldPacket) of
         raw -> 0;
         Other -> Other
     end.

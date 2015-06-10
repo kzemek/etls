@@ -48,6 +48,8 @@ public:
 
     void handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
 
+    void shutdown(const boost::asio::socket_base::shutdown_type type);
+
     boost::asio::ip::tcp::endpoint localEndpoint() const;
 
     boost::asio::ip::tcp::endpoint remoteEndpoint() const;

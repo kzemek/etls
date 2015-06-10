@@ -40,7 +40,8 @@
     active = false :: false | once | true,
     controlling_pid :: pid(),
     sock_ref :: term(),
-    packet = 0 :: 0 | 1 | 2 | 4
+    packet = 0 :: 0 | 1 | 2 | 4,
+    exit_on_close = true :: boolean()
 }).
 
 %%%===================================================================
@@ -285,11 +286,15 @@ handle_event({sock_ref, SockRef}, StateName, State) ->
     {next_state, StateName, State#state{sock_ref = SockRef}};
 
 handle_event({setopts, Opts}, idle, State) ->
-    #state{active = OldActive, buffer = Buffer, sock_ref = Ref} = State,
-    Packet = get_packet(Opts),
-    Active = proplists:get_value(active, Opts, false),
-    UpdatedState = State#state{packet = Packet},
+    #state{active = OldActive, buffer = Buffer, sock_ref = Ref,
+        exit_on_close = OldExitOnClose} = State,
 
+    Packet = get_packet(Opts, State),
+    Active = proplists:get_value(active, Opts, OldActive),
+    ExitOnClose = proplists:get_value(exit_on_close, Opts, OldExitOnClose),
+    UpdatedState = State#state{packet = Packet, exit_on_close = ExitOnClose},
+
+    %% Handle active change
     case {OldActive, Active, Buffer} of
         {false, _, <<>>} when Active =:= once; Active =:= true ->
             recv_packet(UpdatedState#state{active = Active});
@@ -307,9 +312,12 @@ handle_event({setopts, Opts}, idle, State) ->
     end;
 
 handle_event({setopts, Opts}, StateName, State) ->
-    Packet = get_packet(Opts),
-    Active = proplists:get_value(active, Opts, false),
-    {next_state, StateName, State#state{active = Active, packet = Packet}};
+    #state{active = OldActive, exit_on_close = OldExitOnClose} = State,
+    Packet = get_packet(Opts, State),
+    Active = proplists:get_value(active, Opts, OldActive),
+    ExitOnClose = proplists:get_value(exit_on_close, Opts, OldExitOnClose),
+    {next_state, StateName, State#state{
+        active = Active, packet = Packet, exit_on_close = ExitOnClose}};
 
 handle_event({controlling_process, Pid}, StateName, State) ->
     {next_state, StateName, State#state{controlling_pid = Pid}};
@@ -427,9 +435,11 @@ handle_info({ok, Data}, receiving, State) ->
             recv_body(ReallyNeeded, State#state{buffer = AData})
     end;
 
-handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
-    reply(Caller, {error, Reason}),
-    {stop, parse_reason(Reason), State}.
+handle_info({error, Reason}, _StateName, State) ->
+    #state{caller = Caller} = State,
+    TranslatedReason = translate_reason(Reason),
+    reply(Caller, {error, TranslatedReason}),
+    {stop, construct_terminate_reason(TranslatedReason), State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -444,19 +454,26 @@ handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()}
 | term(), StateName :: atom(), StateData :: term()) -> term().
 terminate(Reason, _StateName, State) ->
-    #state{controlling_pid = Pid, active = Active, sock_ref = Ref} = State,
+    #state{controlling_pid = Pid, active = Active, sock_ref = SockRef,
+        exit_on_close = ExitOnClose} = State,
+
     case Active of
         false -> ok;
         _ ->
             Message =
                 case Reason of
-                    normal -> {ssl2_closed, Ref};
-                    shutdown -> {ssl2_closed, Ref};
-                    {shutdown, _} -> {ssl2_closed, Ref};
-                    _ -> {ssl2_error, Ref, Reason}
+                    normal -> {ssl2_closed, SockRef};
+                    shutdown -> {ssl2_closed, SockRef};
+                    {shutdown, _} -> {ssl2_closed, SockRef};
+                    _ -> {ssl2_error, SockRef, Reason}
                 end,
 
             Pid ! Message
+    end,
+
+    case {Reason, ExitOnClose} of
+        {{shutdown, closed}, true} -> spawn(ssl2, close, [SockRef]);
+        _ -> ok
     end,
     ok.
 
@@ -509,9 +526,15 @@ recv_body(Size, State) ->
             {stop, Reason, State}
     end.
 
--spec parse_reason(Reason) -> {shutdown, Reason} | Reason when Reason :: term().
-parse_reason("End of file" = Reason) -> {shutdown, Reason};
-parse_reason(Reason) ->
+-spec translate_reason(Reason :: term()) -> Reason :: term().
+translate_reason("End of file") -> closed;
+translate_reason(Reason) ->
+    Reason.
+
+-spec construct_terminate_reason(Reason :: term()) ->
+    {shutdown, Reason :: term()} | term().
+construct_terminate_reason(closed) -> {shutdown, closed};
+construct_terminate_reason(Reason) ->
     Reason.
 
 -spec create_timer(Timeout :: timeout()) -> Timer :: reference().
@@ -519,9 +542,10 @@ create_timer(infinity) -> make_ref();
 create_timer(Timeout) ->
     erlang:send_after(Timeout, self(), timeout).
 
--spec get_packet(Opts :: ssl2:connect_opts()) -> 0 | 1 | 2 | 4.
-get_packet(Opts) ->
-    case proplists:get_value(packet, Opts, 0) of
+-spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
+    0 | 1 | 2 | 4.
+get_packet(Opts, #state{packet = OldPacket}) ->
+    case proplists:get_value(packet, Opts, OldPacket) of
         raw -> 0;
         Other -> Other
     end.

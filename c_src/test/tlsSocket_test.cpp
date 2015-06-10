@@ -10,6 +10,7 @@
 #include "testUtils.hpp"
 #include "tlsSocket.hpp"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <gtest/gtest.h>
@@ -221,4 +222,20 @@ TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
     auto endpoint = socket->remoteEndpoint();
     ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
     ASSERT_EQ(port, endpoint.port());
+}
+
+TEST_F(TLSSocketTestC, shouldBeShutdownable)
+{
+    socket->shutdown(boost::asio::socket_base::shutdown_send);
+
+    std::atomic<bool> called{false};
+    auto data = randomData();
+
+    socket->sendAsync(socket, boost::asio::buffer(data), [] {},
+        [&](auto reason) {
+            ASSERT_TRUE(boost::algorithm::iequals("broken pipe", reason));
+            called = true;
+        });
+
+    ASSERT_TRUE(waitFor(called));
 }

@@ -20,10 +20,16 @@
 %% API
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
-    controlling_process/2, peername/1, sockname/1, close/1, peercert/1]).
+    controlling_process/2, peername/1, sockname/1, close/1, peercert/1,
+    shutdown/2]).
 
 %% Types
--type opts() :: [{packet, raw | 0 | 1 | 2 | 4} | {active, false | once | true}].
+-type opts() :: [
+{packet, raw | 0 | 1 | 2 | 4} |
+{active, false | once | true} |
+{exit_on_close, boolean()}
+].
+
 -type listen_opts() :: [{certfile, string()} | {keyfile, string()}].
 -opaque socket() :: #sock_ref{}.
 -opaque acceptor() :: ssl2_nif:acceptor().
@@ -237,10 +243,7 @@ sockname(#sock_ref{socket = Sock}) ->
 -spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
 close(#sock_ref{socket = Sock, supervisor = Sup}) ->
     ok = supervisor:terminate_child(ssl2_sup, Sup),
-    case ssl2_nif:close(Sock) of
-        {error, Reason} -> {error, Reason};
-        Else -> Else
-    end.
+    ssl2_nif:close(Sock).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -256,6 +259,26 @@ peercert(#sock_ref{socket = Sock}) ->
         {ok, Chain} -> {ok, lists:last(Chain)};
         {error, Reason} -> {error, Reason}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Closes the socket in one or two directions.
+%% @end
+%%--------------------------------------------------------------------
+-spec shutdown(Socket :: socket(), Type :: read | write | read_write) ->
+    ok | {error, Reason :: any()}.
+shutdown(SockRef, Type) ->
+    #sock_ref{supervisor = Sup, socket = Sock} = SockRef,
+
+    case Type of
+        read -> ok = supervisor:terminate_child(Sup, receiver);
+        write -> ok = supervisor:terminate_child(Sup, sender);
+        read_write ->
+            ok = supervisor:terminate_child(Sup, receiver),
+            ok = supervisor:terminate_child(Sup, sender)
+    end,
+
+    ssl2_nif:shutdown(Sock, Type).
 
 %%%===================================================================
 %%% Internal functions

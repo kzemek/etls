@@ -186,6 +186,11 @@ void TLSSocket::handshakeAsync(
     });
 }
 
+void TLSSocket::shutdown(const boost::asio::socket_base::shutdown_type type)
+{
+    m_strand.dispatch([=] { m_socket.lowest_layer().shutdown(type); });
+}
+
 void TLSSocket::close()
 {
     boost::system::error_code ec;
