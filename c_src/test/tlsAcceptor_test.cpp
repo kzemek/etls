@@ -140,3 +140,20 @@ TEST_F(TLSAcceptorTestC, shouldReturnClient_ServerCommunicableSockets)
     ASSERT_TRUE(waitFor(dataReceived));
     ASSERT_EQ(recvData, sentData);
 }
+
+TEST_F(TLSAcceptorTest, shouldReturnLocalEndpoint)
+{
+    boost::asio::ip::tcp::endpoint endpoint;
+    std::atomic<bool> called{false};
+
+    acceptor->localEndpointAsync(acceptor,
+        [&](auto e) {
+            endpoint = e;
+            called = true;
+        },
+        [](auto) {});
+
+    ASSERT_TRUE(waitFor(called));
+    ASSERT_EQ("0.0.0.0", endpoint.address().to_string());
+    ASSERT_EQ(port, endpoint.port());
+}

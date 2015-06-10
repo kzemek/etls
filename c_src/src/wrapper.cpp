@@ -387,6 +387,42 @@ static ERL_NIF_TERM sockname_nif(
     }
 }
 
+static ERL_NIF_TERM acceptor_sockname_nif(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    try {
+        Env localEnv;
+
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto acceptor =
+            *nifpp::get<one::etls::TLSAcceptor::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=](auto &endpoint) mutable {
+            auto address = endpoint.address().to_string();
+            auto port = endpoint.port();
+            auto message = nifpp::make(localEnv,
+                std::make_tuple(ref, std::make_tuple(
+                                         ok, std::make_tuple(address, port))));
+
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        acceptor->localEndpointAsync(
+            acceptor, std::move(onSuccess), onError(localEnv, pid, ref));
+
+        return nifpp::make(env, ok);
+    }
+    catch (const nifpp::badarg &) {
+        return enif_make_badarg(env);
+    }
+    catch (const std::exception &e) {
+        return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));
+    }
+}
+
 static ERL_NIF_TERM close_nif(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -487,7 +523,8 @@ static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
     {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
     {"peername", 2, peername_nif}, {"sockname", 2, sockname_nif},
-    {"close", 2, close_nif}, {"certificate_chain", 1, certificate_chain_nif},
+    {"acceptor_sockname", 2, acceptor_sockname_nif}, {"close", 2, close_nif},
+    {"certificate_chain", 1, certificate_chain_nif},
     {"shutdown", 3, shutdown_nif}};
 
 ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)

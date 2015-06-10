@@ -11,9 +11,9 @@
 namespace one {
 namespace etls {
 
-TLSAcceptor::TLSAcceptor(
-    boost::asio::io_service &ioService, const unsigned short port,
-        const std::string &certPath, const std::string &keyPath)
+TLSAcceptor::TLSAcceptor(boost::asio::io_service &ioService,
+    const unsigned short port, const std::string &certPath,
+    const std::string &keyPath)
     : m_ioService{ioService}
     , m_acceptor{m_ioService, {boost::asio::ip::tcp::v4(), port}}
 {
@@ -44,6 +44,17 @@ void TLSAcceptor::acceptAsync(
                 success(sock);
         });
     });
+}
+
+void TLSAcceptor::localEndpointAsync(Ptr self,
+    SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
+{
+    m_strand.post([
+        =,
+        self = std::move(self),
+        success = std::move(success),
+        error = std::move(error)
+    ]() mutable { success(m_acceptor.local_endpoint()); });
 }
 
 } // namespace etls

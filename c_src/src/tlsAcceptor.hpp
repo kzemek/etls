@@ -57,6 +57,17 @@ public:
     void acceptAsync(
         Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error);
 
+    /**
+     * Asynchronously retrieve the local endpoint information.
+     * Calls success callback with the retrieved endpoint.
+     * @param self Shared pointer to this.
+     * @param success Callback function to call on success.
+     * @param error Callback function to call on error.
+     */
+    void localEndpointAsync(Ptr self,
+        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
+        ErrorFun error);
+
 private:
     boost::asio::io_service &m_ioService;
     boost::asio::io_service::strand m_strand{m_ioService};

@@ -17,6 +17,10 @@
     sender :: pid()
 }).
 
+-record(acceptor_ref, {
+    acceptor :: ssl2_nif:acceptor()
+}).
+
 %% API
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
@@ -32,7 +36,7 @@
 
 -type listen_opts() :: [{certfile, string()} | {keyfile, string()}].
 -opaque socket() :: #sock_ref{}.
--opaque acceptor() :: ssl2_nif:acceptor().
+-opaque acceptor() :: #acceptor_ref{}.
 
 -export_type([opts/0, listen_opts/0, socket/0, acceptor/0]).
 
@@ -124,7 +128,10 @@ listen(Port, Options) ->
     true = proplists:is_defined(certfile, Options),
     CertPath = proplists:get_value(certfile, Options),
     KeyPath = proplists:get_value(keyfile, Options, CertPath),
-    ssl2_nif:listen(Port, CertPath, KeyPath).
+    case ssl2_nif:listen(Port, CertPath, KeyPath) of
+        {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
+        Result -> Result
+    end.
 
 %%--------------------------------------------------------------------
 %% @equiv accept(Acceptor, infinity)
@@ -132,8 +139,8 @@ listen(Port, Options) ->
 -spec accept(Acceptor :: acceptor()) ->
     {ok, Socket :: socket()} |
     {error, Reason :: timeout | any()}.
-accept(Acceptor) ->
-    accept(Acceptor, infinity).
+accept(AcceptorRef) ->
+    accept(AcceptorRef, infinity).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -145,7 +152,7 @@ accept(Acceptor) ->
 -spec accept(Acceptor :: acceptor(), Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
     {error, Reason :: timeout | any()}.
-accept(Acceptor, Timeout) ->
+accept(#acceptor_ref{acceptor = Acceptor}, Timeout) ->
     Ref = make_ref(),
     case ssl2_nif:accept(Ref, Acceptor) of
         ok ->
@@ -169,9 +176,8 @@ handshake(Socket) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Accepts an incoming connection on an acceptor.
-%% The returned socket should be passed to ssl2:handshake to establish
-%% the secure connection.
+%% Performs a TLS handshake on the new TCP socket.
+%% The socket should be created by ssl2:accept .
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake(Socket :: socket(), Timeout :: timeout()) ->
@@ -234,12 +240,19 @@ peername(#sock_ref{socket = Sock}) ->
 %% Returns the address and port number of the socket.
 %% @end
 %%--------------------------------------------------------------------
--spec sockname(Socket :: socket()) ->
+-spec sockname(SocketOrAcceptor :: socket() | acceptor()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, Reason :: any()}.
 sockname(#sock_ref{socket = Sock}) ->
     Ref = make_ref(),
     case ssl2_nif:sockname(Ref, Sock) of
+        ok -> receive {Ref, Result} -> parse_name_result(Result) end;
+        {error, Reason} ->
+            {error, Reason}
+    end;
+sockname(#acceptor_ref{acceptor = Acceptor}) ->
+    Ref = make_ref(),
+    case ssl2_nif:acceptor_sockname(Ref, Acceptor) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
         {error, Reason} ->
             {error, Reason}

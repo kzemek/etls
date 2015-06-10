@@ -14,7 +14,8 @@
 
 %% API
 -export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
-    peername/2, sockname/2, close/2, certificate_chain/1, shutdown/3]).
+    peername/2, sockname/2, acceptor_sockname/2, close/2, certificate_chain/1,
+    shutdown/3]).
 
 -opaque socket() :: binary().
 -opaque acceptor() :: binary().
@@ -114,7 +115,7 @@ peername(_Ref, _Sock) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a tuple {LocalHostname, LocalPort} describing the peer.
+%% Returns a tuple {LocalHostname, LocalPort} describing the local socket.
 %% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
 %% calling process.
 %% @end
@@ -122,6 +123,18 @@ peername(_Ref, _Sock) ->
 -spec sockname(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: any()}.
 sockname(_Ref, _Sock) ->
+    erlang:nif_error(ssl2_nif_not_loaded).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a tuple {LocalHostname, LocalPort} describing the acceptor socket.
+%% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
+-spec acceptor_sockname(Ref :: reference(), Socket :: acceptor()) ->
+    ok | {error, Reason :: any()}.
+acceptor_sockname(_Ref, _Acceptor) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 %%--------------------------------------------------------------------

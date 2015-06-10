@@ -224,8 +224,7 @@ void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 }
 
 void TLSSocket::localEndpointAsync(Ptr self,
-    SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-    ErrorFun error)
+    SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
     m_strand.post([
         =,
@@ -236,8 +235,7 @@ void TLSSocket::localEndpointAsync(Ptr self,
 }
 
 void TLSSocket::remoteEndpointAsync(Ptr self,
-    SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-    ErrorFun error)
+    SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
     m_strand.post([
         =,

@@ -55,7 +55,8 @@ communication_test_() ->
 server_test_() ->
     [{foreach, fun prepare_args/0, fun cleanup/1, [
         fun accept_should_accept_connections/1,
-        fun sockets_should_communicate/1
+        fun sockets_should_communicate/1,
+        fun acceptor_should_hold_sockname/1
     ]}].
 
 %%%===================================================================
@@ -375,6 +376,10 @@ socket_should_hold_sockname({_Ref, _Server, Port}) ->
         ?_assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
         ?_assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
     ].
+
+acceptor_should_hold_sockname({_Ref, Port}) ->
+    {ok, Acceptor} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    [?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, ssl2:sockname(Acceptor))].
 
 socket_should_be_closeable({_Ref, _Server, Sock}) ->
     ssl2:setopts(Sock, [{active, once}]),
