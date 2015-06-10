@@ -39,10 +39,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a gen_fsm process which calls Module:init/1 to
-%% initialize. To ensure a synchronized start-up procedure, this
-%% function does not return until Module:init/1 has returned.
-%%
+%% Creates a gen_fsm process for this module.
 %% @end
 %%--------------------------------------------------------------------
 -spec start_link(Sock :: term(), Options :: list()) ->
@@ -57,10 +54,8 @@ start_link(Sock, Options) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm is started using gen_fsm:start/[3,4] or
-%% gen_fsm:start_link/[3,4], this function is called by the new
-%% process to initialize.
-%%
+%% Initializes the gen_fsm.
+%% The option settings is deferred to reuse code in handle_event.
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
@@ -75,12 +70,7 @@ init([Sock, Options]) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_event/2, the instance of this function with the same
-%% name as the current state name StateName is called to handle
-%% the event. It is also called if a timeout occurs.
-%%
+%% Idle state callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec idle(Event :: term(), State :: #state{}) ->
@@ -94,12 +84,9 @@ idle(_Event, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_event/[2,3], the instance of this function with
-%% the same name as the current state name StateName is called to
-%% handle the event.
-%%
+%% Synchronous idle state callback.
+%% This callback will be called to start sending data through the
+%% socket.
 %% @end
 %%--------------------------------------------------------------------
 -spec idle(Event :: term(), From :: {pid(), term()},
@@ -135,12 +122,7 @@ idle(Event, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_event/2, the instance of this function with the same
-%% name as the current state name StateName is called to handle
-%% the event. It is also called if a timeout occurs.
-%%
+%% Sending state callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec sending(Event :: term(), State :: #state{}) ->
@@ -154,12 +136,8 @@ sending(_Event, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_event/[2,3], the instance of this function with
-%% the same name as the current state name StateName is called to
-%% handle the event.
-%%
+%% Synchronous sending state callback.
+%% The sending state waits for results of send operation.
 %% @end
 %%--------------------------------------------------------------------
 -spec sending(Event :: term(), From :: {pid(), term()},
@@ -179,10 +157,12 @@ sending(Event, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_all_state_event/2, this function is called to handle
-%% the event.
-%%
+%% Handles events independent of state: setting options and
+%% communicating with gen_fsm caller.
+%% Inter-process communication isimplemented in terms of event
+%% handling because replying is often deferred by the original
+%% handler, and the final handler wants to change state _first_ before
+%% communicating with a client.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_event(Event :: term(), StateName :: atom(),
@@ -205,10 +185,7 @@ handle_event(_Event, StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_all_state_event/[2,3], this function is called
-%% to handle the event.
-%%
+%% Handles synchronous inter-state events.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
@@ -227,10 +204,8 @@ handle_sync_event(Event, _From, StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% This function is called by a gen_fsm when it receives any
-%% message other than a synchronous or asynchronous event
-%% (or a system message).
-%%
+%% Handles messages from other processes.
+%% This callback is used for communication with NIF.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_info(Info :: term(), StateName :: atom(),
@@ -250,11 +225,7 @@ handle_info({error, Reason}, _StateName, #state{caller = Caller} = State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% This function is called by a gen_fsm when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_fsm terminates with
-%% Reason. The return value is ignored.
-%%
+%% Cleans up the receiver's process.
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()}
@@ -266,7 +237,6 @@ terminate(_Reason, _StateName, _State) ->
 %% @private
 %% @doc
 %% Convert process state when code is changed
-%%
 %% @end
 %%--------------------------------------------------------------------
 -spec code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
@@ -279,6 +249,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves packet value from the options proplist.
+%% A 'raw' value is converted to 0.
+%% @end
+%%--------------------------------------------------------------------
 -spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->
@@ -287,6 +264,13 @@ get_packet(Opts, #state{packet = OldPacket}) ->
         Other -> Other
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls gen_fsm:reply() for a defined caller and does nothing
+%% otherwise.
+%% @end
+%%--------------------------------------------------------------------
 -spec reply(Caller :: undefined | {pid(), term()}, Message :: term()) -> ok.
 reply(undefined, _Msg) -> ok;
 reply(Caller, Msg) ->

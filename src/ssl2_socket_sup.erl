@@ -29,8 +29,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Starts the supervisor
-%%
+%% Creates a supervisor for this module.
 %% @end
 %%--------------------------------------------------------------------
 -spec start_link(Sock :: term(), Options :: list(), CtrlPid :: pid()) ->
@@ -45,11 +44,9 @@ start_link(Sock, Options, CtrlPid) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a supervisor is started using supervisor:start_link/[2,3],
-%% this function is called by the new process to find out about
-%% restart strategy, maximum restart frequency and child
-%% specifications.
-%%
+%% Initializes the supervisor.
+%% The socket supervisor creates two children based on ssl2_sender and
+%% ssl2_receiver modules.
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
@@ -76,7 +73,6 @@ init([Sock, Options, CtrlPid]) ->
         Restart, Shutdown, Type, [ssl2_sender]},
 
     {ok, {SupFlags, [Receiver, Sender]}}.
-
 
 %%%===================================================================
 %%% Internal functions
