@@ -109,10 +109,14 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSuccessfulSend)
 
 TEST_F(TLSSocketTestC, shouldNotifyOnSendError)
 {
+    std::atomic<bool> closed{false};
     std::atomic<bool> called{false};
     const auto data = randomData();
 
-    socket->close();
+    socket->closeAsync(socket, [&] { closed = true; }, [](auto) {});
+
+    ASSERT_TRUE(waitFor(closed));
+
     socket->sendAsync(
         socket, boost::asio::buffer(data), [] {}, [&](auto) { called = true; });
 
@@ -212,30 +216,54 @@ TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
 
 TEST_F(TLSSocketTestC, shouldReturnLocalEndpoint)
 {
-    auto endpoint = socket->localEndpoint();
+    boost::asio::ip::tcp::endpoint endpoint;
+    std::atomic<bool> called{false};
+
+    socket->localEndpointAsync(socket,
+        [&](auto e) {
+            endpoint = e;
+            called = true;
+        },
+        [](auto) {});
+
+    ASSERT_TRUE(waitFor(called));
     ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
     ASSERT_NE(port, endpoint.port());
 }
 
 TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
 {
-    auto endpoint = socket->remoteEndpoint();
+    boost::asio::ip::tcp::endpoint endpoint;
+    std::atomic<bool> called{false};
+
+    socket->remoteEndpointAsync(socket,
+        [&](auto e) {
+            endpoint = e;
+            called = true;
+        },
+        [](auto) {});
+
+    ASSERT_TRUE(waitFor(called));
     ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
     ASSERT_EQ(port, endpoint.port());
 }
 
 TEST_F(TLSSocketTestC, shouldBeShutdownable)
 {
-    socket->shutdown(boost::asio::socket_base::shutdown_send);
+    std::atomic<bool> shutdownCalled{false};
+    socket->shutdownAsync(socket, boost::asio::socket_base::shutdown_send,
+        [&]() { shutdownCalled = true; }, [](auto) {});
 
-    std::atomic<bool> called{false};
+    ASSERT_TRUE(waitFor(shutdownCalled));
+
+    std::atomic<bool> sendCalled{false};
     auto data = randomData();
 
     socket->sendAsync(socket, boost::asio::buffer(data), [] {},
         [&](auto reason) {
             ASSERT_TRUE(boost::algorithm::iequals("broken pipe", reason));
-            called = true;
+            sendCalled = true;
         });
 
-    ASSERT_TRUE(waitFor(called));
+    ASSERT_TRUE(waitFor(sendCalled));
 }

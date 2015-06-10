@@ -284,13 +284,28 @@ static ERL_NIF_TERM peername_nif(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     try {
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
-        auto endpoint = sock->remoteEndpoint();
-        auto address = endpoint.address().to_string();
-        auto port = endpoint.port();
+        Env localEnv;
 
-        return nifpp::make(
-            env, std::make_tuple(ok, std::make_tuple(address, port)));
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=](auto &endpoint) mutable {
+            auto address = endpoint.address().to_string();
+            auto port = endpoint.port();
+            auto message = nifpp::make(localEnv,
+                std::make_tuple(ref, std::make_tuple(
+                                         ok, std::make_tuple(address, port))));
+
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        sock->remoteEndpointAsync(
+            sock, std::move(onSuccess), onError(localEnv, pid, ref));
+
+        return nifpp::make(env, ok);
     }
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
@@ -304,13 +319,28 @@ static ERL_NIF_TERM sockname_nif(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     try {
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
-        auto endpoint = sock->localEndpoint();
-        auto address = endpoint.address().to_string();
-        auto port = endpoint.port();
+        Env localEnv;
 
-        return nifpp::make(
-            env, std::make_tuple(ok, std::make_tuple(address, port)));
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=](auto &endpoint) mutable {
+            auto address = endpoint.address().to_string();
+            auto port = endpoint.port();
+            auto message = nifpp::make(localEnv,
+                std::make_tuple(ref, std::make_tuple(
+                                         ok, std::make_tuple(address, port))));
+
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        sock->localEndpointAsync(
+            sock, std::move(onSuccess), onError(localEnv, pid, ref));
+
+        return nifpp::make(env, ok);
     }
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
@@ -324,8 +354,22 @@ static ERL_NIF_TERM close_nif(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     try {
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
-        sock->close();
+        Env localEnv;
+
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=]() mutable {
+            auto message = nifpp::make(localEnv, std::make_tuple(ref, ok));
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        sock->closeAsync(
+            sock, std::move(onSuccess), onError(localEnv, pid, ref));
+
         return nifpp::make(env, ok);
     }
     catch (const nifpp::badarg &) {
@@ -365,17 +409,32 @@ static ERL_NIF_TERM shutdown_nif(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     try {
-        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[0]);
-        const auto type = nifpp::get<nifpp::str_atom>(env, argv[1]);
+        Env localEnv;
 
+        nifpp::TERM ref{enif_make_copy(localEnv, argv[0])};
+        auto sock = *nifpp::get<one::etls::TLSSocket::Ptr *>(env, argv[1]);
+        const auto type = nifpp::get<nifpp::str_atom>(env, argv[2]);
+
+        ErlNifPid pid;
+        enif_self(env, &pid);
+
+        auto onSuccess = [=]() mutable {
+            auto message = nifpp::make(localEnv, std::make_tuple(ref, ok));
+            enif_send(nullptr, &pid, localEnv, message);
+        };
+
+        auto asioType = boost::asio::socket_base::shutdown_both;
         if (type == "read")
-            sock->shutdown(boost::asio::socket_base::shutdown_receive);
+            asioType = boost::asio::socket_base::shutdown_receive;
         else if (type == "write")
-            sock->shutdown(boost::asio::socket_base::shutdown_send);
+            asioType = boost::asio::socket_base::shutdown_send;
         else if (type == "read_write")
-            sock->shutdown(boost::asio::socket_base::shutdown_both);
+            asioType = boost::asio::socket_base::shutdown_both;
         else
             throw nifpp::badarg{};
+
+        sock->shutdownAsync(
+            sock, asioType, std::move(onSuccess), onError(localEnv, pid, ref));
 
         return nifpp::make(env, ok);
     }
@@ -390,9 +449,9 @@ static ERL_NIF_TERM shutdown_nif(
 static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
     {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
-    {"peername", 1, peername_nif}, {"sockname", 1, sockname_nif},
-    {"close", 1, close_nif}, {"certificate_chain", 1, certificate_chain_nif},
-    {"shutdown", 2, shutdown_nif}};
+    {"peername", 2, peername_nif}, {"sockname", 2, sockname_nif},
+    {"close", 2, close_nif}, {"certificate_chain", 1, certificate_chain_nif},
+    {"shutdown", 3, shutdown_nif}};
 
 ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)
 

@@ -15,9 +15,8 @@ namespace etls {
 
 TLSApplication::TLSApplication()
 {
-    const auto threadsNo = std::thread::hardware_concurrency();
-    m_threads.reserve(threadsNo);
-    std::generate_n(std::back_inserter(m_threads), threadsNo, [this] {
+    m_threads.reserve(m_threadsNo);
+    std::generate_n(std::back_inserter(m_threads), m_threadsNo, [this] {
         return std::thread{[this] {
             while (!m_ioService.stopped()) {
                 try {

@@ -26,7 +26,9 @@ public:
     boost::asio::io_service &ioService();
 
 private:
-    boost::asio::io_service m_ioService;
+    const std::size_t m_threadsNo{std::thread::hardware_concurrency()};
+
+    boost::asio::io_service m_ioService{m_threadsNo};
     boost::asio::io_service::work m_work{m_ioService};
 
     std::vector<std::thread> m_threads;

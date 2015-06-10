@@ -222,7 +222,12 @@ controlling_process(#sock_ref{receiver = Receiver}, Pid) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, Reason :: any()}.
 peername(#sock_ref{socket = Sock}) ->
-    parse_name_result(ssl2_nif:peername(Sock)).
+    Ref = make_ref(),
+    case ssl2_nif:peername(Ref, Sock) of
+        ok -> receive {Ref, Result} -> parse_name_result(Result) end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -233,7 +238,12 @@ peername(#sock_ref{socket = Sock}) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, Reason :: any()}.
 sockname(#sock_ref{socket = Sock}) ->
-    parse_name_result(ssl2_nif:sockname(Sock)).
+    Ref = make_ref(),
+    case ssl2_nif:sockname(Ref, Sock) of
+        ok -> receive {Ref, Result} -> parse_name_result(Result) end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -243,7 +253,12 @@ sockname(#sock_ref{socket = Sock}) ->
 -spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
 close(#sock_ref{socket = Sock, supervisor = Sup}) ->
     ok = supervisor:terminate_child(ssl2_sup, Sup),
-    ssl2_nif:close(Sock).
+    Ref = make_ref(),
+    case ssl2_nif:close(Ref, Sock) of
+        ok -> receive {Ref, Result} -> Result end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -278,7 +293,12 @@ shutdown(SockRef, Type) ->
             ok = supervisor:terminate_child(Sup, sender)
     end,
 
-    ssl2_nif:shutdown(Sock, Type).
+    Ref = make_ref(),
+    case ssl2_nif:shutdown(Ref, Sock, Type) of
+        ok -> receive {Ref, Result} -> Result end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 %%%===================================================================
 %%% Internal functions

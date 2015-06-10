@@ -48,15 +48,21 @@ public:
 
     void handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
 
-    void shutdown(const boost::asio::socket_base::shutdown_type type);
+    void shutdownAsync(Ptr self,
+        const boost::asio::socket_base::shutdown_type type,
+        SuccessFun<> success, ErrorFun error);
 
-    boost::asio::ip::tcp::endpoint localEndpoint() const;
+    void localEndpointAsync(Ptr self,
+        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
+        ErrorFun error);
 
-    boost::asio::ip::tcp::endpoint remoteEndpoint() const;
+    void remoteEndpointAsync(Ptr self,
+        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
+        ErrorFun error);
 
     const std::vector<std::vector<unsigned char>> &certificateChain() const;
 
-    void close();
+    void closeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
 
 private:
     std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>

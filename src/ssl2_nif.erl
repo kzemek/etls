@@ -14,7 +14,7 @@
 
 %% API
 -export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
-    peername/1, sockname/1, close/1, certificate_chain/1, shutdown/2]).
+    peername/2, sockname/2, close/2, certificate_chain/1, shutdown/3]).
 
 -opaque socket() :: binary().
 -opaque acceptor() :: binary().
@@ -58,20 +58,19 @@ accept(_Ref, _Acceptor) ->
 handshake(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
--spec peername(Socket :: socket()) ->
-    {ok, {StrAddress :: string(), Port :: inet:port_number()}} |
-    {error, Reason :: any()}.
-peername(_Sock) ->
+-spec peername(Ref :: reference(), Socket :: socket()) ->
+    ok | {error, Reason :: any()}.
+peername(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
--spec sockname(Socket :: socket()) ->
-    {ok, {StrAddress :: string(), Port :: inet:port_number()}} |
-    {error, Reason :: any()}.
-sockname(_Sock) ->
+-spec sockname(Ref :: reference(), Socket :: socket()) ->
+    ok | {error, Reason :: any()}.
+sockname(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
--spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
-close(_Sock) ->
+-spec close(Ref :: reference(), Socket :: socket()) ->
+    ok | {error, Reason :: any()}.
+close(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 -spec certificate_chain(Socket :: socket()) ->
@@ -79,9 +78,10 @@ close(_Sock) ->
 certificate_chain(_Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
--spec shutdown(Socket :: socket(), Type :: read | write | read_write) ->
+-spec shutdown(Ref :: reference(), Socket :: socket(),
+    Type :: read | write | read_write) ->
     ok | {error, Reason :: any()}.
-shutdown(_Sock, _Type) ->
+shutdown(_Ref, _Sock, _Type) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 %%%===================================================================
