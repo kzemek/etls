@@ -50,10 +50,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a gen_fsm process which calls Module:init/1 to
-%% initialize. To ensure a synchronized start-up procedure, this
-%% function does not return until Module:init/1 has returned.
-%%
+%% Creates a gen_fsm process for this module.
 %% @end
 %%--------------------------------------------------------------------
 -spec start_link(Sock :: term(), Options :: list(), Pid :: pid()) ->
@@ -68,10 +65,8 @@ start_link(Sock, Options, Pid) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm is started using gen_fsm:start/[3,4] or
-%% gen_fsm:start_link/[3,4], this function is called by the new
-%% process to initialize.
-%%
+%% Initializes the gen_fsm.
+%% The option settings is deferred to reuse code in handle_event.
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
@@ -86,12 +81,7 @@ init([Sock, Options, Pid]) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_event/2, the instance of this function with the same
-%% name as the current state name StateName is called to handle
-%% the event. It is also called if a timeout occurs.
-%%
+%% Idle state callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec idle(Event :: term(), State :: #state{}) ->
@@ -105,12 +95,13 @@ idle(_Event, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_event/[2,3], the instance of this function with
-%% the same name as the current state name StateName is called to
-%% handle the event.
-%%
+%% Synchronous idle state callback.
+%% This callback will be called to start receiving data through the
+%% socket. If for any reason the request can already be satisfied
+%% from the buffer, it is, and the gen_fsm remains in the idle state.
+%% Otherwise a NIF's receive is called and the gen_fsm's state is
+%% changed to receiving_header or receiving (depending on the packet
+%% option).
 %% @end
 %%--------------------------------------------------------------------
 -spec idle(Event :: term(), From :: {pid(), term()},
@@ -165,12 +156,7 @@ idle(Event, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_event/2, the instance of this function with the same
-%% name as the current state name StateName is called to handle
-%% the event. It is also called if a timeout occurs.
-%%
+%% Receiving state callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec receiving(Event :: term(), State :: #state{}) ->
@@ -184,12 +170,11 @@ receiving(_Event, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_event/[2,3], the instance of this function with
-%% the same name as the current state name StateName is called to
-%% handle the event.
-%%
+%% Synchronous receiving state callback.
+%% The receiving state waits for results of receive operation.
+%% If a client has timed out, and the gen_fsm still remains in the
+%% receiving state, this callback is used to set a new caller who will
+%% receive the data from the socket.
 %% @end
 %%--------------------------------------------------------------------
 -spec receiving(Event :: term(), From :: {pid(), term()},
@@ -220,12 +205,7 @@ receiving(Event, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_event/2, the instance of this function with the same
-%% name as the current state name StateName is called to handle
-%% the event. It is also called if a timeout occurs.
-%%
+%% Receiving header state callback.
 %% @end
 %%--------------------------------------------------------------------
 -spec receiving_header(Event :: term(), State :: #state{}) ->
@@ -239,12 +219,11 @@ receiving_header(_Event, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% There should be one instance of this function for each possible
-%% state name. Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_event/[2,3], the instance of this function with
-%% the same name as the current state name StateName is called to
-%% handle the event.
-%%
+%% Synchronous receiving header state callback.
+%% The receiving header state waits for {packet, N} header.
+%% If a client has timed out, and the gen_fsm still remains in the
+%% receiving state, this callback is used to set a new caller who will
+%% receive the data from the socket.
 %% @end
 %%--------------------------------------------------------------------
 -spec receiving_header(Event :: term(), From :: {pid(), term()},
@@ -270,10 +249,12 @@ receiving_header(Event, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm receives an event sent using
-%% gen_fsm:send_all_state_event/2, this function is called to handle
-%% the event.
-%%
+%% Handles events independent of state: setting options and
+%% communicating with other processes.
+%% Inter-process communication isimplemented in terms of event
+%% handling because replying is often deferred by the original
+%% handler, and the final handler wants to change state _first_ before
+%% communicating with a client.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_event(Event :: term(), StateName :: atom(),
@@ -339,10 +320,7 @@ handle_event(_Event, StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Whenever a gen_fsm receives an event sent using
-%% gen_fsm:sync_send_all_state_event/[2,3], this function is called
-%% to handle the event.
-%%
+%% Handles synchronous inter-state events.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_sync_event(Event :: term(), From :: {pid(), Tag :: term()},
@@ -361,10 +339,12 @@ handle_sync_event(Event, _From, StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% This function is called by a gen_fsm when it receives any
-%% message other than a synchronous or asynchronous event
-%% (or a system message).
-%%
+%% Handles messages from other processes.
+%% This callback is used for communication with NIF.
+%% The timeout message is sent by a timer. A timer is created for each
+%% client that calls a function with a timeout. When the timer
+%% expires, the client is cleared but the gen_fsm remains in the
+%% receiving state until the data is received or an error occurs.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_info(Info :: term(), StateName :: atom(),
@@ -444,11 +424,11 @@ handle_info({error, Reason}, _StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% This function is called by a gen_fsm when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_fsm terminates with
-%% Reason. The return value is ignored.
-%%
+%% Cleans up the receiver's process.
+%% If active is set, the controlling process receives a ssl2_closed
+%% or ssl2_error message.
+%% If the connection was closed by the remote end and exit_on_close
+%% option is set, a process that calls ssl2:close(Socket) is spawned.
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()}
@@ -480,8 +460,7 @@ terminate(Reason, _StateName, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Convert process state when code is changed
-%%
+%% Converts process state when code is changed
 %% @end
 %%--------------------------------------------------------------------
 -spec code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
@@ -494,6 +473,14 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Receives a "packet", i.e. a message without a set size. If
+%% {packet, N} is set, every message is a packet. Otherwise tries to
+%% receive any message from the socket.
+%% @end
+%%--------------------------------------------------------------------
 -spec recv_packet(State :: #state{}) ->
     {next_state, receiving_header | receiving, NextState :: #state{}} |
     {stop, Reason :: any(), State :: #state{}}.
@@ -502,6 +489,12 @@ recv_packet(#state{packet = 0} = NextState) ->
 recv_packet(#state{packet = Packet} = NextState) ->
     recv_header(NextState#state{needed = Packet}).
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Receives a header of a size given in {packet, N}.
+%% @end
+%%--------------------------------------------------------------------
 -spec recv_header(State :: #state{}) ->
     {next_state, receiving_header, NextState :: #state{}} |
     {stop, Reason :: any(), State :: #state{}}.
@@ -514,6 +507,13 @@ recv_header(State) ->
             {stop, Reason, State}
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Receives body of the message, with size set either by the heaader
+%% message (if {packet, N} is set) or explicitely by the client.
+%% @end
+%%--------------------------------------------------------------------
 -spec recv_body(Size :: non_neg_integer(), State :: #state{}) ->
     {next_state, receiving, NextState :: #state{}} |
     {stop, Reason :: any(), State :: #state{}}.
@@ -526,22 +526,53 @@ recv_body(Size, State) ->
             {stop, Reason, State}
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates error reason given by the NIF library to domain-specific
+%% reason returned by the Erlang interface.
+%% @end
+%%--------------------------------------------------------------------
 -spec translate_reason(Reason :: term()) -> Reason :: term().
 translate_reason("End of file") -> closed;
 translate_reason(Reason) ->
     Reason.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Constructs a reason for terminate callback.
+%% The reason will either be changed to {shutdown, Reason} to signify
+%% normal shutdown, or left as Reason to signify an error.
+%% @end
+%%--------------------------------------------------------------------
 -spec construct_terminate_reason(Reason :: term()) ->
     {shutdown, Reason :: term()} | term().
 construct_terminate_reason(closed) -> {shutdown, closed};
 construct_terminate_reason(Reason) ->
     Reason.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a timer with a given timeout.
+%% To allow consisten timer handling, a timeout of infinity produces a
+%% reference() that does not correspond to a valid timer, but can be
+%% used in erlang:cancel_timer.
+%% @end
+%%--------------------------------------------------------------------
 -spec create_timer(Timeout :: timeout()) -> Timer :: reference().
 create_timer(infinity) -> make_ref();
 create_timer(Timeout) ->
     erlang:send_after(Timeout, self(), timeout).
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves packet value from the options proplist.
+%% A 'raw' value is converted to 0.
+%% @end
+%%--------------------------------------------------------------------
 -spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->
@@ -550,6 +581,13 @@ get_packet(Opts, #state{packet = OldPacket}) ->
         Other -> Other
     end.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Calls gen_fsm:reply() for a defined caller and does nothing
+%% otherwise.
+%% @end
+%%--------------------------------------------------------------------
 -spec reply(Caller :: undefined | {pid(), term()}, Message :: term()) -> ok.
 reply(undefined, _Msg) -> ok;
 reply(Caller, Msg) ->
