@@ -170,8 +170,8 @@ handshake(Socket) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Accepts an incoming connection on an acceptor.
-%% The returned socket should be passed to ssl2:handshake to establish the
-%% secure connection.
+%% The returned socket should be passed to ssl2:handshake to establish
+%% the secure connection.
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake(Socket :: socket(), Timeout :: timeout()) ->
@@ -277,7 +277,9 @@ peercert(#sock_ref{socket = Sock}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Closes the socket in one or two directions.
+%% Shuts down the connection in one or two directions.
+%% To be able to handle that the peer has done a shutdown on the write
+%% side, the {exit_on_close, false} option is useful.
 %% @end
 %%--------------------------------------------------------------------
 -spec shutdown(Socket :: socket(), Type :: read | write | read_write) ->

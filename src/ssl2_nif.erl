@@ -25,22 +25,50 @@
 %%% API
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a native TCP socket, connects to the given host and port
+%% and performs an TLS handshake.
+%% When finished, sends {Ref, {ok, Socket} | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec connect(Ref :: reference(), Host :: string(),
     Port :: inet:port_number()) ->
     ok | {error, Reason :: any()}.
 connect(_Ref, _Host, _Port) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Sends a message through the Socket.
+%% When finished, sends ok | {error, Reason} to the calling
+%% process.
+%% @end
+%%--------------------------------------------------------------------
 -spec send(Socket :: socket(), Data :: iodata()) ->
     ok | {error, Reason :: any()}.
 send(_Sock, _Data) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Receives a message from the Socket.
+%% When Size is 0, waits for any data to arrive on the socket.
+%% When finished, sends {ok, Data :: binary()} | {error, Reason} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
     ok | {error, Reason :: any()}.
 recv(_Sock, _Size) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates an acceptor socket that listens on the given port.
+%% @end
+%%--------------------------------------------------------------------
 -spec listen(Port :: inet:port_number(), CertPath :: string(),
     KeyPath :: string()) ->
     {ok, Acceptor :: acceptor()} |
@@ -48,36 +76,84 @@ recv(_Sock, _Size) ->
 listen(_Port, _CertPath, _KeyPath) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Accepts an incoming TCP connection on the acceptor.
+%% When finished, sends {Ref, {ok, Socket} | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec accept(Ref :: reference(), Acceptor :: acceptor()) ->
     ok | {error, Reason :: any()}.
 accept(_Ref, _Acceptor) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Performs a TLS handshake on the new TCP connection.
+%% When finished, sends {Ref, ok | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec handshake(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: any()}.
 handshake(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a tuple {RemoteHostname, RemotePort} describing the peer.
+%% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec peername(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: any()}.
 peername(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a tuple {LocalHostname, LocalPort} describing the peer.
+%% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
+%% calling process.
+%% @end
+%%--------------------------------------------------------------------
 -spec sockname(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: any()}.
 sockname(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Closes the socket.
+%% When finished, sends {Ref, ok | {error, Reason}} to the calling
+%% process.
+%% @end
+%%--------------------------------------------------------------------
 -spec close(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: any()}.
 close(_Ref, _Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a certificate chain of the peer.
+%% This method can only be used after connect / handshake.
+%% @end
+%%--------------------------------------------------------------------
 -spec certificate_chain(Socket :: socket()) ->
     {ok, [binary()]} | {error, Reason :: any()}.
 certificate_chain(_Sock) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Shuts down socket communciation in a chosen direction.
+%% When finished, sends {Ref, ok | {error, Reason}} to the calling
+%% process.
+%% @end
+%%--------------------------------------------------------------------
 -spec shutdown(Ref :: reference(), Socket :: socket(),
     Type :: read | write | read_write) ->
     ok | {error, Reason :: any()}.
@@ -88,6 +164,14 @@ shutdown(_Ref, _Sock, _Type) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Initialization function for the module.
+%% Loads the NIF native library. The library is first searched for
+%% in application priv dir, and then under ../priv and ./priv .
+%% @end
+%%--------------------------------------------------------------------
 -spec init() -> ok | {error, Reason :: any()}.
 init() ->
     LibName = "liberlang_tls",
