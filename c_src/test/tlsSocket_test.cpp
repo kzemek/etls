@@ -260,8 +260,8 @@ TEST_F(TLSSocketTestC, shouldBeShutdownable)
     auto data = randomData();
 
     socket->sendAsync(socket, boost::asio::buffer(data), [] {},
-        [&](auto reason) {
-            ASSERT_TRUE(boost::algorithm::iequals("broken pipe", reason));
+        [&](auto ec) {
+            ASSERT_TRUE(boost::algorithm::iequals("broken pipe", ec.message()));
             sendCalled = true;
         });
 

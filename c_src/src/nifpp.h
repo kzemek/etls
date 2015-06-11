@@ -46,6 +46,7 @@
 #endif
 #include <cassert>
 #include <cstring>
+#include <memory>
 
 namespace nifpp
 {
@@ -1063,6 +1064,17 @@ TERM make(ErlNifEnv *env, const std::unordered_map<TK,TV> &var)
 }
 #endif //NIFPP_HAS_MAPS
 
+template <typename T>
+int get(ErlNifEnv *env, ERL_NIF_TERM term, std::shared_ptr<T> &var)
+{
+    std::shared_ptr<T> *ptr;
+    if (!get(env, term, ptr))
+        return 0;
+
+    var = *ptr;
+    return 1;
+}
+
 // convenience wrappers for get()
 
 template<typename T>
@@ -1084,7 +1096,6 @@ void get_throws(ErlNifEnv *env, ERL_NIF_TERM term, T &t)
         throw badarg();
     }
 }
-
 
 } // namespace nifpp
 

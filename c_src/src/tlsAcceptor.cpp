@@ -39,7 +39,7 @@ void TLSAcceptor::acceptAsync(
             error = std::move(error)
         ](const auto ec) {
             if (ec)
-                error(ec.message());
+                error(ec);
             else
                 success(sock);
         });

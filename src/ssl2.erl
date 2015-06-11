@@ -49,7 +49,7 @@
 %%--------------------------------------------------------------------
 -spec connect(Host :: string(), Port :: inet:port_number(), Opts :: opts()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: any()}.
+    {error, Reason :: atom()}.
 connect(Host, Port, Options) ->
     connect(Host, Port, Options, infinity).
 
@@ -61,7 +61,7 @@ connect(Host, Port, Options) ->
 -spec connect(Host :: string(), Port :: inet:port_number(),
     Opts :: opts(), Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: any()}.
+    {error, Reason :: atom()}.
 connect(Host, Port, Options, Timeout) ->
     Ref = make_ref(),
     case ssl2_nif:connect(Ref, Host, Port) of
@@ -73,7 +73,7 @@ connect(Host, Port, Options, Timeout) ->
                 {error, timeout}
             end;
 
-        {error, Reason} ->
+        {error, Reason} when is_atom(Reason) ->
             {error, Reason}
     end.
 
@@ -123,14 +123,14 @@ recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
 %%--------------------------------------------------------------------
 -spec listen(Port :: inet:port_number(), Opts :: listen_opts()) ->
     {ok, Acceptor :: acceptor()} |
-    {error, Reason :: any()}.
+    {error, Reason :: atom()}.
 listen(Port, Options) ->
     true = proplists:is_defined(certfile, Options),
     CertPath = proplists:get_value(certfile, Options),
     KeyPath = proplists:get_value(keyfile, Options, CertPath),
     case ssl2_nif:listen(Port, CertPath, KeyPath) of
         {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
-        Result -> Result
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -163,14 +163,14 @@ accept(#acceptor_ref{acceptor = Acceptor}, Timeout) ->
                 {error, timeout}
             end;
 
-        {error, Reason} ->
+        {error, Reason} when is_atom(Reason) ->
             {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
 %% @equiv handshake(Socket, infinity)
 %%--------------------------------------------------------------------
--spec handshake(Socket :: socket()) -> ok | {error, Reason :: any()}.
+-spec handshake(Socket :: socket()) -> ok | {error, Reason :: atom()}.
 handshake(Socket) ->
     handshake(Socket, infinity).
 
@@ -192,7 +192,7 @@ handshake(#sock_ref{socket = Sock}, Timeout) ->
                 {error, timeout}
             end;
 
-        {error, Reason} ->
+        {error, Reason} when is_atom(Reason) ->
             {error, Reason}
     end.
 
@@ -226,13 +226,12 @@ controlling_process(#sock_ref{receiver = Receiver}, Pid) ->
 %%--------------------------------------------------------------------
 -spec peername(Socket :: socket()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
-    {error, Reason :: any()}.
+    {error, Reason :: atom()}.
 peername(#sock_ref{socket = Sock}) ->
     Ref = make_ref(),
     case ssl2_nif:peername(Ref, Sock) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
-        {error, Reason} ->
-            {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -242,20 +241,18 @@ peername(#sock_ref{socket = Sock}) ->
 %%--------------------------------------------------------------------
 -spec sockname(SocketOrAcceptor :: socket() | acceptor()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
-    {error, Reason :: any()}.
+    {error, Reason :: atom()}.
 sockname(#sock_ref{socket = Sock}) ->
     Ref = make_ref(),
     case ssl2_nif:sockname(Ref, Sock) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
-        {error, Reason} ->
-            {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end;
 sockname(#acceptor_ref{acceptor = Acceptor}) ->
     Ref = make_ref(),
     case ssl2_nif:acceptor_sockname(Ref, Acceptor) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
-        {error, Reason} ->
-            {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -263,14 +260,13 @@ sockname(#acceptor_ref{acceptor = Acceptor}) ->
 %% Gracefully closes the socket.
 %% @end
 %%--------------------------------------------------------------------
--spec close(Socket :: socket()) -> ok | {error, Reason :: any()}.
+-spec close(Socket :: socket()) -> ok | {error, Reason :: atom()}.
 close(#sock_ref{socket = Sock, supervisor = Sup}) ->
     ok = supervisor:terminate_child(ssl2_sup, Sup),
     Ref = make_ref(),
     case ssl2_nif:close(Ref, Sock) of
         ok -> receive {Ref, Result} -> Result end;
-        {error, Reason} ->
-            {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -285,7 +281,7 @@ peercert(#sock_ref{socket = Sock}) ->
     case ssl2_nif:certificate_chain(Sock) of
         {ok, []} -> {error, no_peer_certificate};
         {ok, Chain} -> {ok, lists:last(Chain)};
-        {error, Reason} -> {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
@@ -296,7 +292,7 @@ peercert(#sock_ref{socket = Sock}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec shutdown(Socket :: socket(), Type :: read | write | read_write) ->
-    ok | {error, Reason :: any()}.
+    ok | {error, Reason :: atom()}.
 shutdown(SockRef, Type) ->
     #sock_ref{supervisor = Sup, socket = Sock} = SockRef,
 
@@ -311,8 +307,7 @@ shutdown(SockRef, Type) ->
     Ref = make_ref(),
     case ssl2_nif:shutdown(Ref, Sock, Type) of
         ok -> receive {Ref, Result} -> Result end;
-        {error, Reason} ->
-            {error, Reason}
+        {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
 %%%===================================================================

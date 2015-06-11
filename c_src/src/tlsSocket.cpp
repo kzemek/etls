@@ -55,7 +55,7 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
             auto endpoints = this->shuffleEndpoints(std::move(iterator));
 
             if (ec) {
-                error(ec.message());
+                error(ec);
                 return;
             }
 
@@ -68,7 +68,7 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
                 ](const auto ec, auto iterator) mutable {
 
                     if (ec) {
-                        error(ec.message());
+                        error(ec);
                         return;
                     }
 
@@ -83,7 +83,7 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
                             error = std::move(error)
                         ](const auto ec) mutable {
                             if (ec)
-                                error(ec.message());
+                                error(ec);
                             else
                                 success(std::move(self));
                         });
@@ -108,7 +108,7 @@ void TLSSocket::sendAsync(Ptr self, boost::asio::const_buffer buffer,
                 error = std::move(error)
             ](const auto ec, const auto read) {
                 if (ec)
-                    error(ec.message());
+                    error(ec);
                 else
                     success();
             });
@@ -132,7 +132,7 @@ void TLSSocket::recvAsync(Ptr self, boost::asio::mutable_buffer buffer,
                 error = std::move(error)
             ](const auto ec, const auto read) {
                 if (ec)
-                    error(ec.message());
+                    error(ec);
                 else
                     success(buffer);
             });
@@ -155,7 +155,7 @@ void TLSSocket::recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
             error = std::move(error)
         ](const auto ec, const auto read) {
             if (ec)
-                error(ec.message());
+                error(ec);
             else
                 success(boost::asio::buffer(buffer, read));
         });
@@ -177,7 +177,7 @@ void TLSSocket::handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
             error = std::move(error)
         ](const auto ec) {
             if (ec)
-                error(ec.message());
+                error(ec);
             else
                 success();
         });
@@ -197,7 +197,7 @@ void TLSSocket::shutdownAsync(Ptr self,
         boost::system::error_code ec;
         m_socket.lowest_layer().shutdown(type, ec);
         if (ec)
-            error(ec.message());
+            error(ec);
         else
             success();
     });
@@ -217,7 +217,7 @@ void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 
         m_socket.lowest_layer().close(ec);
         if (ec)
-            error(ec.message());
+            error(ec);
         else
             success();
     });

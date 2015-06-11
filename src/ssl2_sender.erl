@@ -256,7 +256,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% A 'raw' value is converted to 0.
 %% @end
 %%--------------------------------------------------------------------
--spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
+-spec get_packet(Opts :: ssl2:listen_opts(), State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->
     case proplists:get_value(packet, Opts, OldPacket) of

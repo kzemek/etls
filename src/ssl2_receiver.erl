@@ -533,8 +533,8 @@ recv_body(Size, State) ->
 %% reason returned by the Erlang interface.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_reason(Reason :: term()) -> Reason :: term().
-translate_reason("End of file") -> closed;
+-spec translate_reason(Reason :: atom()) -> Reason :: atom().
+translate_reason(eof) -> closed;
 translate_reason(Reason) ->
     Reason.
 
@@ -573,7 +573,7 @@ create_timer(Timeout) ->
 %% A 'raw' value is converted to 0.
 %% @end
 %%--------------------------------------------------------------------
--spec get_packet(Opts :: ssl2:connect_opts(), State :: #state{}) ->
+-spec get_packet(Opts :: ssl2:listen_opts(), State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->
     case proplists:get_value(packet, Opts, OldPacket) of

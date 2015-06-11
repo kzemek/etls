@@ -531,7 +531,7 @@ server_loop(Pid, Ref, Sock) ->
             server_loop(Pid, Ref, Sock);
 
         stop ->
-            ok
+            ssl:close(Sock)
     end.
 
 clear_queue() ->
