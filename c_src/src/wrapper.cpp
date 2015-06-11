@@ -130,8 +130,8 @@ const std::unordered_map<int, nifpp::str_atom> addrinfoErrorAtom{
  * An error code - atom map used to return atom errors for misc error types.
  */
 const std::unordered_map<int, nifpp::str_atom> miscErrorAtom{
-    {misc_errors::already_open, {"already_open"}}, {misc_errors::eof, {"eof"}},
-    {misc_errors::not_found, {"not_found"}},
+    {misc_errors::already_open, {"already_open"}},
+    {misc_errors::eof, {"closed"}}, {misc_errors::not_found, {"not_found"}},
     {misc_errors::fd_set_failure, {"fd_set_failure"}}};
 
 /**

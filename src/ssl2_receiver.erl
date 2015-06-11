@@ -417,9 +417,8 @@ handle_info({ok, Data}, receiving, State) ->
 
 handle_info({error, Reason}, _StateName, State) ->
     #state{caller = Caller} = State,
-    TranslatedReason = translate_reason(Reason),
-    reply(Caller, {error, TranslatedReason}),
-    {stop, construct_terminate_reason(TranslatedReason), State}.
+    reply(Caller, {error, Reason}),
+    {stop, construct_terminate_reason(Reason), State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -525,18 +524,6 @@ recv_body(Size, State) ->
             reply(Caller, {error, Reason}),
             {stop, Reason, State}
     end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Translates error reason given by the NIF library to domain-specific
-%% reason returned by the Erlang interface.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_reason(Reason :: atom()) -> Reason :: atom().
-translate_reason(eof) -> closed;
-translate_reason(Reason) ->
-    Reason.
 
 %%--------------------------------------------------------------------
 %% @private
