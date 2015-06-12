@@ -59,7 +59,6 @@ using misc_errors = boost::asio::error::misc_errors;
  */
 nifpp::str_atom ok{"ok"};
 nifpp::str_atom error{"error"};
-nifpp::str_atom unknown_error{"unknown_error"};
 /** @} */
 
 /**
@@ -71,98 +70,6 @@ nifpp::str_atom unknown_error{"unknown_error"};
 one::etls::TLSApplication app;
 
 /**
- * An error code - atom map used to return atom errors for basic error types.
- */
-const std::unordered_map<int, nifpp::str_atom> basicErrorAtom{
-    {basic_errors::access_denied, {"access_denied"}},
-    {basic_errors::address_family_not_supported,
-     {"address_family_not_supported"}},
-    {basic_errors::address_in_use, {"address_in_use"}},
-    {basic_errors::already_connected, {"already_connected"}},
-    {basic_errors::already_started, {"already_started"}},
-    {basic_errors::broken_pipe, {"broken_pipe"}},
-    {basic_errors::connection_aborted, {"connection_aborted"}},
-    {basic_errors::connection_refused, {"connection_refused"}},
-    {basic_errors::connection_reset, {"connection_reset"}},
-    {basic_errors::bad_descriptor, {"bad_descriptor"}},
-    {basic_errors::fault, {"fault"}},
-    {basic_errors::host_unreachable, {"host_unreachable"}},
-    {basic_errors::in_progress, {"in_progress"}},
-    {basic_errors::interrupted, {"interrupted"}},
-    {basic_errors::invalid_argument, {"invalid_argument"}},
-    {basic_errors::message_size, {"message_size"}},
-    {basic_errors::name_too_long, {"name_too_long"}},
-    {basic_errors::network_down, {"network_down"}},
-    {basic_errors::network_reset, {"network_reset"}},
-    {basic_errors::network_unreachable, {"network_unreachable"}},
-    {basic_errors::no_descriptors, {"no_descriptors"}},
-    {basic_errors::no_buffer_space, {"no_buffer_space"}},
-    {basic_errors::no_memory, {"no_memory"}},
-    {basic_errors::no_permission, {"no_permission"}},
-    {basic_errors::no_protocol_option, {"no_protocol_option"}},
-    {basic_errors::not_connected, {"not_connected"}},
-    {basic_errors::not_socket, {"not_socket"}},
-    {basic_errors::operation_aborted, {"operation_aborted"}},
-    {basic_errors::operation_not_supported, {"operation_not_supported"}},
-    {basic_errors::shut_down, {"shut_down"}},
-    {basic_errors::timed_out, {"timed_out"}},
-    {basic_errors::try_again, {"try_again"}},
-    {basic_errors::would_block, {"would_block"}}};
-
-/**
- * An error code - atom map used to return atom errors for netdb error types.
- */
-const std::unordered_map<int, nifpp::str_atom> netdbErrorAtom{
-    {netdb_errors::host_not_found, {"host_not_found"}},
-    {netdb_errors::host_not_found_try_again, {"host_not_found_try_again"}},
-    {netdb_errors::no_data, {"no_data"}},
-    {netdb_errors::no_recovery, {"no_recovery"}}};
-
-/**
- * An error code - atom map used to return atom errors for addrinfo error types.
- */
-const std::unordered_map<int, nifpp::str_atom> addrinfoErrorAtom{
-    {addrinfo_errors::service_not_found, {"service_not_found"}},
-    {addrinfo_errors::socket_type_not_supported,
-     {"socket_type_not_supported"}}};
-
-/**
- * An error code - atom map used to return atom errors for misc error types.
- */
-const std::unordered_map<int, nifpp::str_atom> miscErrorAtom{
-    {misc_errors::already_open, {"already_open"}},
-    {misc_errors::eof, {"closed"}}, {misc_errors::not_found, {"not_found"}},
-    {misc_errors::fd_set_failure, {"fd_set_failure"}}};
-
-/**
- * Translates @c error_code to an atom.
- * @param ec The error code to translate.
- * @return An atom describing the error.
- */
-nifpp::str_atom translateError(const boost::system::error_code &ec)
-{
-    std::unordered_map<int, nifpp::str_atom>::const_iterator it, end;
-    if (ec.category().name() == "asio.netdb"s) {
-        it = netdbErrorAtom.find(ec.value());
-        end = netdbErrorAtom.end();
-    }
-    else if (ec.category().name() == "asio.addrinfo"s) {
-        it = addrinfoErrorAtom.find(ec.value());
-        end = addrinfoErrorAtom.end();
-    }
-    else if (ec.category().name() == "asio.misc"s) {
-        it = miscErrorAtom.find(ec.value());
-        end = miscErrorAtom.end();
-    }
-    else {
-        it = basicErrorAtom.find(ec.value());
-        end = basicErrorAtom.end();
-    }
-
-    return it == end ? unknown_error : it->second;
-}
-
-/**
  * Creates an error callback.
  * An error callback implementation is shared between multiple NIF functions.
  * @param localEnv A local NIF environment.
@@ -172,7 +79,7 @@ nifpp::str_atom translateError(const boost::system::error_code &ec)
 one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
 {
     return [localEnv, pid](const boost::system::error_code &ec) mutable {
-        auto reason = translateError(ec);
+        auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
         enif_send(nullptr, &pid, localEnv, message);
     };
@@ -185,7 +92,7 @@ one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
 one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
 {
     return [localEnv, pid, ref](const boost::system::error_code &ec) mutable {
-        auto reason = translateError(ec);
+        auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(
             localEnv, std::make_tuple(ref, std::make_tuple(error, reason)));
 
@@ -208,7 +115,7 @@ ERL_NIF_TERM wrap_helper(
     }
     catch (const boost::system::system_error &e) {
         return nifpp::make(
-            env, std::make_tuple(error, translateError(e.code())));
+            env, std::make_tuple(error, nifpp::str_atom{e.code().message()}));
     }
     catch (const std::exception &e) {
         return nifpp::make(env, std::make_tuple(error, std::string{e.what()}));

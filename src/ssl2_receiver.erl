@@ -415,10 +415,13 @@ handle_info({ok, Data}, receiving, State) ->
             recv_body(ReallyNeeded, State#state{buffer = AData})
     end;
 
+handle_info({error, 'End of file'}, _StateName, State) ->
+    reply(State#state.caller, {error, closed}),
+    {stop, {shutdown, closed}, State};
+
 handle_info({error, Reason}, _StateName, State) ->
-    #state{caller = Caller} = State,
-    reply(Caller, {error, Reason}),
-    {stop, construct_terminate_reason(Reason), State}.
+    reply(State#state.caller, {error, Reason}),
+    {stop, Reason, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -524,20 +527,6 @@ recv_body(Size, State) ->
             reply(Caller, {error, Reason}),
             {stop, Reason, State}
     end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Constructs a reason for terminate callback.
-%% The reason will either be changed to {shutdown, Reason} to signify
-%% normal shutdown, or left as Reason to signify an error.
-%% @end
-%%--------------------------------------------------------------------
--spec construct_terminate_reason(Reason :: term()) ->
-    {shutdown, Reason :: term()} | term().
-construct_terminate_reason(closed) -> {shutdown, closed};
-construct_terminate_reason(Reason) ->
-    Reason.
 
 %%--------------------------------------------------------------------
 %% @private
