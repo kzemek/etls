@@ -113,7 +113,8 @@ idle({send, Data}, From, State) ->
 
     case ssl2_nif:send(Sock, SendData) of
         ok -> {next_state, sending, State#state{caller = From}};
-        {error, Reason} -> {stop, Reason, {error, Reason}, State}
+        {error, Reason} when is_atom(Reason) ->
+            {stop, Reason, {error, Reason}, State}
     end;
 
 idle(Event, _From, State) ->

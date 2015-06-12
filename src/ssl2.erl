@@ -25,7 +25,7 @@
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
     controlling_process/2, peername/1, sockname/1, close/1, peercert/1,
-    shutdown/2]).
+    certificate_chain/1, shutdown/2]).
 
 %% Types
 -type opts() :: [
@@ -84,7 +84,7 @@ connect(Host, Port, Options, Timeout) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec send(Socket :: socket(), Data :: iodata()) ->
-    ok | {error, Reason :: closed | any()}.
+    ok | {error, Reason :: closed | atom()}.
 send(#sock_ref{sender = Sender}, Data) ->
     try
         gen_fsm:sync_send_event(Sender, {send, Data}, infinity)
@@ -96,7 +96,7 @@ send(#sock_ref{sender = Sender}, Data) ->
 %% @equiv recv(Socket, Size, infinity)
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
-    ok | {error, Reason :: closed | timeout | any()}.
+    ok | {error, Reason :: closed | timeout | atom()}.
 recv(SockRef, Size) ->
     recv(SockRef, Size, infinity).
 
@@ -108,7 +108,7 @@ recv(SockRef, Size) ->
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer(),
     Timeout :: timeout()) ->
-    ok | {error, Reason :: closed | timeout | any()}.
+    ok | {error, Reason :: closed | timeout | atom()}.
 recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
     try
         gen_fsm:sync_send_event(Receiver, {recv, Size, Timeout}, infinity)
@@ -138,7 +138,7 @@ listen(Port, Options) ->
 %%--------------------------------------------------------------------
 -spec accept(Acceptor :: acceptor()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: timeout | any()}.
+    {error, Reason :: timeout | atom()}.
 accept(AcceptorRef) ->
     accept(AcceptorRef, infinity).
 
@@ -151,7 +151,7 @@ accept(AcceptorRef) ->
 %%--------------------------------------------------------------------
 -spec accept(Acceptor :: acceptor(), Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
-    {error, Reason :: timeout | any()}.
+    {error, Reason :: timeout | atom()}.
 accept(#acceptor_ref{acceptor = Acceptor}, Timeout) ->
     Ref = make_ref(),
     case ssl2_nif:accept(Ref, Acceptor) of
@@ -276,11 +276,22 @@ close(#sock_ref{socket = Sock, supervisor = Sup}) ->
 %%--------------------------------------------------------------------
 -spec peercert(Socket :: socket()) ->
     {ok, binary()} |
-    {error, Reason :: no_peer_certificate | any()}.
-peercert(#sock_ref{socket = Sock}) ->
-    case ssl2_nif:certificate_chain(Sock) of
+    {error, Reason :: no_peer_certificate | atom()}.
+peercert(SockRef) ->
+    case certificate_chain(SockRef) of
         {ok, []} -> {error, no_peer_certificate};
         {ok, Chain} -> {ok, lists:last(Chain)};
+        Result -> Result
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a DER-encoded chain of peer certificates.
+%% @end
+%%--------------------------------------------------------------------
+certificate_chain(#sock_ref{socket = Sock}) ->
+    case ssl2_nif:certificate_chain(Sock) of
+        {ok, Chain} -> {ok, Chain};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 

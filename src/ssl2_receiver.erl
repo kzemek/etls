@@ -482,7 +482,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec recv_packet(State :: #state{}) ->
     {next_state, receiving_header | receiving, NextState :: #state{}} |
-    {stop, Reason :: any(), State :: #state{}}.
+    {stop, Reason :: atom(), State :: #state{}}.
 recv_packet(#state{packet = 0} = NextState) ->
     recv_body(0, NextState#state{needed = 0});
 recv_packet(#state{packet = Packet} = NextState) ->
@@ -496,12 +496,12 @@ recv_packet(#state{packet = Packet} = NextState) ->
 %%--------------------------------------------------------------------
 -spec recv_header(State :: #state{}) ->
     {next_state, receiving_header, NextState :: #state{}} |
-    {stop, Reason :: any(), State :: #state{}}.
+    {stop, Reason :: atom(), State :: #state{}}.
 recv_header(State) ->
     #state{socket = Sock, packet = Packet, caller = Caller} = State,
     case ssl2_nif:recv(Sock, Packet) of
         ok -> {next_state, receiving_header, State};
-        {error, Reason} ->
+        {error, Reason} when is_atom(Reason) ->
             reply(Caller, {error, Reason}),
             {stop, Reason, State}
     end.
@@ -515,12 +515,12 @@ recv_header(State) ->
 %%--------------------------------------------------------------------
 -spec recv_body(Size :: non_neg_integer(), State :: #state{}) ->
     {next_state, receiving, NextState :: #state{}} |
-    {stop, Reason :: any(), State :: #state{}}.
+    {stop, Reason :: atom(), State :: #state{}}.
 recv_body(Size, State) ->
     #state{socket = Sock, caller = Caller} = State,
     case ssl2_nif:recv(Sock, Size) of
         ok -> {next_state, receiving, State};
-        {error, Reason} ->
+        {error, Reason} when is_atom(Reason) ->
             reply(Caller, {error, Reason}),
             {stop, Reason, State}
     end.
