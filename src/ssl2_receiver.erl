@@ -416,7 +416,6 @@ handle_info({ok, Data}, receiving, State) ->
     end;
 
 handle_info({error, 'End of file'}, _StateName, State) ->
-    reply(State#state.caller, {error, closed}),
     {stop, {shutdown, closed}, State};
 
 handle_info({error, Reason}, _StateName, State) ->

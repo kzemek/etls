@@ -89,7 +89,8 @@ send(#sock_ref{sender = Sender}, Data) ->
     try
         gen_fsm:sync_send_event(Sender, {send, Data}, infinity)
     catch
-        exit:{noproc, _} -> {error, closed}
+        exit:{Reason, _} when Reason =:= noproc; Reason =:= shutdown ->
+            {error, closed}
     end.
 
 %%--------------------------------------------------------------------
@@ -113,7 +114,8 @@ recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
     try
         gen_fsm:sync_send_event(Receiver, {recv, Size, Timeout}, infinity)
     catch
-        exit:{noproc, _} -> {error, closed}
+        exit:{Reason, _} when Reason =:= noproc; Reason =:= shutdown ->
+            {error, closed}
     end.
 
 %%--------------------------------------------------------------------
