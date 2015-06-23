@@ -291,6 +291,8 @@ peercert(SockRef) ->
 %% Returns a DER-encoded chain of peer certificates.
 %% @end
 %%--------------------------------------------------------------------
+-spec certificate_chain(Socket :: socket()) ->
+    {ok, [binary()]} | {error, Reason :: atom()}.
 certificate_chain(#sock_ref{socket = Sock}) ->
     case ssl2_nif:certificate_chain(Sock) of
         {ok, Chain} -> {ok, Chain};
