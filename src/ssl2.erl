@@ -46,6 +46,7 @@
 
 %%--------------------------------------------------------------------
 %% @equiv connect(Host, Port, Opts, infinity)
+%% @end
 %%--------------------------------------------------------------------
 -spec connect(Host :: string(), Port :: inet:port_number(), Opts :: opts()) ->
     {ok, Socket :: socket()} |
@@ -95,6 +96,7 @@ send(#sock_ref{sender = Sender}, Data) ->
 
 %%--------------------------------------------------------------------
 %% @equiv recv(Socket, Size, infinity)
+%% @end
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
     ok | {error, Reason :: closed | timeout | atom()}.
@@ -137,6 +139,7 @@ listen(Port, Options) ->
 
 %%--------------------------------------------------------------------
 %% @equiv accept(Acceptor, infinity)
+%% @end
 %%--------------------------------------------------------------------
 -spec accept(Acceptor :: acceptor()) ->
     {ok, Socket :: socket()} |
@@ -171,6 +174,7 @@ accept(#acceptor_ref{acceptor = Acceptor}, Timeout) ->
 
 %%--------------------------------------------------------------------
 %% @equiv handshake(Socket, infinity)
+%% @end
 %%--------------------------------------------------------------------
 -spec handshake(Socket :: socket()) -> ok | {error, Reason :: atom()}.
 handshake(Socket) ->

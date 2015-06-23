@@ -14,6 +14,10 @@ clean:
 test: compile
 	./rebar eunit
 
+.PHONY: doc
+doc: compile
+	./rebar doc
+
 ##
 ## Dialyzer targets local
 ##
