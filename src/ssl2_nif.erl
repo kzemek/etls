@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc Erlang wrapper for SSL2 NIF module.
+%%% @doc
+%%% Erlang wrapper for SSL2 NIF module.
+%%% @end
 %%%--------------------------------------------------------------------
 -module(ssl2_nif).
 -author("Konrad Zemek").

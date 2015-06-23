@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc A gen_fsm responsible for send-related actions on a socket.
+%%% @doc
+%%% A gen_fsm responsible for send-related actions on a socket.
+%%% @end
 %%%--------------------------------------------------------------------
 -module(ssl2_sender).
 -author("Konrad Zemek").

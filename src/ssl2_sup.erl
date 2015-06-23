@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc The main SSL2 supervisor.
+%%% @doc
+%%% The main SSL2 supervisor.
+%%% @end
 %%%--------------------------------------------------------------------
 -module(ssl2_sup).
 -author("Konrad Zemek").

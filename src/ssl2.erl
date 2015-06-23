@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc Main API module for SSL2.
+%%% @doc
+%%% Main API module for SSL2.
+%%% @end
 %%%--------------------------------------------------------------------
 -module(ssl2).
 -author("Konrad Zemek").

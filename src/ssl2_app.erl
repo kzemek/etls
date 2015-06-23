@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc The SSL2 application module.
+%%% @doc
+%%% The SSL2 application module.
+%%% @end
 %%%--------------------------------------------------------------------
 -module(ssl2_app).
 -author("Konrad Zemek").
