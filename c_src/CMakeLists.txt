@@ -37,5 +37,4 @@ target_include_directories(common_libraries SYSTEM INTERFACE
 
 enable_testing()
 add_subdirectory(src)
-add_subdirectory(test) # TODO: EXCLUDE_FROM_ALL
-
+add_subdirectory(test)

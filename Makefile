@@ -18,6 +18,10 @@ test: compile
 doc: compile
 	./rebar doc
 
+.PHONY: benchmark
+benchmark: compile
+	cd test && ./benchmark.escript
+
 ##
 ## Dialyzer targets local
 ##
