@@ -25,7 +25,7 @@ TLSAcceptor::TLSAcceptor(boost::asio::io_service &ioService,
 void TLSAcceptor::acceptAsync(
     Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -49,7 +49,7 @@ void TLSAcceptor::acceptAsync(
 void TLSAcceptor::localEndpointAsync(Ptr self,
     SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),

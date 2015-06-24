@@ -15,25 +15,21 @@ namespace etls {
 
 TLSApplication::TLSApplication()
 {
-    m_threads.reserve(m_threadsNo);
-    std::generate_n(std::back_inserter(m_threads), m_threadsNo, [this] {
-        return std::thread{[this] {
-            while (!m_ioService.stopped()) {
-                try {
-                    m_ioService.run();
-                }
-                catch (...) {
-                }
+    m_thread = std::thread{[this] {
+        while (!m_ioService.stopped()) {
+            try {
+                m_ioService.run();
             }
-        }};
-    });
+            catch (...) {
+            }
+        }
+    }};
 }
 
 TLSApplication::~TLSApplication()
 {
     m_ioService.stop();
-    for (auto &thread : m_threads)
-        thread.join();
+    m_thread.join();
 }
 
 boost::asio::io_service &TLSApplication::ioService() { return m_ioService; }

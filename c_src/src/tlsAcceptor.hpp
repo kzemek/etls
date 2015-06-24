@@ -70,7 +70,6 @@ public:
 
 private:
     boost::asio::io_service &m_ioService;
-    boost::asio::io_service::strand m_strand{m_ioService};
     boost::asio::ip::tcp::acceptor m_acceptor;
     boost::asio::ssl::context m_context{
         boost::asio::ssl::context::tlsv12_server};

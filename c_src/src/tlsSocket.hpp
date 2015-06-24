@@ -164,8 +164,8 @@ private:
     boost::asio::ssl::context m_clientContext{
         boost::asio::ssl::context::tlsv12_client};
 
-    boost::asio::io_service::strand m_strand;
-    boost::asio::ip::tcp::resolver m_resolver;
+    boost::asio::io_service &m_ioService;
+    boost::asio::ip::tcp::resolver m_resolver{m_ioService};
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;
     std::vector<std::vector<unsigned char>> m_certificateChain;
 };

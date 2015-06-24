@@ -12,7 +12,6 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ssl/context.hpp>
 
-#include <vector>
 #include <thread>
 
 namespace one {
@@ -42,12 +41,9 @@ public:
     boost::asio::io_service &ioService();
 
 private:
-    const std::size_t m_threadsNo{std::thread::hardware_concurrency()};
-
-    boost::asio::io_service m_ioService{m_threadsNo};
+    boost::asio::io_service m_ioService{1};
     boost::asio::io_service::work m_work{m_ioService};
-
-    std::vector<std::thread> m_threads;
+    std::thread m_thread;
 };
 
 } // namespace etls

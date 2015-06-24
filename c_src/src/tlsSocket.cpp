@@ -19,9 +19,8 @@ namespace one {
 namespace etls {
 
 TLSSocket::TLSSocket(boost::asio::io_service &ioService)
-    : m_strand{ioService}
-    , m_resolver{ioService}
-    , m_socket{ioService, m_clientContext}
+    : m_ioService{ioService}
+    , m_socket{m_ioService, m_clientContext}
 {
     namespace p = std::placeholders;
     m_socket.set_verify_mode(boost::asio::ssl::verify_none);
@@ -31,9 +30,8 @@ TLSSocket::TLSSocket(boost::asio::io_service &ioService)
 
 TLSSocket::TLSSocket(
     boost::asio::io_service &ioService, boost::asio::ssl::context &context)
-    : m_strand{ioService}
-    , m_resolver{ioService}
-    , m_socket{ioService, context}
+    : m_ioService{ioService}
+    , m_socket{m_ioService, context}
 {
     namespace p = std::placeholders;
     m_socket.set_verify_mode(boost::asio::ssl::verify_none);
@@ -44,57 +42,56 @@ TLSSocket::TLSSocket(
 void TLSSocket::connectAsync(Ptr self, std::string host,
     const unsigned short port, SuccessFun<Ptr> success, ErrorFun error)
 {
-    m_resolver.async_resolve(
-        {std::move(host), std::to_string(port)}, m_strand.wrap([
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec, auto iterator) mutable {
+    m_resolver.async_resolve({std::move(host), std::to_string(port)}, [
+        =,
+        self = std::move(self),
+        success = std::move(success),
+        error = std::move(error)
+    ](const auto ec, auto iterator) mutable {
 
-            auto endpoints = this->shuffleEndpoints(std::move(iterator));
+        auto endpoints = this->shuffleEndpoints(std::move(iterator));
 
-            if (ec) {
-                error(ec);
-                return;
-            }
+        if (ec) {
+            error(ec);
+            return;
+        }
 
-            boost::asio::async_connect(m_socket.lowest_layer(),
-                endpoints.begin(), endpoints.end(), m_strand.wrap([
-                    =,
-                    self = std::move(self),
-                    success = std::move(success),
-                    error = std::move(error)
-                ](const auto ec, auto iterator) mutable {
+        boost::asio::async_connect(
+            m_socket.lowest_layer(), endpoints.begin(), endpoints.end(), [
+                =,
+                self = std::move(self),
+                success = std::move(success),
+                error = std::move(error)
+            ](const auto ec, auto iterator) mutable {
 
-                    if (ec) {
-                        error(ec);
-                        return;
-                    }
+                if (ec) {
+                    error(ec);
+                    return;
+                }
 
-                    m_socket.lowest_layer().set_option(
-                        boost::asio::ip::tcp::no_delay{true});
+                m_socket.lowest_layer().set_option(
+                    boost::asio::ip::tcp::no_delay{true});
 
-                    m_socket.async_handshake(
-                        boost::asio::ssl::stream_base::client, [
-                            =,
-                            self = std::move(self),
-                            success = std::move(success),
-                            error = std::move(error)
-                        ](const auto ec) mutable {
-                            if (ec)
-                                error(ec);
-                            else
-                                success(std::move(self));
-                        });
-                }));
-        }));
+                m_socket.async_handshake(
+                    boost::asio::ssl::stream_base::client, [
+                        =,
+                        self = std::move(self),
+                        success = std::move(success),
+                        error = std::move(error)
+                    ](const auto ec) mutable {
+                        if (ec)
+                            error(ec);
+                        else
+                            success(std::move(self));
+                    });
+            });
+    });
 }
 
 void TLSSocket::sendAsync(Ptr self, boost::asio::const_buffer buffer,
     SuccessFun<> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -118,7 +115,7 @@ void TLSSocket::sendAsync(Ptr self, boost::asio::const_buffer buffer,
 void TLSSocket::recvAsync(Ptr self, boost::asio::mutable_buffer buffer,
     SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -142,7 +139,7 @@ void TLSSocket::recvAsync(Ptr self, boost::asio::mutable_buffer buffer,
 void TLSSocket::recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
     SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -164,7 +161,7 @@ void TLSSocket::recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
 
 void TLSSocket::handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -188,7 +185,7 @@ void TLSSocket::shutdownAsync(Ptr self,
     const boost::asio::socket_base::shutdown_type type, SuccessFun<> success,
     ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -205,7 +202,7 @@ void TLSSocket::shutdownAsync(Ptr self,
 
 void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -226,7 +223,7 @@ void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 void TLSSocket::localEndpointAsync(Ptr self,
     SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
@@ -237,7 +234,7 @@ void TLSSocket::localEndpointAsync(Ptr self,
 void TLSSocket::remoteEndpointAsync(Ptr self,
     SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
-    m_strand.post([
+    m_ioService.post([
         =,
         self = std::move(self),
         success = std::move(success),
