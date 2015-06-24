@@ -21,5 +21,6 @@ target_include_directories(erlang_tls_obj SYSTEM PRIVATE
 
 add_library(erlang_tls SHARED wrapper.cpp $<TARGET_OBJECTS:erlang_tls_obj>)
 target_link_libraries(erlang_tls PRIVATE compile_options common_libraries)
+set_target_properties(erlang_tls PROPERTIES SUFFIX .so)
 
 install(TARGETS erlang_tls DESTINATION .)

@@ -14,6 +14,11 @@ find_package(OpenSSL REQUIRED)
 find_package(Erlang REQUIRED)
 find_package(Boost REQUIRED)
 
+if(APPLE)
+    set(CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS
+        "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS} -flat_namespace -undefined dynamic_lookup")
+endif(APPLE)
+
 add_library(compile_options INTERFACE)
 target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)
 target_compile_definitions(compile_options INTERFACE
