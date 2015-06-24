@@ -175,7 +175,7 @@ ERL_NIF_TERM send(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
 ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     one::etls::TLSSocket::Ptr sock, std::size_t size)
 {
-    auto bin = std::make_shared<nifpp::binary>(size == 0 ? 1024 : size);
+    auto bin = std::make_shared<nifpp::binary>(size == 0 ? 10 * 1024 : size);
 
     auto onSuccess = [=](boost::asio::mutable_buffer buffer) mutable {
         if (bin->size != boost::asio::buffer_size(buffer))
