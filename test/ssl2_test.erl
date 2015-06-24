@@ -402,7 +402,7 @@ socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
 socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
     ok = ssl2:close(Sock),
     SendResult = ssl2:send(Sock, random_data()),
-    RecvResult = ssl2:recv(Sock, 1234),
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
     [
         ?_assertEqual({error, closed}, SendResult),
         ?_assertEqual({error, closed}, RecvResult)
@@ -411,7 +411,7 @@ socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
 socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
     ok = ssl2:shutdown(Sock, read),
     SendResult = ssl2:send(Sock, random_data()),
-    RecvResult = ssl2:recv(Sock, 1234),
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
     [
         ?_assertEqual(ok, SendResult),
         ?_assertEqual({error, closed}, RecvResult)
@@ -420,7 +420,7 @@ socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
 socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
     {_, _, Supervisor, _, _} = Sock,
     Server ! {shutdown, write},
-    RecvResult = ssl2:recv(Sock, 1234),
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
 
     timer:sleep(250),
 

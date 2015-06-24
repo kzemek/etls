@@ -101,7 +101,8 @@ send(#sock_ref{sender = Sender}, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
-    ok | {error, Reason :: closed | timeout | atom()}.
+    {ok, binary()} |
+    {error, Reason :: closed | timeout | atom()}.
 recv(SockRef, Size) ->
     recv(SockRef, Size, infinity).
 
@@ -113,7 +114,8 @@ recv(SockRef, Size) ->
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer(),
     Timeout :: timeout()) ->
-    ok | {error, Reason :: closed | timeout | atom()}.
+    {ok, binary()} |
+    {error, Reason :: closed | timeout | atom()}.
 recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
     try
         gen_fsm:sync_send_event(Receiver, {recv, Size, Timeout}, infinity)
