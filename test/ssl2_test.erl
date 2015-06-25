@@ -1,0 +1,542 @@
+%%%--------------------------------------------------------------------
+%%% @author Konrad Zemek
+%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%--------------------------------------------------------------------
+%%% @doc ssl2 module tests.
+%%%--------------------------------------------------------------------
+-module(ssl2_test).
+-author("Konrad Zemek").
+
+-include_lib("eunit/include/eunit.hrl").
+-include_lib("public_key/include/public_key.hrl").
+
+-define(TIMEOUT, timer:seconds(10)).
+
+%%%===================================================================
+%%% Test generators
+%%%===================================================================
+
+api_test_() ->
+    [fun listen_should_be_callable/0].
+
+connection_test_() ->
+    [{foreach, fun start_server/0, fun stop_server/1, [
+        fun connect_should_establish_a_secure_connection/1,
+        fun connect_should_honor_active_once/1,
+        fun connect_should_honor_active_true/1,
+        fun connect_should_respect_packet_options/1,
+        fun socket_should_hold_peername/1,
+        fun socket_should_hold_sockname/1
+    ]}].
+
+communication_test_() ->
+    [{foreach, fun start_connection/0, fun stop_connection/1, [
+        fun send_should_send_a_message/1,
+        fun receive_should_receive_a_message/1,
+        fun receive_should_receive_a_message_when_size_is_zero/1,
+        fun setopts_should_honor_active_once/1,
+        fun setopts_should_honor_active_true/1,
+        fun socket_should_notify_about_closure_when_active/1,
+        fun setopts_should_respect_packet_options/1,
+        fun recv_should_allow_for_new_caller_after_timeout/1,
+        fun recv_should_allow_for_recv_while_active/1,
+        fun socket_should_allow_to_set_controlling_process/1,
+        fun socket_should_be_closeable/1,
+        fun socket_should_return_peer_certificate/1,
+        fun socket_should_return_error_closed_when_closed/1,
+        fun socket_should_be_read_shutdownable/1,
+        fun socket_should_close_on_remote_write_shutdown/1,
+        fun socket_should_not_close_on_shutdown_when_no_exit_on_close/1
+    ]}].
+
+server_test_() ->
+    [{foreach, fun prepare_args/0, fun cleanup/1, [
+        fun accept_should_accept_connections/1,
+        fun sockets_should_communicate/1,
+        fun acceptor_should_hold_sockname/1
+    ]}].
+
+%%%===================================================================
+%%% Test functions
+%%%===================================================================
+
+listen_should_be_callable() ->
+    ssl2:listen(12345, [{certfile, "server.pem"}]).
+
+connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
+    ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    receive
+        {Ref, Result} ->
+            [?_assertEqual(connected, Result)]
+    end.
+
+send_should_send_a_message({Ref, Server, Sock}) ->
+    Data = random_data(),
+    ok = ssl2:send(Sock, Data),
+    Server ! {'receive', byte_size(Data)},
+    receive
+        {Ref, 'receive', Result} ->
+            [?_assertEqual({ok, Data}, Result)]
+    end.
+
+receive_should_receive_a_message({Ref, Server, Sock}) ->
+    Data = random_data(),
+    Server ! {send, Data},
+    receive
+        {Ref, send, Result} ->
+            RecvResult = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
+            [
+                ?_assertEqual(ok, Result),
+                ?_assertEqual({ok, Data}, RecvResult)
+            ]
+    end.
+
+receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
+    Data = random_data(),
+    Server ! {send, Data},
+    receive
+        {Ref, send, Result} ->
+            RecvResult = ssl2:recv(Sock, 0, ?TIMEOUT),
+            [
+                ?_assertEqual(ok, Result),
+                ?_assertEqual({ok, Data}, RecvResult)
+            ]
+    end.
+
+accept_should_accept_connections({Ref, Port}) ->
+    Self = self(),
+
+    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+
+    spawn(
+        fun() ->
+            Self ! {Ref, gen_tcp:connect("localhost", Port, [], ?TIMEOUT)}
+        end),
+
+    {ok, _Sock} = ssl2:accept(ListenSock, ?TIMEOUT),
+
+    receive
+        {Ref, Result} ->
+            [?_assertMatch({ok, _}, Result)]
+    end.
+
+sockets_should_communicate({Ref, Port}) ->
+    Self = self(),
+
+    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    spawn(
+        fun() ->
+            Self ! {Ref, ssl2:connect("localhost", Port, [], ?TIMEOUT)}
+        end),
+
+    {ok, ServerSock} = ssl2:accept(ListenSock, ?TIMEOUT),
+    ok = ssl2:handshake(ServerSock, ?TIMEOUT),
+
+    {ok, ClientSock} =
+        receive
+            {Ref, Result} ->
+                Result
+        end,
+
+    ServerSend = random_data(),
+    ClientSend = random_data(),
+
+    ok = ssl2:send(ServerSock, ServerSend),
+    ok = ssl2:send(ClientSock, ClientSend),
+
+    ServerRecv = ssl2:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
+    ClientRecv = ssl2:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, ClientSend}, ServerRecv),
+        ?_assertEqual({ok, ServerSend}, ClientRecv)
+    ].
+
+connect_should_honor_active_once({_Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{active, once}], ?TIMEOUT),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Result1 =
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+
+    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+connect_should_honor_active_true({_Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{active, true}], ?TIMEOUT),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Receive = fun() ->
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end
+    end,
+
+    Result1 = Receive(),
+    Result2 = Receive(),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+setopts_should_honor_active_once({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, once}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Result1 =
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+
+    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+setopts_should_honor_active_true({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, true}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    Receive = fun() ->
+        receive
+            {ssl2, Sock, ReceivedData} ->
+                {ok, ReceivedData}
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end
+    end,
+
+    Result1 = Receive(),
+    Result2 = Receive(),
+
+    [
+        ?_assertEqual({ok, Data1}, Result1),
+        ?_assertEqual({ok, Data2}, Result2)
+    ].
+
+socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, true}]),
+    Server ! stop,
+    Result =
+        receive
+            {ssl2_closed, Sock} -> ok
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+    [?_assertEqual(ok, Result)].
+
+connect_should_respect_packet_options({Ref, Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [{packet, 2}]),
+
+    Data = random_data(),
+    DS = byte_size(Data),
+
+    ok = ssl2:send(Sock, Data),
+    ExpectedData = <<DS:2/big-unsigned-integer-unit:8, Data/binary>>,
+
+    Server ! {'receive', DS + 2},
+    Server ! {send, ExpectedData},
+
+    receive
+        {Ref, 'receive', Result} ->
+            Received = ssl2:recv(Sock, 12345, ?TIMEOUT),
+            [
+                ?_assertEqual({ok, ExpectedData}, Result),
+                ?_assertEqual({ok, Data}, Received)
+            ]
+    end.
+
+setopts_should_respect_packet_options({Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{packet, 4}]),
+
+    Data = random_data(),
+    DS = byte_size(Data),
+
+    ok = ssl2:send(Sock, Data),
+    ExpectedData = <<DS:4/big-unsigned-integer-unit:8, Data/binary>>,
+
+    Server ! {'receive', DS + 4},
+    Server ! {send, ExpectedData},
+
+    receive
+        {Ref, 'receive', Result} ->
+            Received = ssl2:recv(Sock, 54321, ?TIMEOUT),
+            [
+                ?_assertEqual({ok, ExpectedData}, Result),
+                ?_assertEqual({ok, Data}, Received)
+            ]
+    end.
+
+recv_should_allow_for_new_caller_after_timeout({_Ref, Server, Sock}) ->
+    Data = random_data(),
+    {error, timeout} = ssl2:recv(Sock, byte_size(Data), 0),
+    Server ! {send, Data},
+    Result = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
+    [?_assertEqual({ok, Data}, Result)].
+
+recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{active, true}]),
+
+    Data1 = random_data(),
+    Data2 = random_data(),
+    Self = self(),
+    SpawnRef = make_ref(),
+
+    spawn(fun() ->
+        Self ! {SpawnRef, ssl2:recv(Sock, byte_size(Data1), ?TIMEOUT)} end),
+
+    Server ! {send, Data1},
+    Server ! {send, Data2},
+
+    receive
+        {SpawnRef, Result} ->
+            Result2 =
+                receive
+                    {ssl2, Sock, Data2} -> Data2
+                after ?TIMEOUT ->
+                    {error, test_timeout}
+                end,
+
+            [
+                ?_assertEqual({ok, Data1}, Result),
+                ?_assertEqual(Data2, Result2)
+            ]
+    end.
+
+socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
+    ok = ssl2:setopts(Sock, [{active, true}]),
+    Data = random_data(),
+    Self = self(),
+    NewRef = make_ref(),
+
+    Pid = spawn(fun() ->
+        receive
+            {ssl2, Sock, Result} -> Self ! {NewRef, Result}
+        after ?TIMEOUT ->
+            Self ! {NewRef, {error, test_timeout}}
+        end
+    end),
+
+    ok = ssl2:controlling_process(Sock, Pid),
+    Server ! {send, Data},
+
+    receive
+        {NewRef, Res} ->
+            [?_assertEqual(Data, Res)]
+    end.
+
+socket_should_hold_peername({_Ref, _Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    [?_assertEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:peername(Sock))].
+
+socket_should_hold_sockname({_Ref, _Server, Port}) ->
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    [
+        ?_assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
+        ?_assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
+    ].
+
+acceptor_should_hold_sockname({_Ref, Port}) ->
+    {ok, Acceptor} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    [?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, ssl2:sockname(Acceptor))].
+
+socket_should_be_closeable({_Ref, _Server, Sock}) ->
+    ssl2:setopts(Sock, [{active, once}]),
+    ok = ssl2:close(Sock),
+    Result =
+        receive
+            {ssl2_closed, Sock} = R -> R
+        after ?TIMEOUT ->
+            {error, test_timeout}
+        end,
+    [?_assertEqual({ssl2_closed, Sock}, Result)].
+
+socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
+    {ok, Der} = ssl2:peercert(Sock),
+    Cert = public_key:pkix_decode_cert(Der, otp),
+    TBSCert = Cert#'OTPCertificate'.tbsCertificate,
+    Serial = TBSCert#'OTPTBSCertificate'.serialNumber,
+    [?_assertEqual(10728077368415183536, Serial)].
+
+socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
+    ok = ssl2:close(Sock),
+    SendResult = ssl2:send(Sock, random_data()),
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+    [
+        ?_assertEqual({error, closed}, SendResult),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
+    ok = ssl2:shutdown(Sock, read),
+    SendResult = ssl2:send(Sock, random_data()),
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+    [
+        ?_assertEqual(ok, SendResult),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
+    {_, _, Supervisor, _, _} = Sock,
+    Server ! {shutdown, write},
+    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+
+    timer:sleep(250),
+
+    [
+        ?_assertEqual(false, is_process_alive(Supervisor)),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) ->
+    ssl2:setopts(Sock, [{exit_on_close, false}]),
+
+    {_, _, Supervisor, _, _} = Sock,
+    Server ! {shutdown, write},
+    RecvResult = ssl2:recv(Sock, 1234),
+
+    timer:sleep(250),
+
+    [
+        ?_assertEqual(true, is_process_alive(Supervisor)),
+        ?_assertEqual({error, closed}, RecvResult)
+    ].
+
+%%%===================================================================
+%%% Test fixtures
+%%%===================================================================
+
+start_server() ->
+    ssl:start(temporary),
+    ssl2_app:start(temporary, []),
+
+    Self = self(),
+    Ref = make_ref(),
+    Port = random_port(),
+    Server = spawn(fun() -> run_server(Self, Ref, Port) end),
+
+    receive
+        {Ref, ready} ->
+            {Ref, Server, Port}
+    end.
+
+stop_server({_Ref, Server, _Port}) ->
+    Server ! stop,
+    clear_queue().
+
+start_connection() ->
+    {Ref, Server, Port} = start_server(),
+    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    receive
+        {Ref, connected} -> ok
+    after ?TIMEOUT ->
+        error(not_connected)
+    end,
+    {Ref, Server, Sock}.
+
+stop_connection({_Ref, Server, _Sock}) ->
+    Server ! stop,
+    clear_queue().
+
+prepare_args() ->
+    ssl2_app:start(temporary, []),
+    {make_ref(), random_port()}.
+
+cleanup({_Ref, _Port}) ->
+    clear_queue().
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
+random_port() ->
+    random:uniform(65535 - 49152) + 49151.
+
+random_data() ->
+    Len = crypto:rand_uniform(1, 255),
+    crypto:rand_bytes(Len).
+
+run_server(Pid, Ref, Port) ->
+    try
+        {ok, ListenSocket} = ssl:listen(Port, [
+            {certfile, "server.pem"},
+            {keyfile, "server.key"},
+            {reuseaddr, true}]),
+
+        Pid ! {Ref, ready},
+
+        {ok, Sock} = ssl:transport_accept(ListenSocket, ?TIMEOUT),
+        ssl:setopts(Sock, [{active, false}, {mode, binary}]),
+        ok = ssl:ssl_accept(Sock, ?TIMEOUT),
+
+        Pid ! {Ref, connected},
+        server_loop(Pid, Ref, Sock)
+    catch
+        A:B -> Pid ! {Ref, {A, B}}
+    end.
+
+server_loop(Pid, Ref, Sock) ->
+    receive
+        {'receive', Bytes} ->
+            Pid ! {Ref, 'receive', ssl:recv(Sock, Bytes, ?TIMEOUT)},
+            server_loop(Pid, Ref, Sock);
+
+        {send, Data} ->
+            Pid ! {Ref, send, ssl:send(Sock, Data)},
+            server_loop(Pid, Ref, Sock);
+
+        {shutdown, write} ->
+            ssl:shutdown(Sock, write),
+            server_loop(Pid, Ref, Sock);
+
+        stop ->
+            ssl:close(Sock)
+    end.
+
+clear_queue() ->
+    receive
+        _ -> clear_queue()
+    after 0 ->
+        ok
+    end.

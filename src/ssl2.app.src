@@ -1,0 +1,12 @@
+{application, ssl2,
+    [
+        {description, "A NIF-based replacement for OTP SSL module"},
+        {vsn, "1"},
+        {registered, [ssl2_sup]},
+        {applications, [
+            kernel,
+            stdlib
+        ]},
+        {mod, {ssl2_app, []}},
+        {env, []}
+    ]}.
