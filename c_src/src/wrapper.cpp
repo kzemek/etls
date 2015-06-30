@@ -12,11 +12,12 @@
 #include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
 
-#include <boost/asio/error.hpp>
+#include <asio/error.hpp>
 
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <tuple>
 #include <vector>
 #include <unordered_map>
@@ -48,11 +49,6 @@ private:
 
 namespace {
 
-using basic_errors = boost::asio::error::basic_errors;
-using netdb_errors = boost::asio::error::netdb_errors;
-using addrinfo_errors = boost::asio::error::addrinfo_errors;
-using misc_errors = boost::asio::error::misc_errors;
-
 /**
  * @defgroup StaticAtoms Statically created atoms for ease of usage.
  * @{
@@ -78,7 +74,7 @@ one::etls::TLSApplication app;
  */
 one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
 {
-    return [localEnv, pid](const boost::system::error_code &ec) mutable {
+    return [localEnv, pid](const std::error_code &ec) mutable {
         auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
         enif_send(nullptr, &pid, localEnv, message);
@@ -91,7 +87,7 @@ one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
  */
 one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
 {
-    return [localEnv, pid, ref](const boost::system::error_code &ec) mutable {
+    return [localEnv, pid, ref](const std::error_code &ec) mutable {
         auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(
             localEnv, std::make_tuple(ref, std::make_tuple(error, reason)));
@@ -113,7 +109,7 @@ ERL_NIF_TERM wrap_helper(
     catch (const nifpp::badarg &) {
         return enif_make_badarg(env);
     }
-    catch (const boost::system::system_error &e) {
+    catch (const std::system_error &e) {
         return nifpp::make(
             env, std::make_tuple(error, nifpp::str_atom{e.code().message()}));
     }
@@ -160,7 +156,7 @@ ERL_NIF_TERM send(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     ErlNifBinary bin;
     enif_inspect_iolist_as_binary(localEnv, data, &bin);
 
-    boost::asio::const_buffer buffer{bin.data, bin.size};
+    asio::const_buffer buffer{bin.data, bin.size};
 
     auto onSuccess = [=]() mutable {
         auto message = nifpp::make(localEnv, ok);
@@ -177,9 +173,9 @@ ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
 {
     auto bin = std::make_shared<nifpp::binary>(size == 0 ? 10 * 1024 : size);
 
-    auto onSuccess = [=](boost::asio::mutable_buffer buffer) mutable {
-        if (bin->size != boost::asio::buffer_size(buffer))
-            enif_realloc_binary(bin.get(), boost::asio::buffer_size(buffer));
+    auto onSuccess = [=](asio::mutable_buffer buffer) mutable {
+        if (bin->size != asio::buffer_size(buffer))
+            enif_realloc_binary(bin.get(), asio::buffer_size(buffer));
 
         auto message = nifpp::make(
             localEnv, std::make_tuple(ok, nifpp::make(localEnv, *bin)));
@@ -187,7 +183,7 @@ ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    boost::asio::mutable_buffer buffer{bin->data, bin->size};
+    asio::mutable_buffer buffer{bin->data, bin->size};
     if (size == 0) {
         sock->recvAnyAsync(
             sock, buffer, std::move(onSuccess), onError(localEnv, pid));
@@ -353,13 +349,13 @@ ERL_NIF_TERM shutdown(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    auto asioType = boost::asio::socket_base::shutdown_both;
+    auto asioType = asio::socket_base::shutdown_both;
     if (type == "read")
-        asioType = boost::asio::socket_base::shutdown_receive;
+        asioType = asio::socket_base::shutdown_receive;
     else if (type == "write")
-        asioType = boost::asio::socket_base::shutdown_send;
+        asioType = asio::socket_base::shutdown_send;
     else if (type == "read_write")
-        asioType = boost::asio::socket_base::shutdown_both;
+        asioType = asio::socket_base::shutdown_both;
     else
         throw nifpp::badarg{};
 

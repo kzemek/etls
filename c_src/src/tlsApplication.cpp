@@ -32,7 +32,7 @@ TLSApplication::~TLSApplication()
     m_thread.join();
 }
 
-boost::asio::io_service &TLSApplication::ioService() { return m_ioService; }
+asio::io_service &TLSApplication::ioService() { return m_ioService; }
 
 } // namespace etls
 } // namespace one

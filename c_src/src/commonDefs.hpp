@@ -12,7 +12,7 @@
 #include <functional>
 #include <string>
 
-#include <boost/system/error_code.hpp>
+#include <system_error>
 
 namespace one {
 namespace etls {
@@ -25,7 +25,7 @@ template <typename... Args> using SuccessFun = std::function<void(Args...)>;
 /**
  * A function type used to indicate asynchronous operation error.
  */
-using ErrorFun = std::function<void(const boost::system::error_code &)>;
+using ErrorFun = std::function<void(const std::error_code &)>;
 
 } // namespace etls
 } // namespace one

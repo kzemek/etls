@@ -10,9 +10,8 @@
 #include "testUtils.hpp"
 #include "tlsSocket.hpp"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ssl/context.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ssl/context.hpp>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -31,9 +30,9 @@ struct TLSSocketTest : public Test {
     unsigned short port{randomPort()};
     TestServer server{port};
 
-    boost::asio::io_service ioService;
-    boost::asio::io_service::work work{ioService};
-    boost::asio::ssl::context context{boost::asio::ssl::context::tlsv12_client};
+    asio::io_service ioService;
+    asio::io_service::work work{ioService};
+    asio::ssl::context context{asio::ssl::context::tlsv12_client};
     one::etls::TLSSocket::Ptr socket;
     std::thread thread;
 
@@ -88,10 +87,10 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
 TEST_F(TLSSocketTestC, shouldSendMessages)
 {
     const auto data = randomData();
-    socket->sendAsync(socket, boost::asio::buffer(data), []() {}, [](auto) {});
+    socket->sendAsync(socket, asio::buffer(data), []() {}, [](auto) {});
 
     std::vector<char> received(data.size());
-    server.receive(boost::asio::buffer(received));
+    server.receive(asio::buffer(received));
 
     ASSERT_EQ(data, received);
 }
@@ -102,7 +101,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSuccessfulSend)
     const auto data = randomData();
 
     socket->sendAsync(
-        socket, boost::asio::buffer(data), [&] { called = true; }, [](auto) {});
+        socket, asio::buffer(data), [&] { called = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -118,7 +117,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSendError)
     ASSERT_TRUE(waitFor(closed));
 
     socket->sendAsync(
-        socket, boost::asio::buffer(data), [] {}, [&](auto) { called = true; });
+        socket, asio::buffer(data), [] {}, [&](auto) { called = true; });
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -128,10 +127,10 @@ TEST_F(TLSSocketTestC, shouldReceiveMessages)
     std::atomic<bool> called{false};
 
     const auto data = randomData();
-    server.send(boost::asio::buffer(data));
+    server.send(asio::buffer(data));
 
     std::vector<char> received(data.size());
-    socket->recvAsync(socket, boost::asio::buffer(received),
+    socket->recvAsync(socket, asio::buffer(received),
         [&](auto) { called = true; }, [](auto) {});
 
     waitFor(called);
@@ -144,9 +143,9 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvSuccess)
     std::atomic<bool> called{false};
     auto data = randomData();
 
-    server.send(boost::asio::buffer(data));
+    server.send(asio::buffer(data));
 
-    socket->recvAsync(socket, boost::asio::buffer(data),
+    socket->recvAsync(socket, asio::buffer(data),
         [&](auto) { called = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(called));
@@ -159,7 +158,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvError)
 
     server.fail();
 
-    socket->recvAsync(socket, boost::asio::buffer(data), [](auto) {},
+    socket->recvAsync(socket, asio::buffer(data), [](auto) {},
         [&](auto) { called = true; });
 
     ASSERT_TRUE(waitFor(called));
@@ -168,14 +167,14 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvError)
 TEST_F(TLSSocketTestC, shouldReceiveMessagesAsTheyCome)
 {
     std::atomic<bool> called{false};
-    boost::asio::mutable_buffer buffer;
+    asio::mutable_buffer buffer;
 
     const auto data = randomData();
-    server.send(boost::asio::buffer(data));
+    server.send(asio::buffer(data));
 
     std::vector<char> received(data.size() + 100);
 
-    socket->recvAnyAsync(socket, boost::asio::buffer(received),
+    socket->recvAnyAsync(socket, asio::buffer(received),
         [&](auto b) {
             buffer = b;
             called = true;
@@ -185,9 +184,9 @@ TEST_F(TLSSocketTestC, shouldReceiveMessagesAsTheyCome)
     waitFor(called);
 
     ASSERT_NE(data, received);
-    ASSERT_LT(0u, boost::asio::buffer_size(buffer));
-    ASSERT_EQ(0, memcmp(boost::asio::buffer_cast<char *>(buffer), data.data(),
-                     boost::asio::buffer_size(buffer)));
+    ASSERT_LT(0u, asio::buffer_size(buffer));
+    ASSERT_EQ(0, memcmp(asio::buffer_cast<char *>(buffer), data.data(),
+                     asio::buffer_size(buffer)));
 }
 
 TEST_F(TLSSocketTestC, shouldNotifyOnRecvAnySuccess)
@@ -195,9 +194,9 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvAnySuccess)
     std::atomic<bool> called{false};
     auto data = randomData();
 
-    server.send(boost::asio::buffer(data));
+    server.send(asio::buffer(data));
 
-    socket->recvAnyAsync(socket, boost::asio::buffer(data),
+    socket->recvAnyAsync(socket, asio::buffer(data),
         [&](auto) { called = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(called));
@@ -208,7 +207,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
     std::atomic<bool> called{false};
     auto data = randomData();
 
-    socket->recvAnyAsync(socket, boost::asio::buffer(data), [](auto) {},
+    socket->recvAnyAsync(socket, asio::buffer(data), [](auto) {},
         [&](auto) { called = true; });
 
     ASSERT_TRUE(waitFor(called));
@@ -216,7 +215,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
 
 TEST_F(TLSSocketTestC, shouldReturnLocalEndpoint)
 {
-    boost::asio::ip::tcp::endpoint endpoint;
+    asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
     socket->localEndpointAsync(socket,
@@ -233,7 +232,7 @@ TEST_F(TLSSocketTestC, shouldReturnLocalEndpoint)
 
 TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
 {
-    boost::asio::ip::tcp::endpoint endpoint;
+    asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
     socket->remoteEndpointAsync(socket,
@@ -251,7 +250,7 @@ TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
 TEST_F(TLSSocketTestC, shouldBeShutdownable)
 {
     std::atomic<bool> shutdownCalled{false};
-    socket->shutdownAsync(socket, boost::asio::socket_base::shutdown_send,
+    socket->shutdownAsync(socket, asio::socket_base::shutdown_send,
         [&]() { shutdownCalled = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(shutdownCalled));
@@ -259,9 +258,9 @@ TEST_F(TLSSocketTestC, shouldBeShutdownable)
     std::atomic<bool> sendCalled{false};
     auto data = randomData();
 
-    socket->sendAsync(socket, boost::asio::buffer(data), [] {},
+    socket->sendAsync(socket, asio::buffer(data), [] {},
         [&](auto ec) {
-            ASSERT_TRUE(boost::algorithm::iequals("broken pipe", ec.message()));
+            ASSERT_EQ("Broken pipe"s, std::string{ec.message()});
             sendCalled = true;
         });
 

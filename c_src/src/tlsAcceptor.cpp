@@ -11,15 +11,14 @@
 namespace one {
 namespace etls {
 
-TLSAcceptor::TLSAcceptor(boost::asio::io_service &ioService,
-    const unsigned short port, const std::string &certPath,
-    const std::string &keyPath)
+TLSAcceptor::TLSAcceptor(asio::io_service &ioService, const unsigned short port,
+    const std::string &certPath, const std::string &keyPath)
     : m_ioService{ioService}
-    , m_acceptor{m_ioService, {boost::asio::ip::tcp::v4(), port}}
+    , m_acceptor{m_ioService, {asio::ip::tcp::v4(), port}}
 {
-    m_context.set_options(boost::asio::ssl::context::default_workarounds);
-    m_context.use_certificate_file(certPath, boost::asio::ssl::context::pem);
-    m_context.use_private_key_file(keyPath, boost::asio::ssl::context::pem);
+    m_context.set_options(asio::ssl::context::default_workarounds);
+    m_context.use_certificate_file(certPath, asio::ssl::context::pem);
+    m_context.use_private_key_file(keyPath, asio::ssl::context::pem);
 }
 
 void TLSAcceptor::acceptAsync(
@@ -43,7 +42,7 @@ void TLSAcceptor::acceptAsync(
             }
             else {
                 sock->m_socket.lowest_layer().set_option(
-                    boost::asio::ip::tcp::no_delay{true});
+                    asio::ip::tcp::no_delay{true});
                 success(sock);
             }
         });
@@ -51,7 +50,7 @@ void TLSAcceptor::acceptAsync(
 }
 
 void TLSAcceptor::localEndpointAsync(Ptr self,
-    SuccessFun<const boost::asio::ip::tcp::endpoint &> success, ErrorFun error)
+    SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error)
 {
     m_ioService.post([
         =,

@@ -10,8 +10,8 @@
 #include "tlsAcceptor.hpp"
 #include "tlsSocket.hpp"
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ssl/context.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ssl/context.hpp>
 #include <gtest/gtest.h>
 
 #include <thread>
@@ -23,8 +23,8 @@ struct TLSAcceptorTest : public Test {
     std::string host{"127.0.0.1"};
     unsigned short port{randomPort()};
 
-    boost::asio::io_service ioService;
-    boost::asio::io_service::work work{ioService};
+    asio::io_service ioService;
+    asio::io_service::work work{ioService};
 
     one::etls::TLSAcceptor::Ptr acceptor;
     std::thread thread;
@@ -118,8 +118,8 @@ TEST_F(TLSAcceptorTestC, shouldReturnServer_ClientCommunicableSockets)
     const auto sentData = randomData();
     auto recvData = std::vector<char>(sentData.size());
 
-    ssock->sendAsync(ssock, boost::asio::buffer(sentData), [] {}, [](auto) {});
-    csock->recvAsync(csock, boost::asio::buffer(recvData),
+    ssock->sendAsync(ssock, asio::buffer(sentData), [] {}, [](auto) {});
+    csock->recvAsync(csock, asio::buffer(recvData),
         [&](auto) { dataReceived = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(dataReceived));
@@ -133,8 +133,8 @@ TEST_F(TLSAcceptorTestC, shouldReturnClient_ServerCommunicableSockets)
     const auto sentData = randomData();
     auto recvData = std::vector<char>(sentData.size());
 
-    csock->sendAsync(csock, boost::asio::buffer(sentData), [] {}, [](auto) {});
-    ssock->recvAsync(ssock, boost::asio::buffer(recvData),
+    csock->sendAsync(csock, asio::buffer(sentData), [] {}, [](auto) {});
+    ssock->recvAsync(ssock, asio::buffer(recvData),
         [&](auto) { dataReceived = true; }, [](auto) {});
 
     ASSERT_TRUE(waitFor(dataReceived));
@@ -143,7 +143,7 @@ TEST_F(TLSAcceptorTestC, shouldReturnClient_ServerCommunicableSockets)
 
 TEST_F(TLSAcceptorTest, shouldReturnLocalEndpoint)
 {
-    boost::asio::ip::tcp::endpoint endpoint;
+    asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
     acceptor->localEndpointAsync(acceptor,

@@ -9,11 +9,11 @@
 #ifndef ONE_ETLS_TEST_SERVER_HPP
 #define ONE_ETLS_TEST_SERVER_HPP
 
-#include <boost/asio/read.hpp>
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/context.hpp>
-#include <boost/asio/ssl/stream.hpp>
+#include <asio/read.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/ssl/context.hpp>
+#include <asio/ssl/stream.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -21,38 +21,38 @@
 #include <thread>
 
 namespace {
-boost::asio::ssl::context createContext()
+asio::ssl::context createContext()
 {
-    boost::asio::ssl::context context{boost::asio::ssl::context::tlsv12_server};
-    context.set_options(boost::asio::ssl::context::default_workarounds);
-    context.set_verify_mode(boost::asio::ssl::context::verify_none);
+    asio::ssl::context context{asio::ssl::context::tlsv12_server};
+    context.set_options(asio::ssl::context::default_workarounds);
+    context.set_verify_mode(asio::ssl::context::verify_none);
     context.use_certificate_chain_file("server.pem");
-    context.use_private_key_file("server.key", boost::asio::ssl::context::pem);
+    context.use_private_key_file("server.key", asio::ssl::context::pem);
 
     return context;
 }
 }
 
 class TestServer {
-    using SSLSocket = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
+    using SSLSocket = asio::ssl::stream<asio::ip::tcp::socket>;
 
 public:
     TestServer(const unsigned short port);
     ~TestServer();
 
     bool waitForConnection(std::chrono::milliseconds timeout);
-    void send(boost::asio::const_buffer buffer);
-    void receive(boost::asio::mutable_buffer buffer);
+    void send(asio::const_buffer buffer);
+    void receive(asio::mutable_buffer buffer);
     void failConnection();
     void fail();
 
 private:
     void accept();
 
-    boost::asio::io_service m_ioService;
-    boost::asio::io_service::work m_work;
-    boost::asio::ip::tcp::acceptor m_acceptor;
-    boost::asio::ssl::context m_context;
+    asio::io_service m_ioService;
+    asio::io_service::work m_work;
+    asio::ip::tcp::acceptor m_acceptor;
+    asio::ssl::context m_context;
     std::thread m_thread;
     SSLSocket m_session;
 
@@ -63,11 +63,11 @@ private:
 TestServer::TestServer(const unsigned short port)
     : m_work{m_ioService}
     , m_acceptor{m_ioService,
-          boost::asio::ip::tcp::endpoint{boost::asio::ip::tcp::v4(), port}}
+          asio::ip::tcp::endpoint{asio::ip::tcp::v4(), port}}
     , m_context{createContext()}
     , m_session{m_ioService, m_context}
 {
-    m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+    m_acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
 
     m_thread = std::thread{[this] {
         try {
@@ -99,12 +99,12 @@ bool TestServer::waitForConnection(std::chrono::milliseconds timeout)
     return true;
 }
 
-void TestServer::send(boost::asio::const_buffer buffer)
+void TestServer::send(asio::const_buffer buffer)
 {
     std::atomic<bool> done{false};
     m_ioService.post([&, this] {
-        boost::asio::async_write(m_session,
-            boost::asio::const_buffers_1{buffer},
+        asio::async_write(m_session,
+            asio::const_buffers_1{buffer},
             [&](auto, auto) { done = true; });
     });
 
@@ -112,12 +112,12 @@ void TestServer::send(boost::asio::const_buffer buffer)
         std::this_thread::yield();
 }
 
-void TestServer::receive(boost::asio::mutable_buffer buffer)
+void TestServer::receive(asio::mutable_buffer buffer)
 {
     std::atomic<bool> done{false};
     m_ioService.post([&, this] {
-        boost::asio::async_read(m_session,
-            boost::asio::mutable_buffers_1{buffer},
+        asio::async_read(m_session,
+            asio::mutable_buffers_1{buffer},
             [&](auto, auto) { done = true; });
     });
 
@@ -134,7 +134,7 @@ void TestServer::accept()
     m_ioService.post([this] {
         m_acceptor.async_accept(m_session.lowest_layer(), [this](auto ec) {
             this->m_session.lowest_layer().set_option(
-                boost::asio::ip::tcp::no_delay{true});
+                asio::ip::tcp::no_delay{true});
 
             if (this->m_failConnection) {
                 this->m_session.lowest_layer().close();
@@ -142,7 +142,7 @@ void TestServer::accept()
             }
 
             this->m_session.async_handshake(
-                boost::asio::ssl::stream_base::server,
+                asio::ssl::stream_base::server,
                 [this](auto ec) { this->m_connected = true; });
         });
     });

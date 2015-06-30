@@ -12,9 +12,9 @@
 #include "commonDefs.hpp"
 #include "tlsSocket.hpp"
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/context.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/ssl/context.hpp>
 
 #include <memory>
 #include <string>
@@ -43,7 +43,7 @@ public:
      * connection.
      * @param keyPath Path to a PEM keyfile to use for the TLS connection.
      */
-    TLSAcceptor(boost::asio::io_service &ioService, const unsigned short port,
+    TLSAcceptor(asio::io_service &ioService, const unsigned short port,
         const std::string &certPath, const std::string &keyPath);
 
     /**
@@ -65,14 +65,12 @@ public:
      * @param error Callback function to call on error.
      */
     void localEndpointAsync(Ptr self,
-        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-        ErrorFun error);
+        SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error);
 
 private:
-    boost::asio::io_service &m_ioService;
-    boost::asio::ip::tcp::acceptor m_acceptor;
-    boost::asio::ssl::context m_context{
-        boost::asio::ssl::context::tlsv12_server};
+    asio::io_service &m_ioService;
+    asio::ip::tcp::acceptor m_acceptor;
+    asio::ssl::context m_context{asio::ssl::context::tlsv12_server};
 };
 
 } // namespace etls
