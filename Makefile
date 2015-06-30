@@ -2,6 +2,13 @@
 ## Rebar targets
 ##
 
+.PHONY: all
+all: deps compile
+
+.PHONY: deps
+deps:
+	./rebar get-deps
+
 .PHONY: compile
 compile:
 	./rebar compile
@@ -17,10 +24,6 @@ test: compile
 .PHONY: doc
 doc: compile
 	./rebar doc
-
-.PHONY: benchmark
-benchmark: compile
-	cd test && ./benchmark.escript
 
 ##
 ## Dialyzer targets local
