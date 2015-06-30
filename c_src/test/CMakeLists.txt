@@ -4,7 +4,9 @@
 # This software is released under the MIT license cited in 'LICENSE.txt'
 #
 
-add_subdirectory(gmock)
+add_subdirectory(
+    ${PROJECT_SOURCE_DIR}/deps/gmock
+    ${PROJECT_BINARY_DIR}/deps/gmock)
 
 file(COPY server.pem server.key DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
@@ -23,8 +25,8 @@ foreach(TEST_FILE ${TESTS})
     target_include_directories(${TEST_NAME} PRIVATE
 	${PROJECT_SOURCE_DIR}/src)
     target_include_directories(${TEST_NAME} PRIVATE SYSTEM
-	gmock/include
-	gtest/include)
+        ${PROJECT_SOURCE_DIR}/deps/gmock/include
+        ${PROJECT_SOURCE_DIR}/deps/gtest/include)
     target_link_libraries(${TEST_NAME} PRIVATE
 	erlang_tls_test
 	gtest_main
