@@ -29,15 +29,12 @@ public:
     {
     }
 
-    //    Callback(Callback &&) = default;
-    //    Callback(const Callback &) = delete;
-    //    Callback &operator=(Callback &&) = default;
-    //    Callback &operator=(const Callback &) = delete;
+    Callback(Callback &&) = default;
+    Callback(const Callback &) = delete;
+    Callback &operator=(Callback &&) = default;
+    Callback &operator=(const Callback &) = delete;
 
-    void operator()() const
-    {
-        m_successFun();
-    }
+    void operator()() const { m_successFun(); }
 
     template <typename... Args2,
         typename std::enable_if<

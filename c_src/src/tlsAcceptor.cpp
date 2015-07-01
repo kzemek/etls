@@ -23,7 +23,7 @@ TLSAcceptor::TLSAcceptor(asio::io_service &ioService, const unsigned short port,
 
 void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -48,7 +48,7 @@ void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
 void TLSAcceptor::localEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)

@@ -83,7 +83,7 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
 void TLSSocket::sendAsync(
     Ptr self, asio::const_buffer buffer, Callback<> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -102,7 +102,7 @@ void TLSSocket::sendAsync(
 void TLSSocket::recvAsync(Ptr self, asio::mutable_buffer buffer,
     Callback<asio::mutable_buffer> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -121,7 +121,7 @@ void TLSSocket::recvAsync(Ptr self, asio::mutable_buffer buffer,
 void TLSSocket::recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
     Callback<asio::mutable_buffer> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -139,7 +139,7 @@ void TLSSocket::recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
 
 void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -158,7 +158,7 @@ void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
 void TLSSocket::shutdownAsync(
     Ptr self, const asio::socket_base::shutdown_type type, Callback<> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -174,7 +174,7 @@ void TLSSocket::shutdownAsync(
 
 void TLSSocket::closeAsync(Ptr self, Callback<> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -194,7 +194,7 @@ void TLSSocket::closeAsync(Ptr self, Callback<> callback)
 void TLSSocket::localEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -204,7 +204,7 @@ void TLSSocket::localEndpointAsync(
 void TLSSocket::remoteEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    m_ioService.post([
+    asio::post(m_ioService, [
         =,
         self = std::move(self),
         callback = std::move(callback)
