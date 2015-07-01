@@ -52,14 +52,14 @@ struct TLSSocketTest : public Test {
 struct TLSSocketTestC : public TLSSocketTest {
     TLSSocketTestC()
     {
-        socket->connectAsync(socket, host, port, [](auto) {}, [](auto) {});
+        socket->connectAsync(socket, host, port, {[](auto) {}, [](auto) {}});
         server.waitForConnection(5s);
     }
 };
 
 TEST_F(TLSSocketTest, shouldConnectToTheServer)
 {
-    socket->connectAsync(socket, host, port, [](auto) {}, [](auto) {});
+    socket->connectAsync(socket, host, port, {[](auto) {}, [](auto) {}});
     ASSERT_TRUE(server.waitForConnection(5s));
 }
 
@@ -68,7 +68,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionSuccess)
     std::atomic<bool> called{false};
 
     socket->connectAsync(
-        socket, host, port, [&](auto) { called = true; }, [](auto) {});
+        socket, host, port, {[&](auto) { called = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -79,7 +79,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
     std::atomic<bool> called{false};
 
     socket->connectAsync(
-        socket, host, port, [](auto) {}, [&](auto) { called = true; });
+        socket, host, port, {[](auto) {}, [&](auto) { called = true; }});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -87,7 +87,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
 TEST_F(TLSSocketTestC, shouldSendMessages)
 {
     const auto data = randomData();
-    socket->sendAsync(socket, asio::buffer(data), []() {}, [](auto) {});
+    socket->sendAsync(socket, asio::buffer(data), {[]() {}, [](auto) {}});
 
     std::vector<char> received(data.size());
     server.receive(asio::buffer(received));
@@ -101,7 +101,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSuccessfulSend)
     const auto data = randomData();
 
     socket->sendAsync(
-        socket, asio::buffer(data), [&] { called = true; }, [](auto) {});
+        socket, asio::buffer(data), {[&] { called = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -112,12 +112,12 @@ TEST_F(TLSSocketTestC, shouldNotifyOnSendError)
     std::atomic<bool> called{false};
     const auto data = randomData();
 
-    socket->closeAsync(socket, [&] { closed = true; }, [](auto) {});
+    socket->closeAsync(socket, {[&] { closed = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(closed));
 
     socket->sendAsync(
-        socket, asio::buffer(data), [] {}, [&](auto) { called = true; });
+        socket, asio::buffer(data), {[] {}, [&](auto) { called = true; }});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -131,7 +131,7 @@ TEST_F(TLSSocketTestC, shouldReceiveMessages)
 
     std::vector<char> received(data.size());
     socket->recvAsync(socket, asio::buffer(received),
-        [&](auto) { called = true; }, [](auto) {});
+        {[&](auto) { called = true; }, [](auto) {}});
 
     waitFor(called);
 
@@ -146,7 +146,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvSuccess)
     server.send(asio::buffer(data));
 
     socket->recvAsync(socket, asio::buffer(data),
-        [&](auto) { called = true; }, [](auto) {});
+        {[&](auto) { called = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -158,8 +158,8 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvError)
 
     server.fail();
 
-    socket->recvAsync(socket, asio::buffer(data), [](auto) {},
-        [&](auto) { called = true; });
+    socket->recvAsync(socket, asio::buffer(data),
+        {[](auto) {}, [&](auto) { called = true; }});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -174,12 +174,11 @@ TEST_F(TLSSocketTestC, shouldReceiveMessagesAsTheyCome)
 
     std::vector<char> received(data.size() + 100);
 
-    socket->recvAnyAsync(socket, asio::buffer(received),
-        [&](auto b) {
-            buffer = b;
-            called = true;
-        },
-        [](auto) {});
+    socket->recvAnyAsync(socket, asio::buffer(received), {[&](auto b) {
+        buffer = b;
+        called = true;
+    },
+                                                          [](auto) {}});
 
     waitFor(called);
 
@@ -197,7 +196,7 @@ TEST_F(TLSSocketTestC, shouldNotifyOnRecvAnySuccess)
     server.send(asio::buffer(data));
 
     socket->recvAnyAsync(socket, asio::buffer(data),
-        [&](auto) { called = true; }, [](auto) {});
+        {[&](auto) { called = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -207,8 +206,8 @@ TEST_F(TLSSocketTest, shouldNotifyOnRecvAnyError)
     std::atomic<bool> called{false};
     auto data = randomData();
 
-    socket->recvAnyAsync(socket, asio::buffer(data), [](auto) {},
-        [&](auto) { called = true; });
+    socket->recvAnyAsync(socket, asio::buffer(data),
+        {[](auto) {}, [&](auto) { called = true; }});
 
     ASSERT_TRUE(waitFor(called));
 }
@@ -218,12 +217,11 @@ TEST_F(TLSSocketTestC, shouldReturnLocalEndpoint)
     asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
-    socket->localEndpointAsync(socket,
-        [&](auto e) {
-            endpoint = e;
-            called = true;
-        },
-        [](auto) {});
+    socket->localEndpointAsync(socket, {[&](auto e) {
+        endpoint = e;
+        called = true;
+    },
+                                        [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
     ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
@@ -235,12 +233,11 @@ TEST_F(TLSSocketTestC, shouldReturnRemoteEndpoint)
     asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
-    socket->remoteEndpointAsync(socket,
-        [&](auto e) {
-            endpoint = e;
-            called = true;
-        },
-        [](auto) {});
+    socket->remoteEndpointAsync(socket, {[&](auto e) {
+        endpoint = e;
+        called = true;
+    },
+                                         [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
     ASSERT_EQ("127.0.0.1", endpoint.address().to_string());
@@ -251,18 +248,19 @@ TEST_F(TLSSocketTestC, shouldBeShutdownable)
 {
     std::atomic<bool> shutdownCalled{false};
     socket->shutdownAsync(socket, asio::socket_base::shutdown_send,
-        [&]() { shutdownCalled = true; }, [](auto) {});
+        {[&]() { shutdownCalled = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(shutdownCalled));
 
     std::atomic<bool> sendCalled{false};
     auto data = randomData();
 
-    socket->sendAsync(socket, asio::buffer(data), [] {},
-        [&](auto ec) {
-            ASSERT_EQ("Broken pipe"s, std::string{ec.message()});
-            sendCalled = true;
-        });
+    socket->sendAsync(socket, asio::buffer(data),
+        {[] {},
+         [&](auto ec) {
+             ASSERT_EQ("Broken pipe"s, std::string{ec.message()});
+             sendCalled = true;
+         }});
 
     ASSERT_TRUE(waitFor(sendCalled));
 }

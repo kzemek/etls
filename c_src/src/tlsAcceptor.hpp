@@ -9,7 +9,7 @@
 #ifndef ONE_ETLS_TLS_ACCEPTOR_HPP
 #define ONE_ETLS_TLS_ACCEPTOR_HPP
 
-#include "commonDefs.hpp"
+#include "callback.hpp"
 #include "tlsSocket.hpp"
 
 #include <asio/io_service.hpp>
@@ -54,8 +54,7 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void acceptAsync(
-        Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error);
+    void acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback);
 
     /**
      * Asynchronously retrieve the local endpoint information.
@@ -64,8 +63,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void localEndpointAsync(Ptr self,
-        SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error);
+    void localEndpointAsync(
+        Ptr self, Callback<const asio::ip::tcp::endpoint &> callback);
 
 private:
     asio::io_service &m_ioService;

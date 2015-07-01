@@ -21,43 +21,38 @@ TLSAcceptor::TLSAcceptor(asio::io_service &ioService, const unsigned short port,
     m_context.use_private_key_file(keyPath, asio::ssl::context::pem);
 }
 
-void TLSAcceptor::acceptAsync(
-    Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error)
+void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
         auto sock = std::make_shared<TLSSocket>(m_ioService, m_context);
-        m_acceptor.async_accept(sock->m_socket.lowest_layer(), [
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec) {
-            if (ec) {
-                error(ec);
-            }
-            else {
-                sock->m_socket.lowest_layer().set_option(
-                    asio::ip::tcp::no_delay{true});
-                success(sock);
-            }
-        });
+        m_acceptor.async_accept(sock->m_socket.lowest_layer(),
+            [ =, self = std::move(self), callback = std::move(callback) ](
+                                    const auto ec) mutable {
+                if (ec) {
+                    callback(ec);
+                }
+                else {
+                    sock->m_socket.lowest_layer().set_option(
+                        asio::ip::tcp::no_delay{true});
+
+                    callback(sock);
+                }
+            });
     });
 }
 
-void TLSAcceptor::localEndpointAsync(Ptr self,
-    SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error)
+void TLSAcceptor::localEndpointAsync(
+    Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
-    ]() mutable { success(m_acceptor.local_endpoint()); });
+        callback = std::move(callback)
+    ]() mutable { callback(m_acceptor.local_endpoint()); });
 }
 
 } // namespace etls

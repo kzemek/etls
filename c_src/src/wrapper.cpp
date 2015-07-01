@@ -6,7 +6,7 @@
  * 'LICENSE.txt'
  */
 
-#include "commonDefs.hpp"
+#include "callback.hpp"
 #include "nifpp.h"
 #include "tlsAcceptor.hpp"
 #include "tlsApplication.hpp"
@@ -66,34 +66,42 @@ nifpp::str_atom error{"error"};
 one::etls::TLSApplication app;
 
 /**
- * Creates an error callback.
- * An error callback implementation is shared between multiple NIF functions.
+ * Creates a callback object.
  * @param localEnv A local NIF environment.
  * @param pid A PID to which an error message will be sent.
- * @return An instance of created error callback for the parameters.
+ * @param successFun A callback function for success.
+ * @return An instance of created callback for the parameters.
  */
-one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid)
+template <typename... Args, typename SF>
+one::etls::Callback<Args...> createCallback(
+    Env localEnv, ErlNifPid pid, SF &&successFun)
 {
-    return [localEnv, pid](const std::error_code &ec) mutable {
+    auto onError = [localEnv, pid](const std::error_code &ec) mutable {
         auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(localEnv, std::make_tuple(error, reason));
         enif_send(nullptr, &pid, localEnv, message);
     };
+
+    return {std::forward<SF>(successFun), std::move(onError)};
 }
 
 /**
- * @copydoc onError(Env, ErlNifPid)
+ * @copydoc createCallback(Env, ErlNifPid, SF)
  * @param ref A custom Erlang reference for this call.
  */
-one::etls::ErrorFun onError(Env localEnv, ErlNifPid pid, nifpp::TERM ref)
+template <typename... Args, typename SF>
+one::etls::Callback<Args...> createCallback(
+    Env localEnv, ErlNifPid pid, nifpp::TERM ref, SF &&successFun)
 {
-    return [localEnv, pid, ref](const std::error_code &ec) mutable {
+    auto onError = [localEnv, pid, ref](const std::error_code &ec) mutable {
         auto reason = nifpp::str_atom{ec.message()};
         auto message = nifpp::make(
             localEnv, std::make_tuple(ref, std::make_tuple(error, reason)));
 
         enif_send(nullptr, &pid, localEnv, message);
     };
+
+    return {std::forward<SF>(successFun), std::move(onError)};
 }
 
 template <typename... Args, std::size_t... I>
@@ -142,8 +150,10 @@ ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
     };
 
     auto sock = std::make_shared<one::etls::TLSSocket>(app.ioService());
-    sock->connectAsync(
-        sock, host, port, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback<one::etls::TLSSocket::Ptr>(
+        localEnv, pid, ref, std::move(onSuccess));
+
+    sock->connectAsync(sock, host, port, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -163,7 +173,8 @@ ERL_NIF_TERM send(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    sock->sendAsync(sock, buffer, std::move(onSuccess), onError(localEnv, pid));
+    sock->sendAsync(
+        sock, buffer, createCallback(localEnv, pid, std::move(onSuccess)));
 
     return nifpp::make(env, ok);
 }
@@ -184,14 +195,13 @@ ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     };
 
     asio::mutable_buffer buffer{bin->data, bin->size};
-    if (size == 0) {
-        sock->recvAnyAsync(
-            sock, buffer, std::move(onSuccess), onError(localEnv, pid));
-    }
-    else {
-        sock->recvAsync(
-            sock, buffer, std::move(onSuccess), onError(localEnv, pid));
-    }
+    auto callback = createCallback<asio::mutable_buffer>(
+        localEnv, pid, std::move(onSuccess));
+
+    if (size == 0)
+        sock->recvAnyAsync(sock, buffer, std::move(callback));
+    else
+        sock->recvAsync(sock, buffer, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -223,8 +233,10 @@ ERL_NIF_TERM accept(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    acceptor->acceptAsync(
-        acceptor, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback<one::etls::TLSSocket::Ptr>(
+        localEnv, pid, ref, std::move(onSuccess));
+
+    acceptor->acceptAsync(acceptor, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -239,8 +251,8 @@ ERL_NIF_TERM handshake(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    sock->handshakeAsync(
-        sock, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback(localEnv, pid, ref, std::move(onSuccess));
+    sock->handshakeAsync(sock, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -260,8 +272,10 @@ ERL_NIF_TERM peername(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    sock->remoteEndpointAsync(
-        sock, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback<const asio::ip::tcp::endpoint &>(
+        localEnv, pid, ref, std::move(onSuccess));
+
+    sock->remoteEndpointAsync(sock, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -281,8 +295,10 @@ ERL_NIF_TERM sockname(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    sock->localEndpointAsync(
-        sock, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback<const asio::ip::tcp::endpoint &>(
+        localEnv, pid, ref, std::move(onSuccess));
+
+    sock->localEndpointAsync(sock, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -302,8 +318,10 @@ ERL_NIF_TERM acceptor_sockname(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    acceptor->localEndpointAsync(
-        acceptor, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback<const asio::ip::tcp::endpoint &>(
+        localEnv, pid, ref, std::move(onSuccess));
+
+    acceptor->localEndpointAsync(acceptor, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -318,7 +336,8 @@ ERL_NIF_TERM close(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    sock->closeAsync(sock, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback(localEnv, pid, ref, std::move(onSuccess));
+    sock->closeAsync(sock, std::move(callback));
 
     return nifpp::make(env, ok);
 }
@@ -359,8 +378,8 @@ ERL_NIF_TERM shutdown(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     else
         throw nifpp::badarg{};
 
-    sock->shutdownAsync(
-        sock, asioType, std::move(onSuccess), onError(localEnv, pid, ref));
+    auto callback = createCallback(localEnv, pid, ref, std::move(onSuccess));
+    sock->shutdownAsync(sock, asioType, std::move(callback));
 
     return nifpp::make(env, ok);
 }

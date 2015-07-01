@@ -5,7 +5,7 @@
 #
 
 set(SOURCES
-    commonDefs.hpp
+    callback.hpp
     tlsAcceptor.cpp
     tlsApplication.cpp
     tlsSocket.cpp)

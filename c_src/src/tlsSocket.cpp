@@ -40,170 +40,144 @@ TLSSocket::TLSSocket(asio::io_service &ioService, asio::ssl::context &context)
 }
 
 void TLSSocket::connectAsync(Ptr self, std::string host,
-    const unsigned short port, SuccessFun<Ptr> success, ErrorFun error)
+    const unsigned short port, Callback<Ptr> callback)
 {
-    m_resolver.async_resolve({std::move(host), std::to_string(port)}, [
+    m_resolver.async_resolve({std::move(host), std::to_string(port)},
+        [ =, self = std::move(self), callback = std::move(callback) ](
+                                 const auto ec, auto iterator) mutable {
+
+            auto endpoints = this->shuffleEndpoints(std::move(iterator));
+
+            if (ec) {
+                callback(ec);
+                return;
+            }
+
+            asio::async_connect(m_socket.lowest_layer(), endpoints.begin(),
+                endpoints.end(),
+                [ =, self = std::move(self), callback = std::move(callback) ](
+                                    const auto ec, auto iterator) mutable {
+
+                    if (ec) {
+                        callback(ec);
+                        return;
+                    }
+
+                    m_socket.lowest_layer().set_option(
+                        asio::ip::tcp::no_delay{true});
+
+                    m_socket.async_handshake(asio::ssl::stream_base::client, [
+                        =,
+                        self = std::move(self),
+                        callback = std::move(callback)
+                    ](const auto ec) mutable {
+                        if (ec)
+                            callback(ec);
+                        else
+                            callback(std::move(self));
+                    });
+                });
+        });
+}
+
+void TLSSocket::sendAsync(
+    Ptr self, asio::const_buffer buffer, Callback<> callback)
+{
+    m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
-    ](const auto ec, auto iterator) mutable {
-
-        auto endpoints = this->shuffleEndpoints(std::move(iterator));
-
-        if (ec) {
-            error(ec);
-            return;
-        }
-
-        asio::async_connect(
-            m_socket.lowest_layer(), endpoints.begin(), endpoints.end(), [
-                =,
-                self = std::move(self),
-                success = std::move(success),
-                error = std::move(error)
-            ](const auto ec, auto iterator) mutable {
-
-                if (ec) {
-                    error(ec);
-                    return;
-                }
-
-                m_socket.lowest_layer().set_option(
-                    asio::ip::tcp::no_delay{true});
-
-                m_socket.async_handshake(asio::ssl::stream_base::client, [
-                    =,
-                    self = std::move(self),
-                    success = std::move(success),
-                    error = std::move(error)
-                ](const auto ec) mutable {
-                    if (ec)
-                        error(ec);
-                    else
-                        success(std::move(self));
-                });
+        callback = std::move(callback)
+    ]() mutable {
+        asio::async_write(m_socket, asio::const_buffers_1{buffer},
+            [ =, self = std::move(self), callback = std::move(callback) ](
+                              const auto ec, const auto read) {
+                if (ec)
+                    callback(ec);
+                else
+                    callback();
             });
     });
 }
 
-void TLSSocket::sendAsync(
-    Ptr self, asio::const_buffer buffer, SuccessFun<> success, ErrorFun error)
-{
-    m_ioService.post([
-        =,
-        self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
-    ]() mutable {
-        asio::async_write(m_socket, asio::const_buffers_1{buffer}, [
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec, const auto read) {
-            if (ec)
-                error(ec);
-            else
-                success();
-        });
-    });
-}
-
 void TLSSocket::recvAsync(Ptr self, asio::mutable_buffer buffer,
-    SuccessFun<asio::mutable_buffer> success, ErrorFun error)
+    Callback<asio::mutable_buffer> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
-        asio::async_read(m_socket, asio::mutable_buffers_1{buffer}, [
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec, const auto read) {
-            if (ec)
-                error(ec);
-            else
-                success(buffer);
-        });
+        asio::async_read(m_socket, asio::mutable_buffers_1{buffer},
+            [ =, self = std::move(self), callback = std::move(callback) ](
+                             const auto ec, const auto read) mutable {
+                if (ec)
+                    callback(ec);
+                else
+                    callback(std::move(buffer));
+            });
     });
 }
 
 void TLSSocket::recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
-    SuccessFun<asio::mutable_buffer> success, ErrorFun error)
+    Callback<asio::mutable_buffer> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
-        m_socket.async_read_some(asio::mutable_buffers_1{buffer}, [
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec, const auto read) {
-            if (ec)
-                error(ec);
-            else
-                success(asio::buffer(buffer, read));
-        });
+        m_socket.async_read_some(asio::mutable_buffers_1{buffer},
+            [ =, self = std::move(self), callback = std::move(callback) ](
+                                     const auto ec, const auto read) {
+                if (ec)
+                    callback(ec);
+                else
+                    callback(asio::buffer(buffer, read));
+            });
     });
 }
 
-void TLSSocket::handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
+void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
-        m_socket.async_handshake(asio::ssl::stream_base::server, [
-            =,
-            self = std::move(self),
-            success = std::move(success),
-            error = std::move(error)
-        ](const auto ec) {
-            if (ec)
-                error(ec);
-            else
-                success();
-        });
+        m_socket.async_handshake(asio::ssl::stream_base::server,
+            [ =, self = std::move(self), callback = std::move(callback) ](
+                                     const auto ec) {
+                if (ec)
+                    callback(ec);
+                else
+                    callback();
+            });
     });
 }
 
-void TLSSocket::shutdownAsync(Ptr self,
-    const asio::socket_base::shutdown_type type, SuccessFun<> success,
-    ErrorFun error)
+void TLSSocket::shutdownAsync(
+    Ptr self, const asio::socket_base::shutdown_type type, Callback<> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
         std::error_code ec;
         m_socket.lowest_layer().shutdown(type, ec);
         if (ec)
-            error(ec);
+            callback(ec);
         else
-            success();
+            callback();
     });
 }
 
-void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
+void TLSSocket::closeAsync(Ptr self, Callback<> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
+        callback = std::move(callback)
     ]() mutable {
         std::error_code ec;
         m_socket.lowest_layer().shutdown(
@@ -211,32 +185,30 @@ void TLSSocket::closeAsync(Ptr self, SuccessFun<> success, ErrorFun error)
 
         m_socket.lowest_layer().close(ec);
         if (ec)
-            error(ec);
+            callback(ec);
         else
-            success();
+            callback();
     });
 }
 
-void TLSSocket::localEndpointAsync(Ptr self,
-    SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error)
+void TLSSocket::localEndpointAsync(
+    Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
-    ]() mutable { success(m_socket.lowest_layer().local_endpoint()); });
+        callback = std::move(callback)
+    ]() mutable { callback(m_socket.lowest_layer().local_endpoint()); });
 }
 
-void TLSSocket::remoteEndpointAsync(Ptr self,
-    SuccessFun<const asio::ip::tcp::endpoint &> success, ErrorFun error)
+void TLSSocket::remoteEndpointAsync(
+    Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
     m_ioService.post([
         =,
         self = std::move(self),
-        success = std::move(success),
-        error = std::move(error)
-    ]() mutable { success(m_socket.lowest_layer().remote_endpoint()); });
+        callback = std::move(callback)
+    ]() mutable { callback(m_socket.lowest_layer().remote_endpoint()); });
 }
 
 const std::vector<std::vector<unsigned char>> &

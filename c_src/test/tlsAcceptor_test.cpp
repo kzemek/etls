@@ -6,6 +6,7 @@
  * 'LICENSE.txt'
  */
 
+#include "callback.hpp"
 #include "testUtils.hpp"
 #include "tlsAcceptor.hpp"
 #include "tlsSocket.hpp"
@@ -18,6 +19,18 @@
 #include <vector>
 
 using namespace testing;
+
+template <typename... Args, typename SF>
+one::etls::Callback<Args...> successCallback(SF &&success)
+{
+    return {std::forward<SF>(success), [](auto) { FAIL(); }};
+}
+
+template <typename... Args, typename EF>
+one::etls::Callback<Args...> errorCallback(EF &&error)
+{
+    return {{}, std::forward<EF>(error)};
+}
 
 struct TLSAcceptorTest : public Test {
     std::string host{"127.0.0.1"};
@@ -53,20 +66,18 @@ struct TLSAcceptorTestC : public TLSAcceptorTest {
         std::atomic<bool> connectCalled{false};
         std::atomic<bool> handshakeCalled{false};
 
-        acceptor->acceptAsync(acceptor,
-            [&](one::etls::TLSSocket::Ptr s) {
-                s->handshakeAsync(s,
-                    [&, s] {
-                        ssock = s;
-                        handshakeCalled = true;
-                    },
-                    [](auto) {});
+        acceptor->acceptAsync(acceptor, {[&](one::etls::TLSSocket::Ptr s) {
+            s->handshakeAsync(s, {[&, s] {
+                ssock = s;
+                handshakeCalled = true;
             },
-            [](auto) {});
+                                  [](auto) {}});
+        },
+                                         [](auto) {}});
 
         csock->connectAsync(csock, host, port,
-            [&](one::etls::TLSSocket::Ptr) { connectCalled = true; },
-            [](auto) {});
+            {[&](one::etls::TLSSocket::Ptr) { connectCalled = true; },
+             [](auto) {}});
 
         waitFor(connectCalled);
         waitFor(handshakeCalled);
@@ -79,15 +90,14 @@ TEST_F(TLSAcceptorTest, shouldAcceptConnections)
 
     one::etls::TLSSocket::Ptr ssock;
 
-    acceptor->acceptAsync(acceptor,
-        [&](one::etls::TLSSocket::Ptr s) {
-            ssock = std::move(s);
-            acceptCalled = true;
-        },
-        [](auto) {});
+    acceptor->acceptAsync(acceptor, {[&](one::etls::TLSSocket::Ptr s) {
+        ssock = std::move(s);
+        acceptCalled = true;
+    },
+                                     [](auto) {}});
 
     auto csock = std::make_shared<one::etls::TLSSocket>(ioService);
-    csock->connectAsync(csock, host, port, [](auto) {}, [](auto) {});
+    csock->connectAsync(csock, host, port, {[](auto) {}, [](auto) {}});
 
     ASSERT_TRUE(waitFor(acceptCalled));
 }
@@ -97,15 +107,15 @@ TEST_F(TLSAcceptorTest, shouldReturnHandshakableSockets)
     std::atomic<bool> connectCalled{false};
     std::atomic<bool> handshakeCalled{false};
 
-    acceptor->acceptAsync(acceptor,
-        [&](one::etls::TLSSocket::Ptr s) {
-            s->handshakeAsync(s, [&] { handshakeCalled = true; }, [](auto) {});
-        },
-        [](auto) {});
+    acceptor->acceptAsync(acceptor, {[&](one::etls::TLSSocket::Ptr s) {
+        s->handshakeAsync(s, {[&] { handshakeCalled = true; }, [](auto) {}});
+    },
+                                     [](auto) {}});
 
     auto csock = std::make_shared<one::etls::TLSSocket>(ioService);
     csock->connectAsync(csock, host, port,
-        [&](one::etls::TLSSocket::Ptr) { connectCalled = true; }, [](auto) {});
+        {[&](one::etls::TLSSocket::Ptr) { connectCalled = true; },
+         [](auto) {}});
 
     ASSERT_TRUE(waitFor(connectCalled));
     ASSERT_TRUE(waitFor(handshakeCalled));
@@ -118,9 +128,9 @@ TEST_F(TLSAcceptorTestC, shouldReturnServer_ClientCommunicableSockets)
     const auto sentData = randomData();
     auto recvData = std::vector<char>(sentData.size());
 
-    ssock->sendAsync(ssock, asio::buffer(sentData), [] {}, [](auto) {});
+    ssock->sendAsync(ssock, asio::buffer(sentData), {[] {}, [](auto) {}});
     csock->recvAsync(csock, asio::buffer(recvData),
-        [&](auto) { dataReceived = true; }, [](auto) {});
+        {[&](auto) { dataReceived = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(dataReceived));
     ASSERT_EQ(recvData, sentData);
@@ -133,9 +143,9 @@ TEST_F(TLSAcceptorTestC, shouldReturnClient_ServerCommunicableSockets)
     const auto sentData = randomData();
     auto recvData = std::vector<char>(sentData.size());
 
-    csock->sendAsync(csock, asio::buffer(sentData), [] {}, [](auto) {});
+    csock->sendAsync(csock, asio::buffer(sentData), {[] {}, [](auto) {}});
     ssock->recvAsync(ssock, asio::buffer(recvData),
-        [&](auto) { dataReceived = true; }, [](auto) {});
+        {[&](auto) { dataReceived = true; }, [](auto) {}});
 
     ASSERT_TRUE(waitFor(dataReceived));
     ASSERT_EQ(recvData, sentData);
@@ -146,12 +156,11 @@ TEST_F(TLSAcceptorTest, shouldReturnLocalEndpoint)
     asio::ip::tcp::endpoint endpoint;
     std::atomic<bool> called{false};
 
-    acceptor->localEndpointAsync(acceptor,
-        [&](auto e) {
-            endpoint = e;
-            called = true;
-        },
-        [](auto) {});
+    acceptor->localEndpointAsync(acceptor, {[&](auto e) {
+        endpoint = e;
+        called = true;
+    },
+                                            [](auto) {}});
 
     ASSERT_TRUE(waitFor(called));
     ASSERT_EQ("0.0.0.0", endpoint.address().to_string());
