@@ -9,9 +9,11 @@
 #ifndef ONE_ETLS_ssl2_appLICATION_HPP
 #define ONE_ETLS_ssl2_appLICATION_HPP
 
+#include <asio/executor_work.hpp>
 #include <asio/io_service.hpp>
 #include <asio/ssl/context.hpp>
 
+#include <vector>
 #include <thread>
 
 namespace one {
@@ -41,9 +43,10 @@ public:
     asio::io_service &ioService();
 
 private:
-    asio::io_service m_ioService{1};
+    std::size_t m_threadsNum = std::thread::hardware_concurrency();
+    asio::io_service m_ioService{m_threadsNum};
     asio::io_service::work m_work{m_ioService};
-    std::thread m_thread;
+    std::vector<std::thread> m_threads;
 };
 
 } // namespace etls

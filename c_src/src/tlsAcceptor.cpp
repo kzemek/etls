@@ -8,13 +8,15 @@
 
 #include "tlsAcceptor.hpp"
 
+#include <asio/wrap.hpp>
+
 namespace one {
 namespace etls {
 
 TLSAcceptor::TLSAcceptor(asio::io_service &ioService, const unsigned short port,
     const std::string &certPath, const std::string &keyPath)
     : m_ioService{ioService}
-    , m_acceptor{m_ioService, {asio::ip::tcp::v4(), port}}
+    , m_acceptor{ioService, {asio::ip::tcp::v4(), port}}
 {
     m_context.set_options(asio::ssl::context::default_workarounds);
     m_context.use_certificate_file(certPath, asio::ssl::context::pem);
@@ -23,32 +25,36 @@ TLSAcceptor::TLSAcceptor(asio::io_service &ioService, const unsigned short port,
 
 void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
     ]() mutable {
         auto sock = std::make_shared<TLSSocket>(m_ioService, m_context);
-        m_acceptor.async_accept(sock->m_socket.lowest_layer(),
-            [ =, self = std::move(self), callback = std::move(callback) ](
-                                    const auto ec) mutable {
-                if (ec) {
-                    callback(ec);
-                }
-                else {
-                    sock->m_socket.lowest_layer().set_option(
-                        asio::ip::tcp::no_delay{true});
+        m_acceptor.async_accept(
+            sock->m_socket.lowest_layer(),
+            asio::wrap(m_strand,
+                [ =, self = std::move(self), callback = std::move(callback) ](
+                           const auto ec) mutable {
+                    if (ec) {
+                        callback(ec);
+                    }
+                    else {
+                        asio::post(sock->m_strand, [sock] {
+                            sock->m_socket.lowest_layer().set_option(
+                                asio::ip::tcp::no_delay{true});
+                        });
 
-                    callback(sock);
-                }
-            });
+                        callback(sock);
+                    }
+                }));
     });
 }
 
 void TLSAcceptor::localEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)

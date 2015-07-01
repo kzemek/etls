@@ -20,8 +20,9 @@ namespace one {
 namespace etls {
 
 TLSSocket::TLSSocket(asio::io_service &ioService)
-    : m_ioService{ioService}
-    , m_socket{m_ioService, m_clientContext}
+    : m_strand{ioService}
+    , m_resolver{ioService}
+    , m_socket{ioService, m_clientContext}
 {
     namespace p = std::placeholders;
     m_socket.set_verify_mode(asio::ssl::verify_none);
@@ -30,8 +31,9 @@ TLSSocket::TLSSocket(asio::io_service &ioService)
 }
 
 TLSSocket::TLSSocket(asio::io_service &ioService, asio::ssl::context &context)
-    : m_ioService{ioService}
-    , m_socket{m_ioService, context}
+    : m_strand{ioService}
+    , m_resolver{ioService}
+    , m_socket{ioService, context}
 {
     namespace p = std::placeholders;
     m_socket.set_verify_mode(asio::ssl::verify_none);
@@ -83,45 +85,49 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
 void TLSSocket::sendAsync(
     Ptr self, asio::const_buffer buffer, Callback<> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
     ]() mutable {
-        asio::async_write(m_socket, asio::const_buffers_1{buffer},
-            [ =, self = std::move(self), callback = std::move(callback) ](
-                              const auto ec, const auto read) {
-                if (ec)
-                    callback(ec);
-                else
-                    callback();
-            });
+        asio::async_write(
+            m_socket, asio::const_buffers_1{buffer},
+            asio::wrap(m_strand,
+                [ =, self = std::move(self), callback = std::move(callback) ](
+                           const auto ec, const auto read) {
+                    if (ec)
+                        callback(ec);
+                    else
+                        callback();
+                }));
     });
 }
 
 void TLSSocket::recvAsync(Ptr self, asio::mutable_buffer buffer,
     Callback<asio::mutable_buffer> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
     ]() mutable {
-        asio::async_read(m_socket, asio::mutable_buffers_1{buffer},
-            [ =, self = std::move(self), callback = std::move(callback) ](
-                             const auto ec, const auto read) mutable {
-                if (ec)
-                    callback(ec);
-                else
-                    callback(std::move(buffer));
-            });
+        asio::async_read(
+            m_socket, asio::mutable_buffers_1{buffer},
+            asio::wrap(m_strand,
+                [ =, self = std::move(self), callback = std::move(callback) ](
+                           const auto ec, const auto read) mutable {
+                    if (ec)
+                        callback(ec);
+                    else
+                        callback(std::move(buffer));
+                }));
     });
 }
 
 void TLSSocket::recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
     Callback<asio::mutable_buffer> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -139,7 +145,7 @@ void TLSSocket::recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
 
 void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -158,7 +164,7 @@ void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
 void TLSSocket::shutdownAsync(
     Ptr self, const asio::socket_base::shutdown_type type, Callback<> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -174,7 +180,7 @@ void TLSSocket::shutdownAsync(
 
 void TLSSocket::closeAsync(Ptr self, Callback<> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -194,7 +200,7 @@ void TLSSocket::closeAsync(Ptr self, Callback<> callback)
 void TLSSocket::localEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)
@@ -204,7 +210,7 @@ void TLSSocket::localEndpointAsync(
 void TLSSocket::remoteEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
-    asio::post(m_ioService, [
+    asio::post(m_strand, [
         =,
         self = std::move(self),
         callback = std::move(callback)

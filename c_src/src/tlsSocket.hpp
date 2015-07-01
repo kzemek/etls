@@ -158,8 +158,8 @@ private:
 
     asio::ssl::context m_clientContext{asio::ssl::context::tlsv12_client};
 
-    asio::io_service &m_ioService;
-    asio::ip::tcp::resolver m_resolver{m_ioService};
+    asio::io_service::strand m_strand;
+    asio::ip::tcp::resolver m_resolver;
     asio::ssl::stream<asio::ip::tcp::socket> m_socket;
     std::vector<std::vector<unsigned char>> m_certificateChain;
 };
