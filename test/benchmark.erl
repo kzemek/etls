@@ -186,9 +186,14 @@ recv_n(Transport, passive, Sock, Size, Times) ->
     {ok, _} = recv(Transport, Sock, Size),
     recv_n(Transport, passive, Sock, Size, Times - 1);
 recv_n(Transport, active, Sock, Size, Times) ->
+    recv_n(Transport, active, Sock, Size, Size, Times).
+
+recv_n(Transport, active, Sock, Size, 0, Times) ->
+    recv_n(Transport, active, Sock, Size, Times - 1);
+recv_n(Transport, active, Sock, Size, SizeLeft, Times) ->
     ok = Transport:setopts(Sock, [{active, once}]),
     receive
-        {Transport, Sock, _} -> recv_n(Transport, active, Sock, Size, Times - 1);
+        {Transport, Sock, D} -> recv_n(Transport, active, Sock, Size, SizeLeft - byte_size(D), Times);
         Else -> error(Else)
     end.
 
