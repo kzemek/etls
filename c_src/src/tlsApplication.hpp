@@ -45,8 +45,9 @@ public:
 private:
     std::size_t m_threadsNum = 1;
     asio::io_service m_ioService{m_threadsNum};
-    asio::io_service::work m_work{m_ioService};
     std::vector<std::thread> m_threads;
+    asio::executor_work<asio::io_service::executor_type> m_work =
+        asio::make_work(m_ioService);
 };
 
 } // namespace etls
