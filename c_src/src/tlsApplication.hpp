@@ -6,8 +6,8 @@
  * 'LICENSE.txt'
  */
 
-#ifndef ONE_ETLS_ssl2_appLICATION_HPP
-#define ONE_ETLS_ssl2_appLICATION_HPP
+#ifndef ONE_ETLS_SSL2_APPLICATION_HPP
+#define ONE_ETLS_SSL2_APPLICATION_HPP
 
 #include <asio/executor_work.hpp>
 #include <asio/io_service.hpp>
@@ -43,7 +43,7 @@ public:
     asio::io_service &ioService();
 
 private:
-    std::size_t m_threadsNum = std::thread::hardware_concurrency();
+    std::size_t m_threadsNum = 1;
     asio::io_service m_ioService{m_threadsNum};
     asio::io_service::work m_work{m_ioService};
     std::vector<std::thread> m_threads;
@@ -52,4 +52,4 @@ private:
 } // namespace etls
 } // namespace one
 
-#endif // ONE_ETLS_ssl2_appLICATION_HPP
+#endif // ONE_ETLS_SSL2_APPLICATION_HPP
