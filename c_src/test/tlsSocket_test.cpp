@@ -8,10 +8,9 @@
 
 #include "testServer.hpp"
 #include "testUtils.hpp"
+#include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
 
-#include <asio/io_service.hpp>
-#include <asio/ssl/context.hpp>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -30,22 +29,12 @@ struct TLSSocketTest : public Test {
     unsigned short port{randomPort()};
     TestServer server{port};
 
-    asio::io_service ioService;
-    asio::io_service::work work{ioService};
-    asio::ssl::context context{asio::ssl::context::tlsv12_client};
+    one::etls::TLSApplication app;
     one::etls::TLSSocket::Ptr socket;
-    std::thread thread;
 
     TLSSocketTest()
-        : socket{std::make_shared<one::etls::TLSSocket>(ioService)}
+        : socket{std::make_shared<one::etls::TLSSocket>(app)}
     {
-        thread = std::thread{[this] { ioService.run(); }};
-    }
-
-    ~TLSSocketTest()
-    {
-        ioService.stop();
-        thread.join();
     }
 };
 

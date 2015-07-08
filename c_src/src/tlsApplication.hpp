@@ -13,6 +13,9 @@
 #include <asio/io_service.hpp>
 #include <asio/ssl/context.hpp>
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
 #include <vector>
 #include <thread>
 
@@ -27,9 +30,10 @@ class TLSApplication {
 public:
     /**
      * Constructor.
-     * Starts N threads where N is the result of @c std::hardware_concurrency().
+     * Starts N threads where N is by default the result of @c
+     * std::hardware_concurrency().
      */
-    TLSApplication();
+    TLSApplication(std::size_t n = std::thread::hardware_concurrency());
 
     /**
      * Destructor.
@@ -43,11 +47,11 @@ public:
     asio::io_service &ioService();
 
 private:
-    std::size_t m_threadsNum = 1;
-    asio::io_service m_ioService{m_threadsNum};
+    std::size_t m_threadsNum;
+    std::vector<std::unique_ptr<asio::io_service>> m_ioServices;
+    std::vector<asio::executor_work<asio::io_service::executor_type>> m_works;
     std::vector<std::thread> m_threads;
-    asio::executor_work<asio::io_service::executor_type> m_work =
-        asio::make_work(m_ioService);
+    std::atomic<std::size_t> m_nextService{0};
 };
 
 } // namespace etls

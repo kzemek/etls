@@ -9,10 +9,9 @@
 #include "callback.hpp"
 #include "testUtils.hpp"
 #include "tlsAcceptor.hpp"
+#include "tlsApplication.hpp"
 #include "tlsSocket.hpp"
 
-#include <asio/io_service.hpp>
-#include <asio/ssl/context.hpp>
 #include <gtest/gtest.h>
 
 #include <thread>
@@ -36,23 +35,13 @@ struct TLSAcceptorTest : public Test {
     std::string host{"127.0.0.1"};
     unsigned short port{randomPort()};
 
-    asio::io_service ioService;
-    asio::io_service::work work{ioService};
-
+    one::etls::TLSApplication app{1};
     one::etls::TLSAcceptor::Ptr acceptor;
-    std::thread thread;
 
     TLSAcceptorTest()
         : acceptor{std::make_shared<one::etls::TLSAcceptor>(
-              ioService, port, "server.pem", "server.key")}
+              app, port, "server.pem", "server.key")}
     {
-        thread = std::thread{[=] { ioService.run(); }};
-    }
-
-    ~TLSAcceptorTest()
-    {
-        ioService.stop();
-        thread.join();
     }
 };
 
@@ -61,7 +50,7 @@ struct TLSAcceptorTestC : public TLSAcceptorTest {
     one::etls::TLSSocket::Ptr csock;
 
     TLSAcceptorTestC()
-        : csock{std::make_shared<one::etls::TLSSocket>(ioService)}
+        : csock{std::make_shared<one::etls::TLSSocket>(app)}
     {
         std::atomic<bool> connectCalled{false};
         std::atomic<bool> handshakeCalled{false};
@@ -96,7 +85,7 @@ TEST_F(TLSAcceptorTest, shouldAcceptConnections)
     },
                                      [](auto) {}});
 
-    auto csock = std::make_shared<one::etls::TLSSocket>(ioService);
+    auto csock = std::make_shared<one::etls::TLSSocket>(app);
     csock->connectAsync(csock, host, port, {[](auto) {}, [](auto) {}});
 
     ASSERT_TRUE(waitFor(acceptCalled));
@@ -112,7 +101,7 @@ TEST_F(TLSAcceptorTest, shouldReturnHandshakableSockets)
     },
                                      [](auto) {}});
 
-    auto csock = std::make_shared<one::etls::TLSSocket>(ioService);
+    auto csock = std::make_shared<one::etls::TLSSocket>(app);
     csock->connectAsync(csock, host, port,
         {[&](one::etls::TLSSocket::Ptr) { connectCalled = true; },
          [](auto) {}});

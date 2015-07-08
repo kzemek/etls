@@ -14,20 +14,31 @@
 namespace one {
 namespace etls {
 
-TLSApplication::TLSApplication()
+TLSApplication::TLSApplication(std::size_t n)
+    : m_threadsNum{n}
 {
-    std::generate_n(std::back_inserter(m_threads), m_threadsNum,
-        [=] { return std::thread{[=] { m_ioService.run(); }}; });
+    std::generate_n(std::back_inserter(m_ioServices), m_threadsNum,
+        [] { return std::make_unique<asio::io_service>(1); });
+
+    for (auto &ioService : m_ioServices) {
+        m_works.emplace_back(asio::make_work(*ioService));
+        m_threads.emplace_back([&] { ioService->run(); });
+    }
 }
 
 TLSApplication::~TLSApplication()
 {
-    m_ioService.stop();
+    for (auto &ioService : m_ioServices)
+        ioService->stop();
+
     for (auto &thread : m_threads)
         thread.join();
 }
 
-asio::io_service &TLSApplication::ioService() { return m_ioService; }
+asio::io_service &TLSApplication::ioService()
+{
+    return *m_ioServices[m_nextService++ % m_threadsNum];
+}
 
 } // namespace etls
 } // namespace one

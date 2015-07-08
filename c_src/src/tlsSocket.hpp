@@ -14,7 +14,6 @@
 #include <asio/io_service.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/ssl/stream.hpp>
-#include <asio/strand.hpp>
 
 #include <memory>
 #include <string>
@@ -22,6 +21,8 @@
 
 namespace one {
 namespace etls {
+
+class TLSApplication;
 
 /**
  * The @c TLSSocket class is responsible for handling a single TLS socket.
@@ -38,19 +39,19 @@ public:
     /**
      * Constructor.
      * Prepares a new @c asio socket with a local @c ssl::context.
-     * @param ioService @c io_service object to use for this object's
-     * asynchronous operations.
+     * @param app @c TLSApplication object to retrieve @c io_service for this
+     * object's asynchronous operations.
      */
-    TLSSocket(asio::io_service &ioService);
+    TLSSocket(TLSApplication &app);
 
     /**
      * Constructor.
      * Prepares a new @c asio socket with a given @c ssl::context.
      * @param context a @c ssl::context to use for this socket's configuration.
-     * @param ioService @c io_service object to use for this object's
-     * asynchronous operations.
+     * @param app @c TLSApplication object to retrieve @c io_service for this
+     * object's asynchronous operations.
      */
-    TLSSocket(asio::io_service &ioService, asio::ssl::context &context);
+    TLSSocket(TLSApplication &app, asio::ssl::context &context);
 
     /**
      * Asynchronously connects the socket to a remote service.
@@ -158,7 +159,7 @@ private:
 
     asio::ssl::context m_clientContext{asio::ssl::context::tlsv12_client};
 
-    asio::io_service::strand m_strand;
+    asio::io_service &m_ioService;
     asio::ip::tcp::resolver m_resolver;
     asio::ssl::stream<asio::ip::tcp::socket> m_socket;
     std::vector<std::vector<unsigned char>> m_certificateChain;

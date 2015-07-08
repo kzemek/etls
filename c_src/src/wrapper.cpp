@@ -149,7 +149,7 @@ ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    auto sock = std::make_shared<one::etls::TLSSocket>(app.ioService());
+    auto sock = std::make_shared<one::etls::TLSSocket>(app);
     auto callback = createCallback<one::etls::TLSSocket::Ptr>(
         localEnv, pid, ref, std::move(onSuccess));
 
@@ -209,8 +209,8 @@ ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
 ERL_NIF_TERM listen(ErlNifEnv *env, Env /*localEnv*/, ErlNifPid /*pid*/,
     int port, std::string certPath, std::string keyPath)
 {
-    auto acceptor = std::make_shared<one::etls::TLSAcceptor>(
-        app.ioService(), port, certPath, keyPath);
+    auto acceptor =
+        std::make_shared<one::etls::TLSAcceptor>(app, port, certPath, keyPath);
 
     auto res = nifpp::construct_resource<one::etls::TLSAcceptor::Ptr>(acceptor);
 
