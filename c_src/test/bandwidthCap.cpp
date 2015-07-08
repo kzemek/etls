@@ -58,7 +58,7 @@ auto writer(std::size_t messageSize, std::size_t messages)
         socket.handshake(ssl::stream_base::client);
 
         auto ret = std::chrono::steady_clock::now();
-        for (int i = 0; i < messages; ++i)
+        for (auto i = 0u; i < messages; ++i)
             write(socket, buffer(data));
 
         return ret;
@@ -85,7 +85,7 @@ auto reader(
         socket.handshake(ssl::stream_base::server);
 
         std::vector<char> data(messageSize);
-        for (int i = 0; i < messages; ++i)
+        for (auto i = 0u; i < messages; ++i)
             read(socket, buffer(data));
 
         return std::chrono::steady_clock::now();

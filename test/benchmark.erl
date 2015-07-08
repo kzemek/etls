@@ -61,7 +61,7 @@ run() ->
 
 
 cases() ->
-    [bandwidth_benchmark, parameters_benchmark].
+    [parameters_benchmark].
 
 
 config(bandwidth_benchmark) ->
@@ -79,11 +79,11 @@ config(parameters_benchmark) ->
             message_size = element(1, Size),
             messages_num = element(2, Size)
         } ||
-        Transport <- [ssl2],
-        Active <- [passive, active],
-        Packet <- [0, 4],
-        Connections <- [1, 2, 10],
-        Size <- [{?B, 1000000}, {1 * ?KB, 100000}, {1 * ?MB, 10000}]
+        Transport <- [ssl2, ssl2_nif],
+        Active <- [passive],
+        Packet <- [0],
+        Connections <- [10],
+        Size <- [{?B, 1000000}, {100 * ?MB, 100}]
     ].
 
 
