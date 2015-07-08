@@ -247,7 +247,7 @@ TEST_F(TLSSocketTestC, shouldBeShutdownable)
     socket->sendAsync(socket, asio::buffer(data),
         {[] {},
          [&](auto ec) {
-             ASSERT_EQ("Broken pipe"s, std::string{ec.message()});
+             ASSERT_EQ(std::string{"Broken pipe"}, std::string{ec.message()});
              sendCalled = true;
          }});
 
