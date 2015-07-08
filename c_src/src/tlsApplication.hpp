@@ -6,12 +6,17 @@
  * 'LICENSE.txt'
  */
 
-#ifndef ONE_ETLS_ssl2_appLICATION_HPP
-#define ONE_ETLS_ssl2_appLICATION_HPP
+#ifndef ONE_ETLS_SSL2_APPLICATION_HPP
+#define ONE_ETLS_SSL2_APPLICATION_HPP
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ssl/context.hpp>
+#include <asio/executor_work.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ssl/context.hpp>
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <vector>
 #include <thread>
 
 namespace one {
@@ -25,9 +30,10 @@ class TLSApplication {
 public:
     /**
      * Constructor.
-     * Starts N threads where N is the result of @c std::hardware_concurrency().
+     * Starts N threads where N is by default the result of @c
+     * std::hardware_concurrency().
      */
-    TLSApplication();
+    TLSApplication(std::size_t n = std::thread::hardware_concurrency());
 
     /**
      * Destructor.
@@ -38,15 +44,17 @@ public:
     /**
      * @returns An @c io_service object managed by this.
      */
-    boost::asio::io_service &ioService();
+    asio::io_service &ioService();
 
 private:
-    boost::asio::io_service m_ioService{1};
-    boost::asio::io_service::work m_work{m_ioService};
-    std::thread m_thread;
+    std::size_t m_threadsNum;
+    std::vector<std::unique_ptr<asio::io_service>> m_ioServices;
+    std::vector<asio::executor_work<asio::io_service::executor_type>> m_works;
+    std::vector<std::thread> m_threads;
+    std::atomic<std::size_t> m_nextService{0};
 };
 
 } // namespace etls
 } // namespace one
 
-#endif // ONE_ETLS_ssl2_appLICATION_HPP
+#endif // ONE_ETLS_SSL2_APPLICATION_HPP

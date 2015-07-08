@@ -9,12 +9,11 @@
 #ifndef ONE_ETLS_TLS_SOCKET_HPP
 #define ONE_ETLS_TLS_SOCKET_HPP
 
-#include "commonDefs.hpp"
+#include "callback.hpp"
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/stream.hpp>
-#include <boost/asio/strand.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/ssl/stream.hpp>
 
 #include <memory>
 #include <string>
@@ -22,6 +21,8 @@
 
 namespace one {
 namespace etls {
+
+class TLSApplication;
 
 /**
  * The @c TLSSocket class is responsible for handling a single TLS socket.
@@ -37,21 +38,20 @@ public:
 
     /**
      * Constructor.
-     * Prepares a new @c boost::asio socket with a local @c ssl::context.
-     * @param ioService @c io_service object to use for this object's
-     * asynchronous operations.
+     * Prepares a new @c asio socket with a local @c ssl::context.
+     * @param app @c TLSApplication object to retrieve @c io_service for this
+     * object's asynchronous operations.
      */
-    TLSSocket(boost::asio::io_service &ioService);
+    TLSSocket(TLSApplication &app);
 
     /**
      * Constructor.
-     * Prepares a new @c boost::asio socket with a given @c ssl::context.
+     * Prepares a new @c asio socket with a given @c ssl::context.
      * @param context a @c ssl::context to use for this socket's configuration.
-     * @param ioService @c io_service object to use for this object's
-     * asynchronous operations.
+     * @param app @c TLSApplication object to retrieve @c io_service for this
+     * object's asynchronous operations.
      */
-    TLSSocket(
-        boost::asio::io_service &ioService, boost::asio::ssl::context &context);
+    TLSSocket(TLSApplication &app, asio::ssl::context &context);
 
     /**
      * Asynchronously connects the socket to a remote service.
@@ -63,7 +63,7 @@ public:
      * @param error Callback function to call on error.
      */
     void connectAsync(Ptr self, std::string host, const unsigned short port,
-        SuccessFun<Ptr> success, ErrorFun error);
+        Callback<Ptr> callback);
 
     /**
      * Asynchronously sends a message through the socket.
@@ -72,8 +72,7 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void sendAsync(Ptr self, boost::asio::const_buffer buffer,
-        SuccessFun<> success, ErrorFun error);
+    void sendAsync(Ptr self, asio::const_buffer buffer, Callback<> callback);
 
     /**
      * Asynchronously receives a message from the socket.
@@ -84,8 +83,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void recvAsync(Ptr self, boost::asio::mutable_buffer buffer,
-        SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error);
+    void recvAsync(Ptr self, asio::mutable_buffer buffer,
+        Callback<asio::mutable_buffer> callback);
 
     /**
      * Asynchronously receive a message from the socket.
@@ -97,8 +96,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void recvAnyAsync(Ptr self, boost::asio::mutable_buffer buffer,
-        SuccessFun<boost::asio::mutable_buffer> success, ErrorFun error);
+    void recvAnyAsync(Ptr self, asio::mutable_buffer buffer,
+        Callback<asio::mutable_buffer> callback);
 
     /**
      * Asynchronously perform a handshake for an incoming connection.
@@ -106,7 +105,7 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void handshakeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
+    void handshakeAsync(Ptr self, Callback<> callback);
 
     /**
      * Asynchronously shutdown the TCP connection on the socket.
@@ -115,9 +114,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void shutdownAsync(Ptr self,
-        const boost::asio::socket_base::shutdown_type type,
-        SuccessFun<> success, ErrorFun error);
+    void shutdownAsync(Ptr self, const asio::socket_base::shutdown_type type,
+        Callback<> callback);
 
     /**
      * Asynchronously retrieve the local endpoint information.
@@ -126,9 +124,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void localEndpointAsync(Ptr self,
-        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-        ErrorFun error);
+    void localEndpointAsync(
+        Ptr self, Callback<const asio::ip::tcp::endpoint &> callback);
 
     /**
      * Asynchronously retrieve the remote endpoint information.
@@ -137,9 +134,8 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void remoteEndpointAsync(Ptr self,
-        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-        ErrorFun error);
+    void remoteEndpointAsync(
+        Ptr self, Callback<const asio::ip::tcp::endpoint &> callback);
 
     /**
      * @returns A DER-encoded list of certificates that form peer's certificate
@@ -153,20 +149,19 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void closeAsync(Ptr self, SuccessFun<> success, ErrorFun error);
+    void closeAsync(Ptr self, Callback<> callback);
 
 private:
-    std::vector<boost::asio::ip::basic_resolver_entry<boost::asio::ip::tcp>>
-    shuffleEndpoints(boost::asio::ip::tcp::resolver::iterator iterator);
+    std::vector<asio::ip::basic_resolver_entry<asio::ip::tcp>> shuffleEndpoints(
+        asio::ip::tcp::resolver::iterator iterator);
 
-    bool saveCertificate(bool, boost::asio::ssl::verify_context &ctx);
+    bool saveCertificate(bool, asio::ssl::verify_context &ctx);
 
-    boost::asio::ssl::context m_clientContext{
-        boost::asio::ssl::context::tlsv12_client};
+    asio::ssl::context m_clientContext{asio::ssl::context::tlsv12_client};
 
-    boost::asio::io_service &m_ioService;
-    boost::asio::ip::tcp::resolver m_resolver{m_ioService};
-    boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_socket;
+    asio::io_service &m_ioService;
+    asio::ip::tcp::resolver m_resolver;
+    asio::ssl::stream<asio::ip::tcp::socket> m_socket;
     std::vector<std::vector<unsigned char>> m_certificateChain;
 };
 

@@ -34,12 +34,17 @@ run() ->
     application:start(ssl2),
     OutputCases = lists:foldl(
         fun(TestCase, Acc) ->
+            io:format(user, "Running case ~p~n", [TestCase]),
+
             Configs = config(TestCase),
-            Nums = lists:seq(1, length(Configs)),
+            ConfigsNum = length(Configs),
+            Nums = lists:seq(1, ConfigsNum),
             EnumeratedConfigs = lists:zip(Nums, Configs),
 
             OutputConfigs = lists:foldl(
                 fun({Num, Config}, Acc2) ->
+                    io:format(user, "  Running config ~p/~p: ~p~n", [Num, ConfigsNum, Config]),
+
                     BinaryNum = integer_to_binary(Num),
                     Out = run(Config),
                     maps:merge(config_output(BinaryNum, Config, Out), Acc2)
@@ -76,10 +81,9 @@ config(parameters_benchmark) ->
         } ||
         Transport <- [ssl2],
         Active <- [passive, active],
-        Packet <- [0, 2, 4],
+        Packet <- [0, 4],
         Connections <- [1, 2, 10],
-        Size <- [{?B, 1000000}, {100 * ?B, 100000}, {1 * ?KB, 100000},
-            {10 * ?KB, 50000}, {1 * ?MB, 10000}, {10 * ?MB, 1000}]
+        Size <- [{?B, 1000000}, {1 * ?KB, 100000}, {1 * ?MB, 10000}]
     ].
 
 
@@ -187,9 +191,14 @@ recv_n(Transport, passive, Sock, Size, Times) ->
     {ok, _} = recv(Transport, Sock, Size),
     recv_n(Transport, passive, Sock, Size, Times - 1);
 recv_n(Transport, active, Sock, Size, Times) ->
+    recv_n(Transport, active, Sock, Size, Size, Times).
+
+recv_n(Transport, active, Sock, Size, 0, Times) ->
+    recv_n(Transport, active, Sock, Size, Times - 1);
+recv_n(Transport, active, Sock, Size, SizeLeft, Times) ->
     ok = Transport:setopts(Sock, [{active, once}]),
     receive
-        {Transport, Sock, _} -> recv_n(Transport, active, Sock, Size, Times - 1);
+        {Transport, Sock, D} -> recv_n(Transport, active, Sock, Size, SizeLeft - byte_size(D), Times);
         Else -> error(Else)
     end.
 

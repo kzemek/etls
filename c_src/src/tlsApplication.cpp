@@ -9,30 +9,36 @@
 #include "tlsApplication.hpp"
 
 #include <algorithm>
+#include <functional>
 
 namespace one {
 namespace etls {
 
-TLSApplication::TLSApplication()
+TLSApplication::TLSApplication(std::size_t n)
+    : m_threadsNum{n}
 {
-    m_thread = std::thread{[this] {
-        while (!m_ioService.stopped()) {
-            try {
-                m_ioService.run();
-            }
-            catch (...) {
-            }
-        }
-    }};
+    std::generate_n(std::back_inserter(m_ioServices), m_threadsNum,
+        [] { return std::make_unique<asio::io_service>(1); });
+
+    for (auto &ioService : m_ioServices) {
+        m_works.emplace_back(asio::make_work(*ioService));
+        m_threads.emplace_back([&] { ioService->run(); });
+    }
 }
 
 TLSApplication::~TLSApplication()
 {
-    m_ioService.stop();
-    m_thread.join();
+    for (auto &ioService : m_ioServices)
+        ioService->stop();
+
+    for (auto &thread : m_threads)
+        thread.join();
 }
 
-boost::asio::io_service &TLSApplication::ioService() { return m_ioService; }
+asio::io_service &TLSApplication::ioService()
+{
+    return *m_ioServices[m_nextService++ % m_threadsNum];
+}
 
 } // namespace etls
 } // namespace one

@@ -9,18 +9,20 @@
 #ifndef ONE_ETLS_TLS_ACCEPTOR_HPP
 #define ONE_ETLS_TLS_ACCEPTOR_HPP
 
-#include "commonDefs.hpp"
+#include "callback.hpp"
 #include "tlsSocket.hpp"
 
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/context.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/ssl/context.hpp>
 
 #include <memory>
 #include <string>
 
 namespace one {
 namespace etls {
+
+class TLSApplication;
 
 /**
  * The @c TLSAcceptor class is responsible for representing an acceptor socket
@@ -43,7 +45,7 @@ public:
      * connection.
      * @param keyPath Path to a PEM keyfile to use for the TLS connection.
      */
-    TLSAcceptor(boost::asio::io_service &ioService, const unsigned short port,
+    TLSAcceptor(TLSApplication &m_app, const unsigned short port,
         const std::string &certPath, const std::string &keyPath);
 
     /**
@@ -54,8 +56,7 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void acceptAsync(
-        Ptr self, SuccessFun<TLSSocket::Ptr> success, ErrorFun error);
+    void acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback);
 
     /**
      * Asynchronously retrieve the local endpoint information.
@@ -64,15 +65,14 @@ public:
      * @param success Callback function to call on success.
      * @param error Callback function to call on error.
      */
-    void localEndpointAsync(Ptr self,
-        SuccessFun<const boost::asio::ip::tcp::endpoint &> success,
-        ErrorFun error);
+    void localEndpointAsync(
+        Ptr self, Callback<const asio::ip::tcp::endpoint &> callback);
 
 private:
-    boost::asio::io_service &m_ioService;
-    boost::asio::ip::tcp::acceptor m_acceptor;
-    boost::asio::ssl::context m_context{
-        boost::asio::ssl::context::tlsv12_server};
+    TLSApplication &m_app;
+    asio::io_service &m_ioService;
+    asio::ip::tcp::acceptor m_acceptor;
+    asio::ssl::context m_context{asio::ssl::context::tlsv12_server};
 };
 
 } // namespace etls

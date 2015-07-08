@@ -13,8 +13,8 @@
  * message throughput is measured by sending a large number of 1 B messages.
  */
 
-#include <boost/asio.hpp>
-#include <boost/asio/ssl.hpp>
+#include <asio.hpp>
+#include <asio/ssl.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -25,7 +25,7 @@
 #include <iostream>
 #include <functional>
 
-using namespace boost::asio;
+using namespace asio;
 using namespace std::literals;
 
 template <typename F> auto withIoService(F &&f)
@@ -55,7 +55,7 @@ auto writer(std::size_t messageSize, std::size_t messages)
         std::vector<char> data(messageSize, 'a');
 
         connect(socket.lowest_layer(), iterator);
-        socket.handshake(boost::asio::ssl::stream_base::client);
+        socket.handshake(ssl::stream_base::client);
 
         auto ret = std::chrono::steady_clock::now();
         for (int i = 0; i < messages; ++i)
@@ -70,15 +70,13 @@ auto reader(
 {
     return withIoService([&](auto &ioService) {
         ssl::context context{ssl::context::tlsv12_server};
-        context.use_certificate_file(
-            "server.pem", boost::asio::ssl::context::pem);
-        context.use_private_key_file(
-            "server.key", boost::asio::ssl::context::pem);
+        context.use_certificate_file("server.pem", ssl::context::pem);
+        context.use_private_key_file("server.key", ssl::context::pem);
 
         ssl::stream<ip::tcp::socket> socket{ioService, context};
 
-        ip::tcp::acceptor acceptor{ioService,
-            boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 5555)};
+        ip::tcp::acceptor acceptor{
+            ioService, ip::tcp::endpoint(ip::tcp::v4(), 5555)};
 
         listening = true;
 
