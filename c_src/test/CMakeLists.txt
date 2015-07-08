@@ -34,3 +34,6 @@ foreach(TEST_FILE ${TESTS})
 
     add_test(${TEST_NAME} ${TEST_NAME})
 endforeach()
+
+add_executable(bandwidthCap bandwidthCap.cpp)
+target_link_libraries(bandwidthCap PRIVATE compile_options common_libraries)
