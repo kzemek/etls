@@ -10,13 +10,14 @@ project(erlang_tls C CXX)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(Threads REQUIRED)
-find_package(OpenSSL REQUIRED)
 find_package(Erlang REQUIRED)
 
 if(APPLE)
     set(CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS
         "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS} -flat_namespace -undefined dynamic_lookup")
 endif(APPLE)
+
+add_subdirectory(deps/boringssl)
 
 add_library(compile_options INTERFACE)
 target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)
@@ -26,9 +27,10 @@ target_compile_definitions(compile_options INTERFACE
 add_library(common_libraries INTERFACE)
 target_link_libraries(common_libraries INTERFACE
     ${CMAKE_THREAD_LIBS_INIT}
-    ${OPENSSL_LIBRARIES})
+    ssl
+    crypto)
 target_include_directories(common_libraries SYSTEM INTERFACE
-    ${OPENSSL_INCLUDE_DIR}
+    ${CMAKE_SOURCE_DIR}/deps/boringssl/include
     ${ERLANG_ERTS_INCLUDE_PATH}
     ${PROJECT_SOURCE_DIR}/deps/asio/asio/include)
 

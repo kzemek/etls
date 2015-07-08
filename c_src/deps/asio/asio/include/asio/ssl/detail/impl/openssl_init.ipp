@@ -63,10 +63,9 @@ public:
     ::CRYPTO_set_id_callback(0);
     ::CRYPTO_set_locking_callback(0);
     ::ERR_free_strings();
-    ::ERR_remove_state(0);
+    ::ERR_remove_thread_state(NULL);
     ::EVP_cleanup();
     ::CRYPTO_cleanup_all_ex_data();
-    ::CONF_modules_unload(1);
 #if !defined(OPENSSL_NO_ENGINE)
     ::ENGINE_cleanup();
 #endif // !defined(OPENSSL_NO_ENGINE)
