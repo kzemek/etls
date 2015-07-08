@@ -1,3 +1,18 @@
+/**
+ * @file bandwidthCap.cpp
+ * @author Konrad Zemek
+ * @copyright (C) 2015 ACK CYFRONET AGH
+ * @copyright This software is released under the MIT license cited in
+ * 'LICENSE.txt'
+ *
+ * This file contains a simple benchmark of possible single-connection bandwidth
+ * and message throughput using ASIO + SSL.
+ * Client and server sockets are run from dedicated threads. The time is
+ * measured between [start sending messages] and [stop receiving message].
+ * Bandwidth is measured on a relatively small number of 100 MB messages,
+ * message throughput is measured by sending a large number of 1 B messages.
+ */
+
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
@@ -50,7 +65,8 @@ auto writer(std::size_t messageSize, std::size_t messages)
     });
 }
 
-auto reader(std::size_t messageSize, std::size_t messages, std::atomic<bool> &listening)
+auto reader(
+    std::size_t messageSize, std::size_t messages, std::atomic<bool> &listening)
 {
     return withIoService([&](auto &ioService) {
         ssl::context context{ssl::context::tlsv12_server};
@@ -88,10 +104,10 @@ std::chrono::seconds measure(size_t messageSize, size_t send)
     std::atomic<bool> listening{false};
     const auto messages = send / messageSize;
 
-    auto stoppedReadingF = std::async(
-        std::launch::async, [&] { return reader(messageSize, messages, listening); });
+    auto stoppedReadingF = std::async(std::launch::async,
+        [&] { return reader(messageSize, messages, listening); });
 
-    while(!listening)
+    while (!listening)
         std::this_thread::yield();
 
     auto startWritingF = std::async(
