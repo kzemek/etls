@@ -7,6 +7,11 @@
 %%%--------------------------------------------------------------------
 %%% @doc
 %%% Performance benchmarks of erlang-tls.
+%%% The module benchmarks connection's bandwidth and message throughput
+%%% using various configuration parameters specified in config/1.
+%%% The benchmark is run from console by calling run/0. ssl2's and
+%%% dependencies' ebin directories must be present in the code path,
+%%% and the CWD must be set to <erlang-tls dir>/test.
 %%% @end
 %%%--------------------------------------------------------------------
 

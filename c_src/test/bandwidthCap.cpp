@@ -1,3 +1,18 @@
+/**
+ * @file bandwidthCap.cpp
+ * @author Konrad Zemek
+ * @copyright (C) 2015 ACK CYFRONET AGH
+ * @copyright This software is released under the MIT license cited in
+ * 'LICENSE.txt'
+ *
+ * This file contains a simple benchmark of possible single-connection bandwidth
+ * and message throughput using ASIO + SSL.
+ * Client and server sockets are run from dedicated threads. The time is
+ * measured between [start sending messages] and [stop receiving message].
+ * Bandwidth is measured on a relatively small number of 100 MB messages,
+ * message throughput is measured by sending a large number of 1 B messages.
+ */
+
 #include <asio.hpp>
 #include <asio/ssl.hpp>
 
