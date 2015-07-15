@@ -7,33 +7,44 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(erlang_tls C CXX)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE True)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+# Setup Threads
 find_package(Threads REQUIRED)
+
+# Setup Erlang
 find_package(Erlang REQUIRED)
+
+# Setup BoringSSL
+add_subdirectory(deps/boringssl)
+set(BORINGSSL_LIBRARIES ssl crypto)
+set(BORINGSSL_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/deps/boringssl/include)
+
+# Setup Asio
+set(ASIO_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/deps/asio/asio/include)
 
 if(APPLE)
     set(CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS
         "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS} -flat_namespace -undefined dynamic_lookup")
 endif(APPLE)
 
-add_subdirectory(deps/boringssl)
-
-add_library(compile_options INTERFACE)
-target_compile_options(compile_options INTERFACE -std=c++14 -Wall -Wpedantic)
-target_compile_definitions(compile_options INTERFACE
-    -DASIO_STANDALONE)
-
-add_library(common_libraries INTERFACE)
-target_link_libraries(common_libraries INTERFACE
-    ${CMAKE_THREAD_LIBS_INIT}
-    ssl
-    crypto)
-target_include_directories(common_libraries SYSTEM INTERFACE
-    ${CMAKE_SOURCE_DIR}/deps/boringssl/include
-    ${ERLANG_ERTS_INCLUDE_PATH}
-    ${PROJECT_SOURCE_DIR}/deps/asio/asio/include)
+add_compile_options(-Wall -Wpedantic)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+add_definitions(-DASIO_STANDALONE)
 
 enable_testing()
 add_subdirectory(src)
-add_subdirectory(test)
+add_subdirectory(test EXCLUDE_FROM_ALL)
+
+add_library(erlang_tls SHARED src/wrapper.cpp ${PROJECT_SOURCES})
+target_link_libraries(erlang_tls PRIVATE
+    ${ERLANG_TLS_LIBRARIES})
+target_include_directories(erlang_tls SYSTEM PRIVATE
+    ${ERLANG_ERTS_INCLUDE_PATH}
+    ${ERLANG_TLS_SYSTEM_INCLUDE_DIRS})
+target_include_directories(erlang_tls PRIVATE
+    ${ERLANG_TLS_INCLUDE_DIRS})
+set_target_properties(erlang_tls PROPERTIES SUFFIX .so)
+
+install(TARGETS erlang_tls DESTINATION .)
