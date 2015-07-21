@@ -41,8 +41,10 @@ struct TLSSocketTest : public Test {
 struct TLSSocketTestC : public TLSSocketTest {
     TLSSocketTestC()
     {
-        socket->connectAsync(socket, host, port, {[](auto) {}, [](auto) {}});
-        server.waitForConnection(5s);
+        std::atomic<bool> connected{false};
+        socket->connectAsync(
+            socket, host, port, {[&](auto) { connected = true; }, [](auto) {}});
+        waitFor(connected);
     }
 };
 
@@ -76,7 +78,7 @@ TEST_F(TLSSocketTest, shouldNotifyOnConnectionError)
 TEST_F(TLSSocketTestC, shouldSendMessages)
 {
     const auto data = randomData();
-    socket->sendAsync(socket, asio::buffer(data), {[]() {}, [](auto) {}});
+    socket->sendAsync(socket, asio::buffer(data), {[] {}, [](auto) {}});
 
     std::vector<char> received(data.size());
     server.receive(asio::buffer(received));

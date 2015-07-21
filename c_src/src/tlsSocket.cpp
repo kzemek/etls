@@ -18,13 +18,21 @@
 #include <system_error>
 #include <vector>
 
+namespace {
+asio::ssl::context &prepareContext(asio::ssl::context &context)
+{
+    context.set_options(asio::ssl::context::default_workarounds);
+    return context;
+}
+} // namespace
+
 namespace one {
 namespace etls {
 
 TLSSocket::TLSSocket(TLSApplication &app)
     : m_ioService{app.ioService()}
     , m_resolver{m_ioService}
-    , m_socket{m_ioService, m_clientContext}
+    , m_socket{m_ioService, prepareContext(m_clientContext)}
 {
     namespace p = std::placeholders;
     m_socket.set_verify_mode(asio::ssl::verify_none);

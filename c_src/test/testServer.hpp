@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <memory>
 #include <thread>
 
@@ -68,15 +69,15 @@ TestServer::TestServer(const unsigned short port)
     , m_session{m_ioService, m_context}
 {
     m_acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
-
     m_thread = std::thread{[this] {
         try {
             m_ioService.run();
         }
-        catch (...) {
+        catch (const std::exception &e) {
+            std::cerr << e.what() << std::endl;
+            throw;
         }
     }};
-
     accept();
 }
 
@@ -93,7 +94,7 @@ bool TestServer::waitForConnection(std::chrono::milliseconds timeout)
         if (std::chrono::steady_clock::now() > start + timeout)
             return false;
 
-        std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
 
     return true;
@@ -102,25 +103,35 @@ bool TestServer::waitForConnection(std::chrono::milliseconds timeout)
 void TestServer::send(asio::const_buffer buffer)
 {
     std::atomic<bool> done{false};
-    m_ioService.post([&, this] {
-        asio::async_write(m_session, asio::const_buffers_1{buffer},
-            [&](auto, auto) { done = true; });
+    asio::post(m_ioService, [&] {
+        asio::async_write(
+            m_session, asio::const_buffers_1{buffer}, [&](auto ec, auto) {
+                if (ec)
+                    throw std::system_error{ec};
+
+                done = true;
+            });
     });
 
     while (!done)
-        std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
 }
 
 void TestServer::receive(asio::mutable_buffer buffer)
 {
     std::atomic<bool> done{false};
-    m_ioService.post([&, this] {
-        asio::async_read(m_session, asio::mutable_buffers_1{buffer},
-            [&](auto, auto) { done = true; });
+    asio::post(m_ioService, [&] {
+        asio::async_read(
+            m_session, asio::mutable_buffers_1{buffer}, [&](auto ec, auto) {
+                if (ec)
+                    throw std::system_error{ec};
+
+                done = true;
+            });
     });
 
     while (!done)
-        std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
 }
 
 void TestServer::failConnection() { m_failConnection = true; }
@@ -129,19 +140,28 @@ void TestServer::fail() { m_session.lowest_layer().close(); }
 
 void TestServer::accept()
 {
-    m_ioService.post([this] {
-        m_acceptor.async_accept(m_session.lowest_layer(), [this](auto ec) {
-            this->m_session.lowest_layer().set_option(
-                asio::ip::tcp::no_delay{true});
+    asio::post(m_ioService, [this] {
+        m_acceptor.async_accept(
+            m_session.lowest_layer(), [this](const std::error_code &ec) {
+                if (ec)
+                    throw std::system_error{ec};
 
-            if (this->m_failConnection) {
-                this->m_session.lowest_layer().close();
-                return;
-            }
+                m_session.lowest_layer().set_option(
+                    asio::ip::tcp::no_delay{true});
 
-            this->m_session.async_handshake(asio::ssl::stream_base::server,
-                [this](auto) { this->m_connected = true; });
-        });
+                if (m_failConnection) {
+                    m_session.lowest_layer().close();
+                    return;
+                }
+
+                m_session.async_handshake(asio::ssl::stream_base::server,
+                    [this](const std::error_code &ec1) {
+                        if (ec1)
+                            throw std::system_error{ec1};
+
+                        m_connected = true;
+                    });
+            });
     });
 }
 
