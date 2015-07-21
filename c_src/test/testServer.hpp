@@ -103,8 +103,7 @@ void TestServer::send(asio::const_buffer buffer)
 {
     std::atomic<bool> done{false};
     m_ioService.post([&, this] {
-        asio::async_write(m_session,
-            asio::const_buffers_1{buffer},
+        asio::async_write(m_session, asio::const_buffers_1{buffer},
             [&](auto, auto) { done = true; });
     });
 
@@ -116,8 +115,7 @@ void TestServer::receive(asio::mutable_buffer buffer)
 {
     std::atomic<bool> done{false};
     m_ioService.post([&, this] {
-        asio::async_read(m_session,
-            asio::mutable_buffers_1{buffer},
+        asio::async_read(m_session, asio::mutable_buffers_1{buffer},
             [&](auto, auto) { done = true; });
     });
 
@@ -141,9 +139,8 @@ void TestServer::accept()
                 return;
             }
 
-            this->m_session.async_handshake(
-                asio::ssl::stream_base::server,
-                [this](auto ec) { this->m_connected = true; });
+            this->m_session.async_handshake(asio::ssl::stream_base::server,
+                [this](auto) { this->m_connected = true; });
         });
     });
 }

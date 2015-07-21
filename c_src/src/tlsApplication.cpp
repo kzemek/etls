@@ -20,16 +20,16 @@ TLSApplication::TLSApplication(std::size_t n)
     std::generate_n(std::back_inserter(m_ioServices), m_threadsNum,
         [] { return std::make_unique<asio::io_service>(1); });
 
-    for (auto &ioService : m_ioServices) {
-        m_works.emplace_back(asio::make_work(*ioService));
-        m_threads.emplace_back([&] { ioService->run(); });
+    for (auto &ios : m_ioServices) {
+        m_works.emplace_back(asio::make_work(*ios));
+        m_threads.emplace_back([&] { ios->run(); });
     }
 }
 
 TLSApplication::~TLSApplication()
 {
-    for (auto &ioService : m_ioServices)
-        ioService->stop();
+    for (auto &ios : m_ioServices)
+        ios->stop();
 
     for (auto &thread : m_threads)
         thread.join();
