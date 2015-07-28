@@ -19,9 +19,6 @@
 %%% Test generators
 %%%===================================================================
 
-api_test_() ->
-    [fun listen_should_be_callable/0].
-
 connection_test_() ->
     [{foreach, fun start_server/0, fun stop_server/1, [
         fun connect_should_establish_a_secure_connection/1,
@@ -63,14 +60,14 @@ server_test_() ->
 %%% Test functions
 %%%===================================================================
 
-listen_should_be_callable() ->
+listen_should_be_callable_test() ->
     ssl2:listen(12345, [{certfile, "server.pem"}]).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
     ssl2:connect("localhost", Port, [], ?TIMEOUT),
     receive
         {Ref, Result} ->
-            [?_assertEqual(connected, Result)]
+            ?_assertEqual(connected, Result)
     end.
 
 send_should_send_a_message({Ref, Server, Sock}) ->
@@ -79,7 +76,7 @@ send_should_send_a_message({Ref, Server, Sock}) ->
     Server ! {'receive', byte_size(Data)},
     receive
         {Ref, 'receive', Result} ->
-            [?_assertEqual({ok, Data}, Result)]
+            ?_assertEqual({ok, Data}, Result)
     end.
 
 receive_should_receive_a_message({Ref, Server, Sock}) ->
@@ -88,10 +85,11 @@ receive_should_receive_a_message({Ref, Server, Sock}) ->
     receive
         {Ref, send, Result} ->
             RecvResult = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
-            [
-                ?_assertEqual(ok, Result),
-                ?_assertEqual({ok, Data}, RecvResult)
-            ]
+
+            {?LINE, fun() ->
+                ?assertEqual(ok, Result),
+                ?assertEqual({ok, Data}, RecvResult)
+            end}
     end.
 
 receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
@@ -100,10 +98,11 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
     receive
         {Ref, send, Result} ->
             RecvResult = ssl2:recv(Sock, 0, ?TIMEOUT),
-            [
-                ?_assertEqual(ok, Result),
-                ?_assertEqual({ok, Data}, RecvResult)
-            ]
+
+            {?LINE, fun() ->
+                ?assertEqual(ok, Result),
+                ?assertEqual({ok, Data}, RecvResult)
+            end}
     end.
 
 accept_should_accept_connections({Ref, Port}) ->
@@ -120,7 +119,7 @@ accept_should_accept_connections({Ref, Port}) ->
 
     receive
         {Ref, Result} ->
-            [?_assertMatch({ok, _}, Result)]
+            ?_assertMatch({ok, _}, Result)
     end.
 
 sockets_should_communicate({Ref, Port}) ->
@@ -150,10 +149,10 @@ sockets_should_communicate({Ref, Port}) ->
     ServerRecv = ssl2:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
     ClientRecv = ssl2:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
 
-    [
-        ?_assertEqual({ok, ClientSend}, ServerRecv),
-        ?_assertEqual({ok, ServerSend}, ClientRecv)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({ok, ClientSend}, ServerRecv),
+        ?assertEqual({ok, ServerSend}, ClientRecv)
+    end}.
 
 connect_should_honor_active_once({_Ref, Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [{active, once}], ?TIMEOUT),
@@ -174,10 +173,10 @@ connect_should_honor_active_once({_Ref, Server, Port}) ->
 
     Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
 
-    [
-        ?_assertEqual({ok, Data1}, Result1),
-        ?_assertEqual({ok, Data2}, Result2)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({ok, Data1}, Result1),
+        ?assertEqual({ok, Data2}, Result2)
+    end}.
 
 connect_should_honor_active_true({_Ref, Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [{active, true}], ?TIMEOUT),
@@ -200,10 +199,10 @@ connect_should_honor_active_true({_Ref, Server, Port}) ->
     Result1 = Receive(),
     Result2 = Receive(),
 
-    [
-        ?_assertEqual({ok, Data1}, Result1),
-        ?_assertEqual({ok, Data2}, Result2)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({ok, Data1}, Result1),
+        ?assertEqual({ok, Data2}, Result2)
+    end}.
 
 setopts_should_honor_active_once({_Ref, Server, Sock}) ->
     ssl2:setopts(Sock, [{active, once}]),
@@ -224,10 +223,10 @@ setopts_should_honor_active_once({_Ref, Server, Sock}) ->
 
     Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
 
-    [
-        ?_assertEqual({ok, Data1}, Result1),
-        ?_assertEqual({ok, Data2}, Result2)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({ok, Data1}, Result1),
+        ?assertEqual({ok, Data2}, Result2)
+    end}.
 
 setopts_should_honor_active_true({_Ref, Server, Sock}) ->
     ssl2:setopts(Sock, [{active, true}]),
@@ -250,10 +249,10 @@ setopts_should_honor_active_true({_Ref, Server, Sock}) ->
     Result1 = Receive(),
     Result2 = Receive(),
 
-    [
-        ?_assertEqual({ok, Data1}, Result1),
-        ?_assertEqual({ok, Data2}, Result2)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({ok, Data1}, Result1),
+        ?assertEqual({ok, Data2}, Result2)
+    end}.
 
 socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
     ssl2:setopts(Sock, [{active, true}]),
@@ -264,7 +263,8 @@ socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
-    [?_assertEqual(ok, Result)].
+
+    ?_assertEqual(ok, Result).
 
 connect_should_respect_packet_options({Ref, Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [{packet, 2}]),
@@ -281,10 +281,10 @@ connect_should_respect_packet_options({Ref, Server, Port}) ->
     receive
         {Ref, 'receive', Result} ->
             Received = ssl2:recv(Sock, 12345, ?TIMEOUT),
-            [
-                ?_assertEqual({ok, ExpectedData}, Result),
-                ?_assertEqual({ok, Data}, Received)
-            ]
+            {?LINE, fun() ->
+                ?assertEqual({ok, ExpectedData}, Result),
+                ?assertEqual({ok, Data}, Received)
+            end}
     end.
 
 setopts_should_respect_packet_options({Ref, Server, Sock}) ->
@@ -302,10 +302,10 @@ setopts_should_respect_packet_options({Ref, Server, Sock}) ->
     receive
         {Ref, 'receive', Result} ->
             Received = ssl2:recv(Sock, 54321, ?TIMEOUT),
-            [
-                ?_assertEqual({ok, ExpectedData}, Result),
-                ?_assertEqual({ok, Data}, Received)
-            ]
+            {?LINE, fun() ->
+                ?assertEqual({ok, ExpectedData}, Result),
+                ?assertEqual({ok, Data}, Received)
+            end}
     end.
 
 recv_should_allow_for_new_caller_after_timeout({_Ref, Server, Sock}) ->
@@ -313,7 +313,7 @@ recv_should_allow_for_new_caller_after_timeout({_Ref, Server, Sock}) ->
     {error, timeout} = ssl2:recv(Sock, byte_size(Data), 0),
     Server ! {send, Data},
     Result = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
-    [?_assertEqual({ok, Data}, Result)].
+    ?_assertEqual({ok, Data}, Result).
 
 recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
     ok = ssl2:setopts(Sock, [{active, true}]),
@@ -338,10 +338,10 @@ recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
                     {error, test_timeout}
                 end,
 
-            [
-                ?_assertEqual({ok, Data1}, Result),
-                ?_assertEqual(Data2, Result2)
-            ]
+            {?LINE, fun() ->
+                ?assertEqual({ok, Data1}, Result),
+                ?assertEqual(Data2, Result2)
+            end}
     end.
 
 socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
@@ -363,7 +363,7 @@ socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
 
     receive
         {NewRef, Res} ->
-            [?_assertEqual(Data, Res)]
+            ?_assertEqual(Data, Res)
     end.
 
 socket_should_hold_peername({_Ref, _Server, Port}) ->
@@ -372,14 +372,14 @@ socket_should_hold_peername({_Ref, _Server, Port}) ->
 
 socket_should_hold_sockname({_Ref, _Server, Port}) ->
     {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
-    [
-        ?_assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
-        ?_assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
-    ].
+    {?LINE, fun() ->
+        ?assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
+        ?assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
+    end}.
 
 acceptor_should_hold_sockname({_Ref, Port}) ->
     {ok, Acceptor} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
-    [?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, ssl2:sockname(Acceptor))].
+    ?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, ssl2:sockname(Acceptor)).
 
 socket_should_be_closeable({_Ref, _Server, Sock}) ->
     ssl2:setopts(Sock, [{active, once}]),
@@ -390,32 +390,32 @@ socket_should_be_closeable({_Ref, _Server, Sock}) ->
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
-    [?_assertEqual({ssl2_closed, Sock}, Result)].
+    ?_assertEqual({ssl2_closed, Sock}, Result).
 
 socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
     {ok, Der} = ssl2:peercert(Sock),
     Cert = public_key:pkix_decode_cert(Der, otp),
     TBSCert = Cert#'OTPCertificate'.tbsCertificate,
     Serial = TBSCert#'OTPTBSCertificate'.serialNumber,
-    [?_assertEqual(10728077368415183536, Serial)].
+    ?_assertEqual(10728077368415183536, Serial).
 
 socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
     ok = ssl2:close(Sock),
     SendResult = ssl2:send(Sock, random_data()),
     RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
-    [
-        ?_assertEqual({error, closed}, SendResult),
-        ?_assertEqual({error, closed}, RecvResult)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual({error, closed}, SendResult),
+        ?assertEqual({error, closed}, RecvResult)
+    end}.
 
 socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
     ok = ssl2:shutdown(Sock, read),
     SendResult = ssl2:send(Sock, random_data()),
     RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
-    [
-        ?_assertEqual(ok, SendResult),
-        ?_assertEqual({error, closed}, RecvResult)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual(ok, SendResult),
+        ?assertEqual({error, closed}, RecvResult)
+    end}.
 
 socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
     {_, _, Supervisor, _, _} = Sock,
@@ -424,10 +424,10 @@ socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
 
     timer:sleep(250),
 
-    [
-        ?_assertEqual(false, is_process_alive(Supervisor)),
-        ?_assertEqual({error, closed}, RecvResult)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual(false, is_process_alive(Supervisor)),
+        ?assertEqual({error, closed}, RecvResult)
+    end}.
 
 socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) ->
     ssl2:setopts(Sock, [{exit_on_close, false}]),
@@ -438,10 +438,10 @@ socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) 
 
     timer:sleep(250),
 
-    [
-        ?_assertEqual(true, is_process_alive(Supervisor)),
-        ?_assertEqual({error, closed}, RecvResult)
-    ].
+    {?LINE, fun() ->
+        ?assertEqual(true, is_process_alive(Supervisor)),
+        ?assertEqual({error, closed}, RecvResult)
+    end}.
 
 %%%===================================================================
 %%% Test fixtures

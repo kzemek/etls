@@ -65,6 +65,38 @@ nifpp::str_atom error{"error"};
  */
 one::etls::TLSApplication app;
 
+void setTLSOptions(one::etls::detail::WithSSLContext &object,
+    std::string verifyMode, bool failIfNoPeerCert, bool verifyClientOnce,
+    const std::vector<std::string> &CAs, const std::vector<std::string> &CRLs,
+    const std::vector<std::string> &chain)
+{
+    if (verifyMode == "verify_none") {
+        object.setVerifyMode(asio::ssl::verify_none);
+    }
+    else if (verifyMode == "verify_peer") {
+        auto mode = asio::ssl::verify_peer;
+        if (failIfNoPeerCert)
+            mode |= asio::ssl::verify_fail_if_no_peer_cert;
+
+        if (verifyClientOnce)
+            mode |= asio::ssl::verify_client_once;
+
+        object.setVerifyMode(mode);
+    }
+    else {
+        throw nifpp::badarg{};
+    }
+
+    for (auto &ca : CAs)
+        object.addCertificateAuthority(asio::buffer(ca));
+
+    for (auto &crl : CRLs)
+        object.addCertificateRevocationList(asio::buffer(crl));
+
+    for (auto &cert : chain)
+        object.addChainCertificate(asio::buffer(cert));
+}
+
 /**
  * Creates a callback object.
  * @param localEnv A local NIF environment.
@@ -134,7 +166,10 @@ ERL_NIF_TERM wrap(ERL_NIF_TERM (*fun)(ErlNifEnv *, Env, ErlNifPid, Args...),
 }
 
 ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
-    std::string host, int port)
+    std::string host, int port, std::string certPath, std::string keyPath,
+    std::string verifyMode, bool failIfNoPeerCert, bool verifyClientOnce,
+    std::string rfc2818Hostname, std::vector<std::string> CAs,
+    std::vector<std::string> CRLs, std::vector<std::string> chain)
 {
     nifpp::TERM ref{enif_make_copy(localEnv, r)};
 
@@ -149,7 +184,12 @@ ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
         enif_send(nullptr, &pid, localEnv, message);
     };
 
-    auto sock = std::make_shared<one::etls::TLSSocket>(app);
+    auto sock = std::make_shared<one::etls::TLSSocket>(
+        app, certPath, keyPath, std::move(rfc2818Hostname));
+
+    setTLSOptions(*sock, verifyMode, failIfNoPeerCert, verifyClientOnce,
+        std::move(CAs), std::move(CRLs), std::move(chain));
+
     auto callback = createCallback<one::etls::TLSSocket::Ptr>(
         localEnv, pid, ref, std::move(onSuccess));
 
@@ -207,10 +247,16 @@ ERL_NIF_TERM recv(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
 }
 
 ERL_NIF_TERM listen(ErlNifEnv *env, Env /*localEnv*/, ErlNifPid /*pid*/,
-    int port, std::string certPath, std::string keyPath)
+    int port, std::string certPath, std::string keyPath, std::string verifyMode,
+    bool failIfNoPeerCert, bool verifyClientOnce, std::string rfc2818Hostname,
+    std::vector<std::string> CAs, std::vector<std::string> CRLs,
+    std::vector<std::string> chain)
 {
-    auto acceptor =
-        std::make_shared<one::etls::TLSAcceptor>(app, port, certPath, keyPath);
+    auto acceptor = std::make_shared<one::etls::TLSAcceptor>(
+        app, port, certPath, keyPath, std::move(rfc2818Hostname));
+
+    setTLSOptions(*acceptor, verifyMode, failIfNoPeerCert, verifyClientOnce,
+        std::move(CAs), std::move(CRLs), std::move(chain));
 
     auto res = nifpp::construct_resource<one::etls::TLSAcceptor::Ptr>(acceptor);
 
@@ -474,8 +520,8 @@ static ERL_NIF_TERM shutdown_nif(
     return wrap(shutdown, env, argv);
 }
 
-static ErlNifFunc nif_funcs[] = {{"connect", 3, connect_nif},
-    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 3, listen_nif},
+static ErlNifFunc nif_funcs[] = {{"connect", 12, connect_nif},
+    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 10, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
     {"peername", 2, peername_nif}, {"sockname", 2, sockname_nif},
     {"acceptor_sockname", 2, acceptor_sockname_nif}, {"close", 2, close_nif},

@@ -10,6 +10,7 @@
 #define ONE_ETLS_TLS_ACCEPTOR_HPP
 
 #include "callback.hpp"
+#include "detail.hpp"
 #include "tlsSocket.hpp"
 
 #include <asio/io_service.hpp>
@@ -28,7 +29,7 @@ class TLSApplication;
  * The @c TLSAcceptor class is responsible for representing an acceptor socket
  * and its interface methods.
  */
-class TLSAcceptor {
+class TLSAcceptor : public detail::WithSSLContext {
 public:
     /**
      * A shortcut alias for frequent usage.
@@ -46,7 +47,8 @@ public:
      * @param keyPath Path to a PEM keyfile to use for the TLS connection.
      */
     TLSAcceptor(TLSApplication &m_app, const unsigned short port,
-        const std::string &certPath, const std::string &keyPath);
+        const std::string &certPath, const std::string &keyPath,
+        std::string rfc2818Hostname = "");
 
     /**
      * Asynchronously accepts a single pending connection.
@@ -72,7 +74,6 @@ private:
     TLSApplication &m_app;
     asio::io_service &m_ioService;
     asio::ip::tcp::acceptor m_acceptor;
-    asio::ssl::context m_context{asio::ssl::context::tlsv12_server};
 };
 
 } // namespace etls

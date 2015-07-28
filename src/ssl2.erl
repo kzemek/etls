@@ -30,17 +30,30 @@
     certificate_chain/1, shutdown/2]).
 
 %% Types
--type opts() :: [
-{packet, raw | 0 | 1 | 2 | 4} |
-{active, false | once | true} |
-{exit_on_close, boolean()}
-].
+-type der_encoded() :: binary().
+-type pem_encoded() :: binary().
+-type str() :: binary() | string().
 
--type listen_opts() :: [{certfile, string()} | {keyfile, string()}].
+-type option() ::
+{packet, raw | 0 | 1 | 2 | 4} |
+{active, boolean() | once} |
+{exit_on_close, boolean()}.
+
+-type ssl_option() ::
+{verify_type, verify_none | verify_peer} |
+{fail_if_no_peer_cert, boolean()} |
+{verify_client_once, boolean()} |
+{rfc2818_verification_hostname, str()} |
+{cacerts, [pem_encoded()]} |
+{crls, [pem_encoded()]} |
+{certfile, str()} |
+{keyfile, str()} |
+{chain, [pem_encoded()]}.
+
 -opaque socket() :: #sock_ref{}.
 -opaque acceptor() :: #acceptor_ref{}.
 
--export_type([opts/0, listen_opts/0, socket/0, acceptor/0]).
+-export_type([option/0, ssl_option/0, socket/0, acceptor/0]).
 
 %%%===================================================================
 %%% API
@@ -50,7 +63,8 @@
 %% @equiv connect(Host, Port, Opts, infinity)
 %% @end
 %%--------------------------------------------------------------------
--spec connect(Host :: string(), Port :: inet:port_number(), Opts :: opts()) ->
+-spec connect(Host :: str(), Port :: inet:port_number(),
+    Opts :: [option() | ssl_option()]) ->
     {ok, Socket :: socket()} |
     {error, Reason :: atom()}.
 connect(Host, Port, Options) ->
@@ -61,13 +75,19 @@ connect(Host, Port, Options) ->
 %% Opens an ssl connection to Host, Port.
 %% @end
 %%--------------------------------------------------------------------
--spec connect(Host :: string(), Port :: inet:port_number(),
-    Opts :: opts(), Timeout :: timeout()) ->
+-spec connect(Host :: str(), Port :: inet:port_number(),
+    Opts :: [option() | ssl_option()], Timeout :: timeout()) ->
     {ok, Socket :: socket()} |
     {error, Reason :: atom()}.
 connect(Host, Port, Options, Timeout) ->
     Ref = make_ref(),
-    case ssl2_nif:connect(Ref, Host, Port) of
+
+    {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
+        RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
+
+    case ssl2_nif:connect(Ref, Host, Port, CertPath, KeyPath, VerifyType,
+        FailIfNoPeerCert, VerifyClientOnce, RFC2818Hostname,
+        CAs, CRLs, Chain) of
         ok ->
             receive
                 {Ref, {ok, Sock}} -> start_socket_processes(Sock, Options);
@@ -129,14 +149,17 @@ recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
 %% Creates an acceptor (listen socket).
 %% @end
 %%--------------------------------------------------------------------
--spec listen(Port :: inet:port_number(), Opts :: listen_opts()) ->
+-spec listen(Port :: inet:port_number(), Opts :: [ssl_option()]) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
 listen(Port, Options) ->
     true = proplists:is_defined(certfile, Options),
-    CertPath = proplists:get_value(certfile, Options),
-    KeyPath = proplists:get_value(keyfile, Options, CertPath),
-    case ssl2_nif:listen(Port, CertPath, KeyPath) of
+
+    {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
+        RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
+
+    case ssl2_nif:listen(Port, CertPath, KeyPath, VerifyType, FailIfNoPeerCert,
+        VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain) of
         {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -211,7 +234,7 @@ handshake(#sock_ref{socket = Sock}, Timeout) ->
 %% Sets options according to Options for the socket Socket.
 %% @end
 %%--------------------------------------------------------------------
--spec setopts(Socket :: socket(), Opts :: opts()) -> ok.
+-spec setopts(Socket :: socket(), Opts :: [option()]) -> ok.
 setopts(#sock_ref{receiver = Receiver, sender = Sender}, Options) ->
     gen_fsm:send_all_state_event(Receiver, {setopts, Options}),
     gen_fsm:send_all_state_event(Sender, {setopts, Options}),
@@ -285,7 +308,7 @@ close(#sock_ref{socket = Sock, supervisor = Sup}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec peercert(Socket :: socket()) ->
-    {ok, binary()} |
+    {ok, der_encoded()} |
     {error, Reason :: no_peer_certificate | atom()}.
 peercert(SockRef) ->
     case certificate_chain(SockRef) of
@@ -300,7 +323,7 @@ peercert(SockRef) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec certificate_chain(Socket :: socket()) ->
-    {ok, [binary()]} | {error, Reason :: atom()}.
+    {ok, [der_encoded()]} | {error, Reason :: atom()}.
 certificate_chain(#sock_ref{socket = Sock}) ->
     case ssl2_nif:certificate_chain(Sock) of
         {ok, Chain} -> {ok, Chain};
@@ -344,7 +367,8 @@ shutdown(SockRef, Type) ->
 %% Returns a reference for the socket that is usable by the client.
 %% @end
 %%--------------------------------------------------------------------
--spec start_socket_processes(Socket :: ssl2_nif:socket(), Options :: opts()) ->
+-spec start_socket_processes(Socket :: ssl2_nif:socket(),
+    Options :: [option()]) ->
     {ok, SockRef :: socket()}.
 start_socket_processes(Sock, Options) ->
     Args = [Sock, Options, self()],
@@ -376,3 +400,31 @@ parse_name_result({ok, {StrAddress, Port}}) ->
     {ok, {Addr, Port}};
 parse_name_result(Result) ->
     Result.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Extracts common TLS settings out of a proplist.
+%% @end
+%%--------------------------------------------------------------------
+-spec extract_tls_settings(Opts :: proplists:proplist()) ->
+    {str(), str(), str(), boolean(), boolean(), str(),
+        [pem_encoded()], [pem_encoded()], [pem_encoded()]}.
+extract_tls_settings(Opts) ->
+    CertPath = proplists:get_value(certfile, Opts, ""),
+    KeyPath = proplists:get_value(keyfile, Opts, CertPath),
+
+    VerifyTypeAtom = proplists:get_value(verify_type, Opts, verify_none),
+    VerifyType = atom_to_list(VerifyTypeAtom),
+
+    FailIfNoPeerCert = proplists:get_bool(fail_if_no_peer_cert, Opts),
+    VerifyClientOnce = proplists:get_bool(verify_client_once, Opts),
+    RFC2818Hostname =
+        proplists:get_value(rfc2818_verification_hostname, Opts, ""),
+
+    CAs = proplists:get_value(cacerts, Opts, []),
+    CRLs = proplists:get_value(crls, Opts, []),
+    Chain = proplists:get_value(chain, Opts, []),
+
+    {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
+        RFC2818Hostname, CAs, CRLs, Chain}.

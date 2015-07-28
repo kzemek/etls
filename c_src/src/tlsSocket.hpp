@@ -10,6 +10,7 @@
 #define ONE_ETLS_TLS_SOCKET_HPP
 
 #include "callback.hpp"
+#include "detail.hpp"
 
 #include <asio.hpp>
 #include <asio/io_service.hpp>
@@ -28,7 +29,7 @@ class TLSApplication;
 /**
  * The @c TLSSocket class is responsible for handling a single TLS socket.
  */
-class TLSSocket {
+class TLSSocket : public detail::WithSSLContext {
     friend class TLSAcceptor;
 
 public:
@@ -42,8 +43,12 @@ public:
      * Prepares a new @c asio socket with a local @c ssl::context.
      * @param app @c TLSApplication object to retrieve @c io_service for this
      * object's asynchronous operations.
+     * @param certPath Path to a PEM certificate file to use for the TLS
+     * connection.
+     * @param keyPath Path to a PEM keyfile to use for the TLS connection.
      */
-    TLSSocket(TLSApplication &app);
+    TLSSocket(TLSApplication &app, const std::string &keyPath = "",
+        const std::string &certPath = "", std::string rfc2818Hostname = "");
 
     /**
      * Constructor.
@@ -153,13 +158,13 @@ public:
      */
     void closeAsync(Ptr self, Callback<> callback);
 
+    void setVerifyMode(const asio::ssl::verify_mode mode) override;
+
 private:
+    void saveChain(bool server);
+
     std::vector<asio::ip::basic_resolver_entry<asio::ip::tcp>> shuffleEndpoints(
         asio::ip::tcp::resolver::iterator iterator);
-
-    bool saveCertificate(bool, asio::ssl::verify_context &ctx);
-
-    asio::ssl::context m_clientContext{asio::ssl::context::tlsv12_client};
 
     asio::io_service &m_ioService;
     asio::ip::tcp::resolver m_resolver;
