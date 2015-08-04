@@ -155,9 +155,9 @@ void TestServer::accept()
                 }
 
                 m_session.async_handshake(asio::ssl::stream_base::server,
-                    [this](const std::error_code &ec) {
-                        if (ec)
-                            throw std::system_error{ec};
+                    [this](const std::error_code &ec1) {
+                        if (ec1)
+                            throw std::system_error{ec1};
 
                         m_connected = true;
                     });

@@ -166,7 +166,7 @@ ERL_NIF_TERM send(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     ErlNifBinary bin;
     enif_inspect_iolist_as_binary(localEnv, data, &bin);
 
-    asio::const_buffer buffer{bin.data, bin.size};
+    asio::const_buffers_1 buffer{bin.data, bin.size};
 
     auto onSuccess = [=]() mutable {
         auto message = nifpp::make(localEnv, ok);

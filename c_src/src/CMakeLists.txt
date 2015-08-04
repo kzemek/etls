@@ -4,23 +4,33 @@
 # This software is released under the MIT license cited in 'LICENSE.txt'
 #
 
-set(SOURCES
+set(ERLANG_TLS_SYSTEM_INCLUDE_DIRS
+    ${BORINGSSL_INCLUDE_DIRS}
+    ${ASIO_INCLUDE_DIRS})
+
+add_library(erlang_tls_obj OBJECT
     callback.hpp
     tlsAcceptor.cpp
     tlsApplication.cpp
     tlsSocket.cpp)
 
-add_library(erlang_tls_obj OBJECT ${SOURCES})
-set_target_properties(erlang_tls_obj PROPERTIES
-    POSITION_INDEPENDENT_CODE True
-    COMPILE_OPTIONS "$<TARGET_PROPERTY:compile_options,INTERFACE_COMPILE_OPTIONS>"
-    COMPILE_DEFINITIONS "$<TARGET_PROPERTY:compile_options,INTERFACE_COMPILE_DEFINITIONS>")
-
 target_include_directories(erlang_tls_obj SYSTEM PRIVATE
-    $<TARGET_PROPERTY:common_libraries,INTERFACE_SYSTEM_INCLUDE_DIRECTORIES>)
+    ${ERLANG_TLS_SYSTEM_INCLUDE_DIRS})
 
-add_library(erlang_tls SHARED wrapper.cpp $<TARGET_OBJECTS:erlang_tls_obj>)
-target_link_libraries(erlang_tls PRIVATE compile_options common_libraries)
-set_target_properties(erlang_tls PROPERTIES SUFFIX .so)
+set(ERLANG_TLS_SYSTEM_INCLUDE_DIRS
+    ${ERLANG_TLS_SYSTEM_INCLUDE_DIRS}
+    PARENT_SCOPE)
 
-install(TARGETS erlang_tls DESTINATION .)
+set(ERLANG_TLS_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    PARENT_SCOPE)
+
+set(ERLANG_TLS_LIBRARIES
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${BORINGSSL_LIBRARIES}
+    PARENT_SCOPE)
+
+set(PROJECT_SOURCES
+    $<TARGET_OBJECTS:erlang_tls_obj>
+    ${PROJECT_SOURCES}
+    PARENT_SCOPE)
