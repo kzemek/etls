@@ -8,6 +8,7 @@
 
 #include "tlsSocket.hpp"
 
+#include "detail.hpp"
 #include "tlsApplication.hpp"
 
 #include <asio.hpp>
@@ -19,36 +20,45 @@
 #include <vector>
 
 namespace {
-asio::ssl::context &prepareContext(asio::ssl::context &context)
+
+std::vector<unsigned char> certToDer(X509 *cert)
 {
-    context.set_options(asio::ssl::context::default_workarounds);
-    return context;
+    if (!cert)
+        return {};
+
+    const auto dataLen = i2d_X509(cert, nullptr);
+    if (dataLen < 0)
+        return {};
+
+    std::vector<unsigned char> certificateData(dataLen);
+    auto p = certificateData.data();
+    if (i2d_X509(cert, &p) < 0)
+        return {};
+
+    return certificateData;
 }
+
 } // namespace
 
 namespace one {
 namespace etls {
 
-TLSSocket::TLSSocket(TLSApplication &app)
-    : m_ioService{app.ioService()}
+TLSSocket::TLSSocket(TLSApplication &app, const std::string &keyPath,
+    const std::string &certPath, std::string rfc2818Hostname)
+    : detail::WithSSLContext{asio::ssl::context::tlsv12_client, keyPath,
+          certPath, std::move(rfc2818Hostname)}
+    , m_ioService{app.ioService()}
     , m_resolver{m_ioService}
-    , m_socket{m_ioService, prepareContext(m_clientContext)}
+    , m_socket{m_ioService, m_context}
 {
-    namespace p = std::placeholders;
-    m_socket.set_verify_mode(asio::ssl::verify_none);
-    m_socket.set_verify_callback(
-        std::bind(&TLSSocket::saveCertificate, this, p::_1, p::_2));
 }
 
 TLSSocket::TLSSocket(TLSApplication &app, asio::ssl::context &context)
-    : m_ioService{app.ioService()}
+    : detail::WithSSLContext{asio::ssl::context::tlsv12_client}
+    , m_ioService{app.ioService()}
     , m_resolver{m_ioService}
     , m_socket{m_ioService, context}
 {
-    namespace p = std::placeholders;
-    m_socket.set_verify_mode(asio::ssl::verify_none);
-    m_socket.set_verify_callback(
-        std::bind(&TLSSocket::saveCertificate, this, p::_1, p::_2));
 }
 
 void TLSSocket::connectAsync(Ptr self, std::string host,
@@ -85,10 +95,13 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
                     self = std::move(self),
                     callback = std::move(callback)
                 ](const auto ec3) mutable {
-                    if (ec3)
+                    if (ec3) {
                         callback(ec3);
-                    else
+                    }
+                    else {
+                        saveChain(false);
                         callback(std::move(self));
+                    }
                 });
             });
     });
@@ -142,10 +155,13 @@ void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
         m_socket.async_handshake(asio::ssl::stream_base::server,
             [ =, self = std::move(self), callback = std::move(callback) ](
                                      const auto ec) {
-                if (ec)
+                if (ec) {
                     callback(ec);
-                else
+                }
+                else {
+                    saveChain(true);
                     callback();
+                }
             });
     });
 }
@@ -186,6 +202,45 @@ void TLSSocket::closeAsync(Ptr self, Callback<> callback)
     });
 }
 
+void TLSSocket::setVerifyMode(const asio::ssl::verify_mode mode)
+{
+    m_socket.set_verify_mode(mode);
+}
+
+void TLSSocket::saveChain(bool server)
+{
+    auto ssl = m_socket.native_handle();
+    if (!ssl)
+        return;
+
+    auto chain = SSL_get_peer_cert_chain(ssl);
+    if (!chain)
+        return;
+
+    decltype(m_certificateChain) certificateChain;
+
+    auto numCerts = sk_X509_num(chain);
+    for (int i = 0; i < numCerts; ++i) {
+        auto cert = sk_X509_value(chain, i);
+        auto certificateData = certToDer(cert);
+        if (certificateData.empty())
+            return;
+
+        certificateChain.emplace_back(std::move(certificateData));
+    }
+
+    if (server) {
+        auto cert = SSL_get_peer_certificate(ssl);
+        auto certificateData = certToDer(cert);
+        if (certificateData.empty())
+            return;
+
+        certificateChain.emplace_back(std::move(certificateData));
+    }
+
+    std::swap(m_certificateChain, certificateChain);
+}
+
 void TLSSocket::localEndpointAsync(
     Ptr self, Callback<const asio::ip::tcp::endpoint &> callback)
 {
@@ -223,26 +278,6 @@ TLSSocket::shuffleEndpoints(asio::ip::tcp::resolver::iterator iterator)
     std::shuffle(endpoints.begin(), endpoints.end(), engine);
 
     return endpoints;
-}
-
-bool TLSSocket::saveCertificate(bool, asio::ssl::verify_context &ctx)
-{
-    auto cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
-    if (!cert)
-        return true;
-
-    const auto dataLen = i2d_X509(cert, nullptr);
-    if (dataLen < 0)
-        return true;
-
-    std::vector<unsigned char> certificateData(dataLen);
-    auto p = certificateData.data();
-    if (i2d_X509(cert, &p) < 0)
-        return true;
-
-    m_certificateChain.emplace_back(std::move(certificateData));
-
-    return true;
 }
 
 } // namespace etls

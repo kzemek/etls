@@ -14,14 +14,14 @@ namespace one {
 namespace etls {
 
 TLSAcceptor::TLSAcceptor(TLSApplication &app, const unsigned short port,
-    const std::string &certPath, const std::string &keyPath)
-    : m_app{app}
+    const std::string &certPath, const std::string &keyPath,
+    std::string rfc2818Hostname)
+    : detail::WithSSLContext{asio::ssl::context::tlsv12_server, certPath,
+          keyPath, std::move(rfc2818Hostname)}
+    , m_app{app}
     , m_ioService{app.ioService()}
     , m_acceptor{m_ioService, {asio::ip::tcp::v4(), port}}
 {
-    m_context.set_options(asio::ssl::context::default_workarounds);
-    m_context.use_certificate_file(certPath, asio::ssl::context::pem);
-    m_context.use_private_key_file(keyPath, asio::ssl::context::pem);
 }
 
 void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)

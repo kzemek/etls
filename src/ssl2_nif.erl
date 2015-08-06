@@ -15,10 +15,11 @@
 -on_load(init/0).
 
 %% API
--export([connect/3, send/2, recv/2, listen/3, accept/2, handshake/2,
-    peername/2, sockname/2, acceptor_sockname/2, close/2, certificate_chain/1,
-    shutdown/3]).
+-export([connect/12, send/2, recv/2, listen/10, accept/2, handshake/2,
+    peername/2, sockname/2, acceptor_sockname/2, close/2,
+    certificate_chain/1, shutdown/3]).
 
+-type str() :: binary() | string().
 -type socket() :: term().
 -type acceptor() :: term().
 
@@ -36,10 +37,14 @@
 %% calling process.
 %% @end
 %%--------------------------------------------------------------------
--spec connect(Ref :: reference(), Host :: string(),
-    Port :: inet:port_number()) ->
+-spec connect(Ref :: reference(), Host :: str(), Port :: inet:port_number(),
+    CertPath :: str(), KeyPath :: str(), VerifyType :: str(),
+    FailIfNoPeerCert :: boolean(), VerifyClientOnce :: boolean(),
+    RFC2818Hostname :: str(), CAs :: [binary()], CRLs :: [binary()],
+    Chain :: [binary()]) ->
     ok | {error, Reason :: atom()}.
-connect(_Ref, _Host, _Port) ->
+connect(_Ref, _Host, _Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 %%--------------------------------------------------------------------
@@ -58,8 +63,8 @@ send(_Sock, _Data) ->
 %% @doc
 %% Receives a message from the Socket.
 %% When Size is 0, waits for any data to arrive on the socket.
-%% When finished, sends {ok, Data :: binary()} | {error, Reason} to the
-%% calling process.
+%% When finished, sends {ok, Data :: binary()} | {error, Reason} to
+%% the calling process.
 %% @end
 %%--------------------------------------------------------------------
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
@@ -72,11 +77,14 @@ recv(_Sock, _Size) ->
 %% Creates an acceptor socket that listens on the given port.
 %% @end
 %%--------------------------------------------------------------------
--spec listen(Port :: inet:port_number(), CertPath :: string(),
-    KeyPath :: string()) ->
+-spec listen(Port :: inet:port_number(), CertPath :: str(), KeyPath :: str(),
+    VerifyType :: str(), FailIfNoPeerCert :: boolean(),
+    VerifyClientOnce :: boolean(), RFC2818Hostname :: str(),
+    CAs :: [binary()], CRLs :: [binary()], Chain :: [binary()]) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
-listen(_Port, _CertPath, _KeyPath) ->
+listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
     erlang:nif_error(ssl2_nif_not_loaded).
 
 %%--------------------------------------------------------------------
@@ -117,7 +125,8 @@ peername(_Ref, _Sock) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a tuple {LocalHostname, LocalPort} describing the local socket.
+%% Returns a tuple {LocalHostname, LocalPort} describing the local
+%% socket.
 %% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
 %% calling process.
 %% @end
@@ -129,7 +138,8 @@ sockname(_Ref, _Sock) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a tuple {LocalHostname, LocalPort} describing the acceptor socket.
+%% Returns a tuple {LocalHostname, LocalPort} describing the acceptor
+%% socket.
 %% When finished, sends {Ref, {ok, Result} | {error, Reason}} to the
 %% calling process.
 %% @end

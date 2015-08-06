@@ -10,6 +10,7 @@ set(ERLANG_TLS_SYSTEM_INCLUDE_DIRS
 
 add_library(erlang_tls_obj OBJECT
     callback.hpp
+    detail.cpp
     tlsAcceptor.cpp
     tlsApplication.cpp
     tlsSocket.cpp)
