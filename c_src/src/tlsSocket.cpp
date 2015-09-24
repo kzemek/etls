@@ -99,7 +99,7 @@ void TLSSocket::connectAsync(Ptr self, std::string host,
                         callback(ec3);
                     }
                     else {
-                        saveChain(false);
+                        this->saveChain(false);
                         callback(std::move(self));
                     }
                 });
@@ -159,7 +159,7 @@ void TLSSocket::handshakeAsync(Ptr self, Callback<> callback)
                     callback(ec);
                 }
                 else {
-                    saveChain(true);
+                    this->saveChain(true);
                     callback();
                 }
             });
@@ -217,16 +217,16 @@ void TLSSocket::saveChain(bool server)
     if (!chain)
         return;
 
-    decltype(m_certificateChain) certificateChain;
+    decltype(m_certificateChain) certChain;
 
     auto numCerts = sk_X509_num(chain);
-    for (int i = 0; i < numCerts; ++i) {
+    for (auto i = 0u; i < numCerts; ++i) {
         auto cert = sk_X509_value(chain, i);
         auto certificateData = certToDer(cert);
         if (certificateData.empty())
             return;
 
-        certificateChain.emplace_back(std::move(certificateData));
+        certChain.emplace_back(std::move(certificateData));
     }
 
     if (server) {
@@ -235,10 +235,10 @@ void TLSSocket::saveChain(bool server)
         if (certificateData.empty())
             return;
 
-        certificateChain.emplace_back(std::move(certificateData));
+        certChain.emplace_back(std::move(certificateData));
     }
 
-    std::swap(m_certificateChain, certificateChain);
+    std::swap(m_certificateChain, certChain);
 }
 
 void TLSSocket::localEndpointAsync(
