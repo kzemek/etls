@@ -9,7 +9,7 @@ if(ANDROID)
   set(GO_EXECUTABLE "go")
 else()
   find_package(Perl REQUIRED)
-  find_program(GO_EXECUTABLE go)
+  find_program(GO_EXECUTABLE NAMES go golang-go)
 endif()
 
 if (NOT GO_EXECUTABLE)

@@ -29,7 +29,7 @@ if(APPLE)
         "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS} -flat_namespace -undefined dynamic_lookup")
 endif(APPLE)
 
-add_compile_options(-Werror -Wall -Wshadow -Wpedantic)
+add_compile_options(-Wall -Wshadow -Wpedantic)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 add_definitions(-DASIO_STANDALONE)
 
