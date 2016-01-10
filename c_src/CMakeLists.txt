@@ -19,7 +19,7 @@ execute_process(
 message(STATUS "Detecting erl_interface lib directory -- ${ERL_INTERFACE_LIB_DIR}")
 
 set(BORINGSSL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/../boringssl/include)
-set(BORINGSSL_BUILD_DIR ${CMAKE_SOURCE_DIR}/../build/boringssl/)
+set(BORINGSSL_BUILD_DIR ${CMAKE_SOURCE_DIR}/../_build/boringssl/)
 
 link_directories(${ERL_INTERFACE_LIB_DIR})
 include_directories(SYSTEM
@@ -28,15 +28,10 @@ include_directories(SYSTEM
   ${BORINGSSL_INCLUDE_DIR})
 
 add_compile_options(-std=c11 -Wall -Wshadow -pedantic)
-
-add_library(etls_crypto SHARED etls_crypto.c)
-set_target_properties(etls_crypto PROPERTIES SUFFIX .so)
-target_link_libraries(etls_crypto PRIVATE
-  ${BORINGSSL_BUILD_DIR}/crypto/libcrypto.a
-  -lerl_interface -lei)
-
-add_library(etls_ssl SHARED etls_ssl.c)
-set_target_properties(etls_ssl PROPERTIES SUFFIX .so)
-target_link_libraries(etls_ssl PRIVATE
+add_library(etls_nif SHARED etls_nif.c)
+set_target_properties(etls_nif PROPERTIES SUFFIX .so)
+target_link_libraries(etls_nif PRIVATE
   ${BORINGSSL_BUILD_DIR}/ssl/libssl.a
-  -lerl_interface -lei)
+  ${BORINGSSL_BUILD_DIR}/crypto/libcrypto.a
+  -lerl_interface
+  -lei)
