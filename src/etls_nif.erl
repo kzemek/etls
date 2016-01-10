@@ -18,7 +18,7 @@
 
 %% API
 -export([bio_new/0, bio_read/1, bio_write/2, ssl_new/0, ssl_get_error/2, ssl_set_connect_state/1, ssl_do_handshake/1,
-  ssl_set_bio/3, ssl_write/2]).
+  ssl_set_bio/3, ssl_write/2, ssl_read/2]).
 
 -spec bio_new() -> bio_handle().
 bio_new() ->
@@ -54,6 +54,10 @@ ssl_do_handshake(_SSL) ->
 
 -spec ssl_write(ssl_handle(), iodata()) -> integer().
 ssl_write(_SSL, _Data) ->
+  erlang:nif_error(etls_ssl_nif_not_loaded).
+
+-spec ssl_read(ssl_handle(), non_neg_integer()) -> binary() | integer().
+ssl_read(_SSL, _Num) ->
   erlang:nif_error(etls_ssl_nif_not_loaded).
 
 -spec init() -> ok | {error, Reason :: atom()}.

@@ -275,12 +275,40 @@ static ERL_NIF_TERM ssl_write(
     return enif_make_int(env, SSL_write(ssl, bin.data, bin.size));
 }
 
+static ERL_NIF_TERM ssl_read(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    SSL *ssl = get_ssl(env, argv[0]);
+    if (!ssl)
+        return enif_make_badarg(env);
+
+    int num;
+    if (!enif_get_int(env, argv[1], &num))
+        return enif_make_badarg(env);
+
+    ErlNifBinary bin;
+    if (!enif_alloc_binary(num, &bin))
+        return oom(env);
+
+    int read = SSL_read(ssl, bin.data, num);
+    if (read >= 0) {
+        if (!enif_realloc_binary(&bin, read))
+            return oom(env);
+
+        return enif_make_binary(env, &bin);
+    }
+
+    enif_release_binary(&bin);
+    return enif_make_int(env, read);
+}
+
 static ErlNifFunc nif_funcs[] = {{"bio_new", 0, bio_new},
     {"bio_read", 1, bio_read}, {"bio_write", 2, bio_write},
     {"ssl_new", 0, ssl_new}, {"ssl_get_error", 2, ssl_get_error},
     {"ssl_set_bio", 3, ssl_set_bio},
     {"ssl_set_connect_state", 1, ssl_set_connect_state},
     {"ssl_do_handshake", 1, ssl_do_handshake, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"ssl_write", 2, ssl_write, ERL_NIF_DIRTY_JOB_CPU_BOUND}};
+    {"ssl_write", 2, ssl_write, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"ssl_read", 2, ssl_read, ERL_NIF_DIRTY_JOB_CPU_BOUND}};
 
 ERL_NIF_INIT(etls_nif, nif_funcs, load, 0, 0, unload)

@@ -11,7 +11,7 @@
 
 %% API exports
 -export_type([sslsocket/0]).
--export([connect/2, connect/3, send/2]).
+-export([connect/2, connect/3, send/2, recv/2, recv/3]).
 
 %%====================================================================
 %% API functions
@@ -54,9 +54,37 @@ send(Socket, Data) ->
       end
   end.
 
+recv(Socket, Size) ->
+  recv(Socket, Size, infinity).
+
+recv(Socket, Size, Timeout) ->
+  recv(Socket, Size, Timeout, []).
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+recv(Socket, Size, Timeout, Acc) ->
+  #etls_handle{ssl = SSL} = Socket,
+  ReqSize = case Size of 0 -> 1024; _ -> Size end,
+  case etls_nif:ssl_read(SSL, ReqSize) of
+    <<Data/binary>> ->
+      case Size of
+        0 -> {ok, Data};
+        _ ->
+          Left = Size - byte_size(Data),
+          case Left > 0 of
+            true -> recv(Socket, Left, Timeout, [Data | Acc]);
+            false -> {ok, iolist_to_binary(lists:reverse([Data | Acc]))}
+          end
+      end;
+
+    RetCode ->
+      case handle_error(Socket, RetCode, Timeout) of
+        ok -> recv(Socket, Size, Timeout, Acc);
+        Other -> Other
+      end
+  end.
 
 handshake(Handle, Timeout) ->
   #etls_handle{ssl = SSL} = Handle,
@@ -78,16 +106,23 @@ handle_error(Handle, RetCode, Timeout) ->
     'SSL_ERROR_WANT_WRITE' ->
       push_data(Handle);
 
+    'SSL_ERROR_ZERO_RETURN' ->
+      {error, closed};
+
     Error -> {error, Error}
   end.
 
 get_data(Handle, Timeout) ->
   #etls_handle{input_bio = InputBio, socket = Socket} = Handle,
-  {ok, Data} = gen_tcp:recv(Socket, 0, Timeout),
-  DataSize = byte_size(Data),
-  case etls_nif:bio_write(InputBio, Data) of
-    DataSize -> ok;
-    _ -> {error, bio_write_error}
+  case gen_tcp:recv(Socket, 0, Timeout) of
+    {ok, Data} ->
+      DataSize = byte_size(Data),
+      case etls_nif:bio_write(InputBio, Data) of
+        DataSize -> ok;
+        _ -> {error, bio_write_error}
+      end;
+
+    Error -> Error
   end.
 
 push_data(Handle) ->
