@@ -415,7 +415,8 @@ handle_info({ok, Data}, receiving, State) ->
             recv_body(ReallyNeeded, State#state{buffer = AData})
     end;
 
-handle_info({error, 'End of file'}, _StateName, State) ->
+handle_info({error, Closed}, _StateName, State)
+  when Closed =:= 'End of file'; Closed =:= 'UNEXPECTED_RECORD' ->
     reply(State#state.caller, {error, closed}),
     {stop, {shutdown, closed}, State};
 
