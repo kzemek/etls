@@ -4,6 +4,10 @@
 CHANGELOG
 ---------
 
+### 1.0.1
+
+* app.src version repaired
+
 ### 1.0.0
 
 
