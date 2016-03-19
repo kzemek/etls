@@ -17,8 +17,9 @@
 -export_type([bio_handle/0, ssl_handle/0]).
 
 %% API
--export([bio_new/0, bio_read/1, bio_write/2, ssl_new/0, ssl_get_error/2, ssl_set_connect_state/1, ssl_do_handshake/1,
-  ssl_set_bio/3, ssl_write/2, ssl_read/2]).
+-export([bio_new/0, bio_read/1, bio_write/2, ssl_new/0, ssl_get_error/2,
+  ssl_set_connect_state/1, ssl_do_handshake/1, ssl_set_bio/3, ssl_write/2,
+  ssl_read/2]).
 
 -spec bio_new() -> bio_handle().
 bio_new() ->
