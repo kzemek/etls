@@ -12,9 +12,23 @@ magnitude higher bandwidth when encoding/decoding data.
 
 Currently only `TLSv1.2` is supported, and default [BoringSSL] cipher is used.
 
+# Build
+
+Dependencies:
+
+* `cmake` >= 3.0.0
+* `erlang` >= 17.0
+* `g++` >= 4.9.0
+* `git`
+* `golang`
+* `make`
+* `ninja-build`
+
+To build the project, simply run `make` from its directory.
+
 # User Guide
 
-Add TLS as a `rebar` dependency:
+Add TLS as a `rebar` dependency to your project:
 
 ```erlang
 {deps, [
