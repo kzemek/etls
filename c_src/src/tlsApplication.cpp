@@ -8,6 +8,8 @@
 
 #include "tlsApplication.hpp"
 
+#include "utils.hpp"
+
 #include <algorithm>
 #include <functional>
 
@@ -23,6 +25,7 @@ TLSApplication::TLSApplication(std::size_t n)
     for (auto &ios : m_ioServices) {
         m_works.emplace_back(asio::make_work(*ios));
         m_threads.emplace_back([&] { ios->run(); });
+        utils::nameThread(m_threads.back(), "TLSApplication");
     }
 }
 
