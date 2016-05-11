@@ -55,21 +55,20 @@ WithSSLContext::WithSSLContext(const asio::ssl::context_base::method method,
     X509_STORE_set_flags(
         m_context.native_handle()->cert_store, X509_V_FLAG_ALLOW_PROXY_CERTS);
 
-    m_context.set_verify_callback(
-        [ this, rfc2818Hostname = std::move(rfc2818Hostname) ](
-            auto preverify, auto &ctx) mutable {
+    m_context.set_verify_callback([
+        this, rfc2818Hostname = std::move(rfc2818Hostname)
+    ](bool preverify, asio::ssl::verify_context &ctx) mutable {
 
-            if (!preverify &&
-                X509_STORE_CTX_get_error(ctx.native_handle()) ==
-                    X509_V_ERR_UNABLE_TO_GET_CRL)
-                preverify = true;
+        if (!preverify &&
+            X509_STORE_CTX_get_error(ctx.native_handle()) ==
+                X509_V_ERR_UNABLE_TO_GET_CRL)
+            preverify = true;
 
-            if (rfc2818Hostname.empty())
-                return preverify;
+        if (rfc2818Hostname.empty())
+            return preverify;
 
-            return asio::ssl::rfc2818_verification{rfc2818Hostname}(
-                preverify, ctx);
-        });
+        return asio::ssl::rfc2818_verification{rfc2818Hostname}(preverify, ctx);
+    });
 }
 
 void WithSSLContext::addCertificateRevocationList(
