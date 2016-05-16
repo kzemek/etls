@@ -7,6 +7,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(erlang_tls C CXX)
 
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY True)
 set(CMAKE_POSITION_INDEPENDENT_CODE True)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
