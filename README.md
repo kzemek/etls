@@ -12,7 +12,7 @@ magnitude higher bandwidth when encoding/decoding data.
 
 Currently only `TLSv1.2` is supported, and default [BoringSSL] cipher is used.
 
-# Performance
+## Performance
 
 Benchmark ran on OS X 10.11.5, 2,2 GHz Intel Core i7 (4 cores with HT). The
 benchmark consisted of **10 concurrent connections**, each sending **10
@@ -26,7 +26,7 @@ and the last message received. The tests were compiled with and ran on Erlang
 | ssl       | 111 MB/s  |
 | ssl2      | 833 MB/s  |
 
-# Build
+## Build
 
 Dependencies:
 
@@ -76,9 +76,9 @@ application:start(ssl2),
 ssl2:send(Socket, "foo").
 ```
 
-# APIs
+## APIs
 
-## Implemented `ssl` functions
+### Implemented `ssl` functions
 
 The following `ssl`/[`inet`] functions are currently implemented:
 
@@ -101,7 +101,7 @@ The following `ssl`/[`inet`] functions are currently implemented:
 * `certificate_chain/1` (not present in `ssl`)
 * `shutdown/2`
 
-## Implemented `ssl` options
+### Implemented `ssl` options
 
 The following `ssl`/`inet` options are currently supported:
 
