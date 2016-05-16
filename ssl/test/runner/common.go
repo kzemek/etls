@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package runner
 
 import (
 	"container/list"
@@ -82,6 +82,7 @@ const (
 	extensionSignedCertificateTimestamp uint16 = 18
 	extensionExtendedMasterSecret       uint16 = 23
 	extensionSessionTicket              uint16 = 35
+	extensionCustom                     uint16 = 1234  // not IANA assigned
 	extensionNextProtoNeg               uint16 = 13172 // not IANA assigned
 	extensionRenegotiationInfo          uint16 = 0xff01
 	extensionChannelID                  uint16 = 30032 // not IANA assigned
@@ -97,10 +98,11 @@ const (
 type CurveID uint16
 
 const (
-	CurveP224 CurveID = 21
-	CurveP256 CurveID = 23
-	CurveP384 CurveID = 24
-	CurveP521 CurveID = 25
+	CurveP224   CurveID = 21
+	CurveP256   CurveID = 23
+	CurveP384   CurveID = 24
+	CurveP521   CurveID = 25
+	CurveX25519 CurveID = 29
 )
 
 // TLS Elliptic Curve Point Formats
@@ -188,7 +190,9 @@ type ConnectionState struct {
 	VerifiedChains             [][]*x509.Certificate // verified chains built from PeerCertificates
 	ChannelID                  *ecdsa.PublicKey      // the channel ID for this connection
 	SRTPProtectionProfile      uint16                // the negotiated DTLS-SRTP protection profile
-	TLSUnique                  []byte
+	TLSUnique                  []byte                // the tls-unique channel binding
+	SCTList                    []byte                // signed certificate timestamp list
+	ClientCertSignatureHash    uint8                 // TLS id of the hash used by the client to sign the handshake
 }
 
 // ClientAuthType declares the policy the server will follow for
@@ -214,6 +218,8 @@ type ClientSessionState struct {
 	handshakeHash        []byte              // Handshake hash for Channel ID purposes.
 	serverCertificates   []*x509.Certificate // Certificate chain presented by the server
 	extendedMasterSecret bool                // Whether an extended master secret was used to generate the session
+	sctList              []byte
+	ocspResponse         []byte
 }
 
 // ClientSessionCache is a cache of ClientSessionState objects that can be used
@@ -394,14 +400,33 @@ const (
 	NumBadValues
 )
 
+type RSABadValue int
+
+const (
+	RSABadValueNone RSABadValue = iota
+	RSABadValueCorrupt
+	RSABadValueTooLong
+	RSABadValueTooShort
+	RSABadValueWrongVersion
+	NumRSABadValues
+)
+
 type ProtocolBugs struct {
 	// InvalidSKXSignature specifies that the signature in a
 	// ServerKeyExchange message should be invalid.
 	InvalidSKXSignature bool
 
+	// InvalidCertVerifySignature specifies that the signature in a
+	// CertificateVerify message should be invalid.
+	InvalidCertVerifySignature bool
+
 	// InvalidSKXCurve causes the curve ID in the ServerKeyExchange message
 	// to be wrong.
 	InvalidSKXCurve bool
+
+	// InvalidECDHPoint, if true, causes the ECC points in
+	// ServerKeyExchange or ClientKeyExchange messages to be invalid.
+	InvalidECDHPoint bool
 
 	// BadECDSAR controls ways in which the 'r' value of an ECDSA signature
 	// can be invalid.
@@ -447,6 +472,10 @@ type ProtocolBugs struct {
 	// SkipNewSessionTicket causes the server to skip sending the
 	// NewSessionTicket message despite promising to in ServerHello.
 	SkipNewSessionTicket bool
+
+	// SkipClientCertificate causes the client to skip the Certificate
+	// message.
+	SkipClientCertificate bool
 
 	// SkipChangeCipherSpec causes the implementation to skip
 	// sending the ChangeCipherSpec message (and adjusting cipher
@@ -496,14 +525,17 @@ type ProtocolBugs struct {
 	// two records.
 	FragmentAlert bool
 
+	// DoubleAlert will cause all alerts to be sent as two copies packed
+	// within one record.
+	DoubleAlert bool
+
 	// SendSpuriousAlert, if non-zero, will cause an spurious, unwanted
 	// alert to be sent.
 	SendSpuriousAlert alert
 
-	// RsaClientKeyExchangeVersion, if non-zero, causes the client to send a
-	// ClientKeyExchange with the specified version rather than the
-	// client_version when performing the RSA key exchange.
-	RsaClientKeyExchangeVersion uint16
+	// BadRSAClientKeyExchange causes the client to send a corrupted RSA
+	// ClientKeyExchange which would not pass padding checks.
+	BadRSAClientKeyExchange RSABadValue
 
 	// RenewTicketOnResume causes the server to renew the session ticket and
 	// send a NewSessionTicket message during an abbreviated handshake.
@@ -526,11 +558,6 @@ type ProtocolBugs struct {
 	// closed the connection) before or after sending app data.
 	AlertBeforeFalseStartTest alert
 
-	// SSL3RSAKeyExchange causes the client to always send an RSA
-	// ClientKeyExchange message without the two-byte length
-	// prefix, as if it were SSL3.
-	SSL3RSAKeyExchange bool
-
 	// SkipCipherVersionCheck causes the server to negotiate
 	// TLS 1.2 ciphers in earlier versions of TLS.
 	SkipCipherVersionCheck bool
@@ -539,10 +566,13 @@ type ProtocolBugs struct {
 	// must specify in the server_name extension.
 	ExpectServerName string
 
-	// SwapNPNAndALPN switches the relative order between NPN and
-	// ALPN on the server. This is to test that server preference
-	// of ALPN works regardless of their relative order.
+	// SwapNPNAndALPN switches the relative order between NPN and ALPN in
+	// both ClientHello and ServerHello.
 	SwapNPNAndALPN bool
+
+	// ALPNProtocol, if not nil, sets the ALPN protocol that a server will
+	// return.
+	ALPNProtocol *string
 
 	// AllowSessionVersionMismatch causes the server to resume sessions
 	// regardless of the version associated with the session.
@@ -572,19 +602,27 @@ type ProtocolBugs struct {
 	// renegotiation handshake to be incorrect.
 	BadRenegotiationInfo bool
 
-	// NoRenegotiationInfo causes the client to behave as if it
-	// didn't support the renegotiation info extension.
+	// NoRenegotiationInfo disables renegotiation info support in all
+	// handshakes.
 	NoRenegotiationInfo bool
+
+	// NoRenegotiationInfoInInitial disables renegotiation info support in
+	// the initial handshake.
+	NoRenegotiationInfoInInitial bool
+
+	// NoRenegotiationInfoAfterInitial disables renegotiation info support
+	// in renegotiation handshakes.
+	NoRenegotiationInfoAfterInitial bool
 
 	// RequireRenegotiationInfo, if true, causes the client to return an
 	// error if the server doesn't reply with the renegotiation extension.
 	RequireRenegotiationInfo bool
 
-	// SequenceNumberIncrement, if non-zero, causes outgoing sequence
-	// numbers in DTLS to increment by that value rather by 1. This is to
-	// stress the replay bitmap window by simulating extreme packet loss and
-	// retransmit at the record layer.
-	SequenceNumberIncrement uint64
+	// SequenceNumberMapping, if non-nil, is the mapping function to apply
+	// to the sequence number of outgoing packets. For both TLS and DTLS,
+	// the two most-significant bytes in the resulting sequence number are
+	// ignored so that the DTLS epoch cannot be changed.
+	SequenceNumberMapping func(uint64) uint64
 
 	// RSAEphemeralKey, if true, causes the server to send a
 	// ServerKeyExchange message containing an ephemeral key (as in
@@ -617,10 +655,6 @@ type ProtocolBugs struct {
 	// across a renego.
 	RequireSameRenegoClientVersion bool
 
-	// RequireFastradioPadding, if true, requires that ClientHello messages
-	// be at least 1000 bytes long.
-	RequireFastradioPadding bool
-
 	// ExpectInitialRecordVersion, if non-zero, is the expected
 	// version of the records before the version is determined.
 	ExpectInitialRecordVersion uint16
@@ -634,7 +668,11 @@ type ProtocolBugs struct {
 	// the server believes it has actually negotiated.
 	SendCipherSuite uint16
 
-	// AppDataAfterChangeCipherSpec, if not null, causes application data to
+	// AppDataBeforeHandshake, if not nil, causes application data to be
+	// sent immediately before the first handshake message.
+	AppDataBeforeHandshake []byte
+
+	// AppDataAfterChangeCipherSpec, if not nil, causes application data to
 	// be sent immediately after ChangeCipherSpec.
 	AppDataAfterChangeCipherSpec []byte
 
@@ -732,6 +770,74 @@ type ProtocolBugs struct {
 	// ExpectNewTicket, if true, causes the client to abort if it does not
 	// receive a new ticket.
 	ExpectNewTicket bool
+
+	// RequireClientHelloSize, if not zero, is the required length in bytes
+	// of the ClientHello /record/. This is checked by the server.
+	RequireClientHelloSize int
+
+	// CustomExtension, if not empty, contains the contents of an extension
+	// that will be added to client/server hellos.
+	CustomExtension string
+
+	// ExpectedCustomExtension, if not nil, contains the expected contents
+	// of a custom extension.
+	ExpectedCustomExtension *string
+
+	// NoCloseNotify, if true, causes the close_notify alert to be skipped
+	// on connection shutdown.
+	NoCloseNotify bool
+
+	// ExpectCloseNotify, if true, requires a close_notify from the peer on
+	// shutdown. Records from the peer received after close_notify is sent
+	// are not discard.
+	ExpectCloseNotify bool
+
+	// SendLargeRecords, if true, allows outgoing records to be sent
+	// arbitrarily large.
+	SendLargeRecords bool
+
+	// NegotiateALPNAndNPN, if true, causes the server to negotiate both
+	// ALPN and NPN in the same connetion.
+	NegotiateALPNAndNPN bool
+
+	// SendEmptySessionTicket, if true, causes the server to send an empty
+	// session ticket.
+	SendEmptySessionTicket bool
+
+	// FailIfSessionOffered, if true, causes the server to fail any
+	// connections where the client offers a non-empty session ID or session
+	// ticket.
+	FailIfSessionOffered bool
+
+	// SendHelloRequestBeforeEveryAppDataRecord, if true, causes a
+	// HelloRequest handshake message to be sent before each application
+	// data record. This only makes sense for a server.
+	SendHelloRequestBeforeEveryAppDataRecord bool
+
+	// RequireDHPublicValueLen causes a fatal error if the length (in
+	// bytes) of the server's Diffie-Hellman public value is not equal to
+	// this.
+	RequireDHPublicValueLen int
+
+	// BadChangeCipherSpec, if not nil, is the body to be sent in
+	// ChangeCipherSpec records instead of {1}.
+	BadChangeCipherSpec []byte
+
+	// BadHelloRequest, if not nil, is what to send instead of a
+	// HelloRequest.
+	BadHelloRequest []byte
+
+	// RequireSessionTickets, if true, causes the client to require new
+	// sessions use session tickets instead of session IDs.
+	RequireSessionTickets bool
+
+	// NullAllCiphers, if true, causes every cipher to behave like the null
+	// cipher.
+	NullAllCiphers bool
+
+	// SendSCTListOnResume, if not nil, causes the server to send the
+	// supplied SCT list in resumption handshakes.
+	SendSCTListOnResume []byte
 }
 
 func (c *Config) serverInit() {
@@ -789,7 +895,7 @@ func (c *Config) maxVersion() uint16 {
 	return c.MaxVersion
 }
 
-var defaultCurvePreferences = []CurveID{CurveP256, CurveP384, CurveP521}
+var defaultCurvePreferences = []CurveID{CurveX25519, CurveP256, CurveP384, CurveP521}
 
 func (c *Config) curvePreferences() []CurveID {
 	if c == nil || len(c.CurvePreferences) == 0 {

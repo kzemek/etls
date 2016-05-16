@@ -87,7 +87,11 @@ int BIO_printf(BIO *bio, const char *format, ...) {
   }
 #endif
 
-  if (out_len >= sizeof(buf)) {
+  if (out_len < 0) {
+    return -1;
+  }
+
+  if ((size_t) out_len >= sizeof(buf)) {
     const int requested_len = out_len;
     /* The output was truncated. Note that vsnprintf's return value
      * does not include a trailing NUL, but the buffer must be sized
@@ -95,7 +99,7 @@ int BIO_printf(BIO *bio, const char *format, ...) {
     out = OPENSSL_malloc(requested_len + 1);
     out_malloced = 1;
     if (out == NULL) {
-      OPENSSL_PUT_ERROR(BIO, BIO_printf, ERR_R_MALLOC_FAILURE);
+      OPENSSL_PUT_ERROR(BIO, ERR_R_MALLOC_FAILURE);
       return -1;
     }
     va_start(args, format);

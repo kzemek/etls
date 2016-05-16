@@ -12,7 +12,7 @@
 // with simulated loss, but there is no point in forcing the test
 // driver to.
 
-package main
+package runner
 
 import (
 	"bytes"
@@ -46,6 +46,7 @@ func (c *Conn) dtlsDoReadRecord(want recordType) (recordType, *block, error) {
 	b := c.rawInput
 
 	// Read a new packet only if the current one is empty.
+	var newPacket bool
 	if len(b.data) == 0 {
 		// Pick some absurdly large buffer size.
 		b.resize(maxCiphertext + recordHeaderLen)
@@ -57,6 +58,7 @@ func (c *Conn) dtlsDoReadRecord(want recordType) (recordType, *block, error) {
 			return 0, nil, fmt.Errorf("dtls: exceeded maximum packet length")
 		}
 		c.rawInput.resize(n)
+		newPacket = true
 	}
 
 	// Read out one record.
@@ -80,15 +82,21 @@ func (c *Conn) dtlsDoReadRecord(want recordType) (recordType, *block, error) {
 			return 0, nil, c.in.setErrorLocked(fmt.Errorf("dtls: received record with version %x when expecting version %x", vers, expect))
 		}
 	}
-	seq := b.data[3:11]
-	// For test purposes, we assume a reliable channel. Require
-	// that the explicit sequence number matches the incrementing
-	// one we maintain. A real implementation would maintain a
-	// replay window and such.
-	if !bytes.Equal(seq, c.in.seq[:]) {
+	epoch := b.data[3:5]
+	seq := b.data[5:11]
+	// For test purposes, require the sequence number be monotonically
+	// increasing, so c.in includes the minimum next sequence number. Gaps
+	// may occur if packets failed to be sent out. A real implementation
+	// would maintain a replay window and such.
+	if !bytes.Equal(epoch, c.in.seq[:2]) {
+		c.sendAlert(alertIllegalParameter)
+		return 0, nil, c.in.setErrorLocked(fmt.Errorf("dtls: bad epoch"))
+	}
+	if bytes.Compare(seq, c.in.seq[2:]) < 0 {
 		c.sendAlert(alertIllegalParameter)
 		return 0, nil, c.in.setErrorLocked(fmt.Errorf("dtls: bad sequence number"))
 	}
+	copy(c.in.seq[2:], seq)
 	n := int(b.data[11])<<8 | int(b.data[12])
 	if n > maxCiphertext || len(b.data) < recordHeaderLen+n {
 		c.sendAlert(alertRecordOverflow)
@@ -102,6 +110,13 @@ func (c *Conn) dtlsDoReadRecord(want recordType) (recordType, *block, error) {
 		c.in.setErrorLocked(c.sendAlert(err))
 	}
 	b.off = off
+
+	// Require that ChangeCipherSpec always share a packet with either the
+	// previous or next handshake message.
+	if newPacket && typ == recordTypeChangeCipherSpec && c.rawInput == nil {
+		return 0, nil, c.in.setErrorLocked(fmt.Errorf("dtls: ChangeCipherSpec not packed together with Finished"))
+	}
+
 	return typ, b, nil
 }
 
@@ -298,13 +313,13 @@ func (c *Conn) dtlsSealRecord(typ recordType, data []byte) (b *block, err error)
 	b.data[1] = byte(vers >> 8)
 	b.data[2] = byte(vers)
 	// DTLS records include an explicit sequence number.
-	copy(b.data[3:11], c.out.seq[0:])
+	copy(b.data[3:11], c.out.outSeq[0:])
 	b.data[11] = byte(len(data) >> 8)
 	b.data[12] = byte(len(data))
 	if explicitIVLen > 0 {
 		explicitIV := b.data[recordHeaderLen : recordHeaderLen+explicitIVLen]
 		if explicitIVIsSeq {
-			copy(explicitIV, c.out.seq[:])
+			copy(explicitIV, c.out.outSeq[:])
 		} else {
 			if _, err = io.ReadFull(c.config.rand(), explicitIV); err != nil {
 				return

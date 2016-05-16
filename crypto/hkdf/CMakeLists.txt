@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 add_library(
   hkdf
@@ -17,3 +17,4 @@ add_executable(
 )
 
 target_link_libraries(hkdf_test crypto)
+add_dependencies(all_tests hkdf_test)

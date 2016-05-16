@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package runner
 
 import (
 	"bytes"
@@ -45,7 +45,7 @@ func (c *Conn) clientHandshake() error {
 
 	nextProtosLength := 0
 	for _, proto := range c.config.NextProtos {
-		if l := len(proto); l == 0 || l > 255 {
+		if l := len(proto); l > 255 {
 			return errors.New("tls: invalid NextProtos value")
 		} else {
 			nextProtosLength += 1 + l
@@ -61,6 +61,7 @@ func (c *Conn) clientHandshake() error {
 		compressionMethods:      []uint8{compressionNone},
 		random:                  make([]byte, 32),
 		ocspStapling:            true,
+		sctListSupported:        true,
 		serverName:              c.config.ServerName,
 		supportedCurves:         c.config.curvePreferences(),
 		supportedPoints:         []uint8{pointFormatUncompressed},
@@ -73,6 +74,7 @@ func (c *Conn) clientHandshake() error {
 		extendedMasterSecret:    c.config.maxVersion() >= VersionTLS10,
 		srtpProtectionProfiles:  c.config.SRTPProtectionProfiles,
 		srtpMasterKeyIdentifier: c.config.Bugs.SRTPMasterKeyIdentifer,
+		customExtension:         c.config.Bugs.CustomExtension,
 	}
 
 	if c.config.Bugs.SendClientVersion != 0 {
@@ -96,7 +98,7 @@ func (c *Conn) clientHandshake() error {
 		}
 	}
 
-	if c.config.Bugs.NoRenegotiationInfo {
+	if c.noRenegotiationInfo() {
 		hello.secureRenegotiation = nil
 	}
 
@@ -280,13 +282,19 @@ NextCipherSuite:
 		return errors.New("tls: renegotiation extension missing")
 	}
 
-	if len(c.clientVerify) > 0 && !c.config.Bugs.NoRenegotiationInfo {
+	if len(c.clientVerify) > 0 && !c.noRenegotiationInfo() {
 		var expectedRenegInfo []byte
 		expectedRenegInfo = append(expectedRenegInfo, c.clientVerify...)
 		expectedRenegInfo = append(expectedRenegInfo, c.serverVerify...)
 		if !bytes.Equal(serverHello.secureRenegotiation, expectedRenegInfo) {
 			c.sendAlert(alertHandshakeFailure)
 			return fmt.Errorf("tls: renegotiation mismatch")
+		}
+	}
+
+	if expected := c.config.Bugs.ExpectedCustomExtension; expected != nil {
+		if serverHello.customExtension != *expected {
+			return fmt.Errorf("tls: bad custom extension contents %q", serverHello.customExtension)
 		}
 	}
 
@@ -355,6 +363,9 @@ NextCipherSuite:
 	}
 
 	if sessionCache != nil && hs.session != nil && session != hs.session {
+		if c.config.Bugs.RequireSessionTickets && len(hs.session.sessionTicket) == 0 {
+			return errors.New("tls: new session used session IDs instead of tickets")
+		}
 		sessionCache.Put(cacheKey, hs.session)
 	}
 
@@ -364,6 +375,7 @@ NextCipherSuite:
 	copy(c.clientRandom[:], hs.hello.random)
 	copy(c.serverRandom[:], hs.serverHello.random)
 	copy(c.masterSecret[:], hs.masterSecret)
+
 	return nil
 }
 
@@ -552,15 +564,20 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	hs.writeServerHash(shd.marshal())
 
 	// If the server requested a certificate then we have to send a
-	// Certificate message, even if it's empty because we don't have a
-	// certificate to send.
+	// Certificate message in TLS, even if it's empty because we don't have
+	// a certificate to send. In SSL 3.0, skip the message and send a
+	// no_certificate warning alert.
 	if certRequested {
-		certMsg := new(certificateMsg)
-		if chainToSend != nil {
-			certMsg.certificates = chainToSend.Certificate
+		if c.vers == VersionSSL30 && chainToSend == nil {
+			c.sendAlert(alertNoCertficate)
+		} else if !c.config.Bugs.SkipClientCertificate {
+			certMsg := new(certificateMsg)
+			if chainToSend != nil {
+				certMsg.certificates = chainToSend.Certificate
+			}
+			hs.writeClientHash(certMsg.marshal())
+			c.writeRecord(recordTypeHandshake, certMsg.marshal())
 		}
-		hs.writeClientHash(certMsg.marshal())
-		c.writeRecord(recordTypeHandshake, certMsg.marshal())
 	}
 
 	preMasterSecret, ckx, err := keyAgreement.generateClientKeyExchange(c.config, hs.hello, leaf)
@@ -614,6 +631,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		if err != nil {
 			c.sendAlert(alertInternalError)
 			return err
+		}
+		if c.config.Bugs.InvalidCertVerifySignature {
+			digest[0] ^= 0x80
 		}
 
 		switch key := c.config.Certificates[0].PrivateKey.(type) {
@@ -738,13 +758,28 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 			return false, errors.New("tls: server resumed session on renegotiation")
 		}
 
+		if hs.serverHello.sctList != nil {
+			return false, errors.New("tls: server sent SCT extension on session resumption")
+		}
+
+		if hs.serverHello.ocspStapling {
+			return false, errors.New("tls: server sent OCSP extension on session resumption")
+		}
+
 		// Restore masterSecret and peerCerts from previous state
 		hs.masterSecret = hs.session.masterSecret
 		c.peerCertificates = hs.session.serverCertificates
 		c.extendedMasterSecret = hs.session.extendedMasterSecret
+		c.sctList = hs.session.sctList
+		c.ocspResponse = hs.session.ocspResponse
 		hs.finishedHash.discardHandshakeBuffer()
 		return true, nil
 	}
+
+	if hs.serverHello.sctList != nil {
+		c.sctList = hs.serverHello.sctList
+	}
+
 	return false, nil
 }
 
@@ -791,6 +826,8 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 		masterSecret:       hs.masterSecret,
 		handshakeHash:      hs.finishedHash.server.Sum(nil),
 		serverCertificates: c.peerCertificates,
+		sctList:            c.sctList,
+		ocspResponse:       c.ocspResponse,
 	}
 
 	if !hs.serverHello.ticketSupported {
@@ -802,6 +839,10 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 			hs.session = session
 		}
 		return nil
+	}
+
+	if c.vers == VersionSSL30 {
+		return errors.New("tls: negotiated session tickets in SSL 3.0")
 	}
 
 	msg, err := c.readHandshake()
@@ -891,7 +932,11 @@ func (hs *clientHandshakeState) sendFinished(out []byte, isResume bool) error {
 
 	if !c.config.Bugs.SkipChangeCipherSpec &&
 		c.config.Bugs.EarlyChangeCipherSpec == 0 {
-		c.writeRecord(recordTypeChangeCipherSpec, []byte{1})
+		ccs := []byte{1}
+		if c.config.Bugs.BadChangeCipherSpec != nil {
+			ccs = c.config.Bugs.BadChangeCipherSpec
+		}
+		c.writeRecord(recordTypeChangeCipherSpec, ccs)
 	}
 
 	if c.config.Bugs.AppDataAfterChangeCipherSpec != nil {

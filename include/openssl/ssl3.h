@@ -114,28 +114,25 @@
  * SUN MICROSYSTEMS, INC., and contributed to the OpenSSL project.
  */
 
-#ifndef HEADER_SSL3_H
-#define HEADER_SSL3_H
+#ifndef OPENSSL_HEADER_SSL3_H
+#define OPENSSL_HEADER_SSL3_H
 
 #include <openssl/aead.h>
-#include <openssl/buf.h>
-#include <openssl/evp.h>
-#include <openssl/ssl.h>
 #include <openssl/type_check.h>
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
+
 /* These are kept to support clients that negotiates higher protocol versions
  * using SSLv2 client hello records. */
 #define SSL2_MT_CLIENT_HELLO 1
 #define SSL2_VERSION 0x0002
 
-/* Signalling cipher suite value: from RFC5746 */
+/* Signalling cipher suite value from RFC 5746. */
 #define SSL3_CK_SCSV 0x030000FF
-/* Fallback signalling cipher suite value: not IANA assigned.
- * See https://tools.ietf.org/html/draft-bmoeller-tls-downgrade-scsv-01 */
+/* Fallback signalling cipher suite value from RFC 7507. */
 #define SSL3_CK_FALLBACK_SCSV 0x03005600
 
 #define SSL3_CK_RSA_NULL_MD5 0x03000001
@@ -234,8 +231,6 @@ extern "C" {
 
 #define SSL_RT_MAX_CIPHER_BLOCK_SIZE 16
 
-#define SSL3_RT_MAX_EXTRA (16384)
-
 /* Maximum plaintext length: defined by SSL/TLS standards */
 #define SSL3_RT_MAX_PLAIN_LENGTH 16384
 /* Maximum compression overhead: defined by SSL/TLS standards */
@@ -273,28 +268,10 @@ OPENSSL_COMPILE_ASSERT(
 #define SSL3_MD_CLIENT_FINISHED_CONST "\x43\x4C\x4E\x54"
 #define SSL3_MD_SERVER_FINISHED_CONST "\x53\x52\x56\x52"
 
-#define SSL3_VERSION 0x0300
-#define SSL3_VERSION_MAJOR 0x03
-#define SSL3_VERSION_MINOR 0x00
-
 #define SSL3_RT_CHANGE_CIPHER_SPEC 20
 #define SSL3_RT_ALERT 21
 #define SSL3_RT_HANDSHAKE 22
 #define SSL3_RT_APPLICATION_DATA 23
-
-/* Pseudo content types to indicate additional parameters */
-#define TLS1_RT_CRYPTO 0x1000
-#define TLS1_RT_CRYPTO_PREMASTER (TLS1_RT_CRYPTO | 0x1)
-#define TLS1_RT_CRYPTO_CLIENT_RANDOM (TLS1_RT_CRYPTO | 0x2)
-#define TLS1_RT_CRYPTO_SERVER_RANDOM (TLS1_RT_CRYPTO | 0x3)
-#define TLS1_RT_CRYPTO_MASTER (TLS1_RT_CRYPTO | 0x4)
-
-#define TLS1_RT_CRYPTO_READ 0x0000
-#define TLS1_RT_CRYPTO_WRITE 0x0100
-#define TLS1_RT_CRYPTO_MAC (TLS1_RT_CRYPTO | 0x5)
-#define TLS1_RT_CRYPTO_KEY (TLS1_RT_CRYPTO | 0x6)
-#define TLS1_RT_CRYPTO_IV (TLS1_RT_CRYPTO | 0x7)
-#define TLS1_RT_CRYPTO_FIXED_IV (TLS1_RT_CRYPTO | 0x8)
 
 /* Pseudo content type for SSL/TLS header info */
 #define SSL3_RT_HEADER 0x100
@@ -316,34 +293,6 @@ OPENSSL_COMPILE_ASSERT(
 #define SSL3_AD_ILLEGAL_PARAMETER 47      /* fatal */
 #define SSL3_AD_INAPPROPRIATE_FALLBACK 86 /* fatal */
 
-typedef struct ssl3_record_st {
-  /* type is the record type. */
-  uint8_t type;
-  /* length is the number of unconsumed bytes of |data|. */
-  uint16_t length;
-  /* off is the number of consumed bytes of |data|. */
-  uint16_t off;
-  /* data is a non-owning pointer to the record contents. The total length of
-   * the buffer is |off| + |length|. */
-  uint8_t *data;
-  /* epoch, in DTLS, is the epoch number of the record. */
-  uint16_t epoch;
-  /* seq_num, in DTLS, is the sequence number of the record. The top two bytes
-   * are always zero.
-   *
-   * TODO(davidben): This is confusing. They should include the epoch or the
-   * field should be six bytes. */
-  uint8_t seq_num[8];
-} SSL3_RECORD;
-
-typedef struct ssl3_buffer_st {
-  uint8_t *buf;       /* at least SSL3_RT_MAX_PACKET_SIZE bytes, see
-                         ssl3_setup_buffers() */
-  size_t len;         /* buffer size */
-  int offset;         /* where to 'copy from' */
-  int left;           /* how many bytes left */
-} SSL3_BUFFER;
-
 #define SSL3_CT_RSA_SIGN 1
 #define SSL3_CT_DSS_SIGN 2
 #define SSL3_CT_RSA_FIXED_DH 3
@@ -352,233 +301,12 @@ typedef struct ssl3_buffer_st {
 #define SSL3_CT_DSS_EPHEMERAL_DH 6
 #define SSL3_CT_FORTEZZA_DMS 20
 
-
-/* TODO(davidben): This flag can probably be merged into s3->change_cipher_spec
- * to something tri-state. (Normal / Expect CCS / Between CCS and Finished). */
-#define SSL3_FLAGS_EXPECT_CCS 0x0080
-
-typedef struct ssl3_state_st {
-  long flags;
-
-  uint8_t read_sequence[8];
-  int read_mac_secret_size;
-  uint8_t read_mac_secret[EVP_MAX_MD_SIZE];
-  uint8_t write_sequence[8];
-  int write_mac_secret_size;
-  uint8_t write_mac_secret[EVP_MAX_MD_SIZE];
-
-  uint8_t server_random[SSL3_RANDOM_SIZE];
-  uint8_t client_random[SSL3_RANDOM_SIZE];
-
-  /* flags for countermeasure against known-IV weakness */
-  int need_record_splitting;
-
-  /* The value of 'extra' when the buffers were initialized */
-  int init_extra;
-
-  /* have_version is true if the connection's final version is known. Otherwise
-   * the version has not been negotiated yet. */
-  char have_version;
-
-  /* initial_handshake_complete is true if the initial handshake has
-   * completed. */
-  char initial_handshake_complete;
-
-  /* sniff_buffer is used by the server in the initial handshake to read a
-   * V2ClientHello before the record layer is initialized. */
-  BUF_MEM *sniff_buffer;
-  size_t sniff_buffer_len;
-
-  SSL3_BUFFER rbuf; /* read IO goes into here */
-  SSL3_BUFFER wbuf; /* write IO goes into here */
-
-  SSL3_RECORD rrec; /* each decoded record goes in here */
-
-  /* storage for Handshake protocol data received but not yet processed by
-   * ssl3_read_bytes: */
-  uint8_t handshake_fragment[4];
-  unsigned int handshake_fragment_len;
-
-  /* partial write - check the numbers match */
-  unsigned int wnum; /* number of bytes sent so far */
-  int wpend_tot;     /* number bytes written */
-  int wpend_type;
-  int wpend_ret; /* number of bytes submitted */
-  const uint8_t *wpend_buf;
-
-  /* used during startup, digest all incoming/outgoing packets */
-  BIO *handshake_buffer;
-  /* When set of handshake digests is determined, buffer is hashed and freed
-   * and MD_CTX-es for all required digests are stored in this array */
-  EVP_MD_CTX **handshake_dgst;
-  /* this is set whenerver we see a change_cipher_spec message come in when we
-   * are not looking for one */
-  int change_cipher_spec;
-
-  int warn_alert;
-  int fatal_alert;
-  /* we allow one fatal and one warning alert to be outstanding, send close
-   * alert via the warning alert */
-  int alert_dispatch;
-  uint8_t send_alert[2];
-
-  int total_renegotiations;
-
-  /* empty_record_count is the number of consecutive empty records received. */
-  uint8_t empty_record_count;
-
-  /* warning_alert_count is the number of consecutive warning alerts
-   * received. */
-  uint8_t warning_alert_count;
-
-  /* State pertaining to the pending handshake.
-   *
-   * TODO(davidben): State is current spread all over the place. Move
-   * pending handshake state here so it can be managed separately from
-   * established connection state in case of renegotiations. */
-  struct {
-    /* actually only need to be 16+20 for SSLv3 and 12 for TLS */
-    uint8_t finish_md[EVP_MAX_MD_SIZE * 2];
-    int finish_md_len;
-    uint8_t peer_finish_md[EVP_MAX_MD_SIZE * 2];
-    int peer_finish_md_len;
-
-    unsigned long message_size;
-    int message_type;
-
-    /* used to hold the new cipher we are going to use */
-    const SSL_CIPHER *new_cipher;
-    DH *dh;
-
-    EC_KEY *ecdh; /* holds short lived ECDH key */
-
-    /* used when SSL_ST_FLUSH_DATA is entered */
-    int next_state;
-
-    int reuse_message;
-
-    union {
-      /* sent is a bitset where the bits correspond to elements of kExtensions
-       * in t1_lib.c. Each bit is set if that extension was sent in a
-       * ClientHello. It's not used by servers. */
-      uint32_t sent;
-      /* received is a bitset, like |sent|, but is used by servers to record
-       * which extensions were received from a client. */
-      uint32_t received;
-    } extensions;
-
-
-    /* SNI extension */
-
-    /* should_ack_sni is used by a server and indicates that the SNI extension
-     * should be echoed in the ServerHello. */
-    unsigned should_ack_sni:1;
-
-
-    /* Client-only: cert_req determines if a client certificate is to be sent.
-     * This is 0 if no client Certificate message is to be sent, 1 if there is
-     * a client certificate, and 2 to send an empty client Certificate
-     * message. */
-    int cert_req;
-
-    /* Client-only: ca_names contains the list of CAs received in a
-     * CertificateRequest message. */
-    STACK_OF(X509_NAME) *ca_names;
-
-    /* Client-only: certificate_types contains the set of certificate types
-     * received in a CertificateRequest message. */
-    uint8_t *certificate_types;
-    size_t num_certificate_types;
-
-    int key_block_length;
-    uint8_t *key_block;
-
-    const EVP_AEAD *new_aead;
-    uint8_t new_mac_secret_len;
-    uint8_t new_fixed_iv_len;
-    uint8_t new_variable_iv_len;
-
-    /* Server-only: cert_request is true if a client certificate was
-     * requested. */
-    int cert_request;
-
-    /* certificate_status_expected is true if OCSP stapling was negotiated and
-     * the server is expected to send a CertificateStatus message. */
-    char certificate_status_expected;
-
-    /* peer_ecpointformatlist contains the EC point formats advertised by the
-     * peer. */
-    uint8_t *peer_ecpointformatlist;
-    size_t peer_ecpointformatlist_length;
-
-    /* Server-only: peer_ellipticcurvelist contains the EC curve IDs advertised
-     * by the peer. This is only set on the server's end. The server does not
-     * advertise this extension to the client. */
-    uint16_t *peer_ellipticcurvelist;
-    size_t peer_ellipticcurvelist_length;
-
-    /* extended_master_secret indicates whether the extended master secret
-     * computation is used in this handshake. Note that this is different from
-     * whether it was used for the current session. If this is a resumption
-     * handshake then EMS might be negotiated in the client and server hello
-     * messages, but it doesn't matter if the session that's being resumed
-     * didn't use it to create the master secret initially. */
-    char extended_master_secret;
-
-    /* Client-only: peer_psk_identity_hint is the psk_identity_hint sent by the
-     * server when using a PSK key exchange. */
-    char *peer_psk_identity_hint;
-
-    /* new_mac_secret_size is unused and exists only until wpa_supplicant can
-     * be updated. It is only needed for EAP-FAST, which we don't support. */
-    uint8_t new_mac_secret_size;
-
-    /* Client-only: in_false_start is one if there is a pending handshake in
-     * False Start. The client may write data at this point. */
-    char in_false_start;
-  } tmp;
-
-  /* Connection binding to prevent renegotiation attacks */
-  uint8_t previous_client_finished[EVP_MAX_MD_SIZE];
-  uint8_t previous_client_finished_len;
-  uint8_t previous_server_finished[EVP_MAX_MD_SIZE];
-  uint8_t previous_server_finished_len;
-  int send_connection_binding; /* TODOEKR */
-
-  /* Set if we saw the Next Protocol Negotiation extension from our peer. */
-  int next_proto_neg_seen;
-
-  /* ALPN information
-   * (we are in the process of transitioning from NPN to ALPN.) */
-
-  /* In a server these point to the selected ALPN protocol after the
-   * ClientHello has been processed. In a client these contain the protocol
-   * that the server selected once the ServerHello has been processed. */
-  uint8_t *alpn_selected;
-  size_t alpn_selected_len;
-
-  /* In a client, this means that the server supported Channel ID and that a
-   * Channel ID was sent. In a server it means that we echoed support for
-   * Channel IDs and that tlsext_channel_id will be valid after the
-   * handshake. */
-  char tlsext_channel_id_valid;
-  /* tlsext_channel_id_new means that the updated Channel ID extension was
-   * negotiated. This is a temporary hack in the code to support both forms of
-   * Channel ID extension while we transition to the new format, which fixed a
-   * security issue. */
-  char tlsext_channel_id_new;
-  /* For a server:
-   *     If |tlsext_channel_id_valid| is true, then this contains the
-   *     verified Channel ID from the client: a P256 point, (x,y), where
-   *     each are big-endian values. */
-  uint8_t tlsext_channel_id[64];
-} SSL3_STATE;
-
 /* SSLv3 */
 /* client */
 /* extra state */
 #define SSL3_ST_CW_FLUSH (0x100 | SSL_ST_CONNECT)
 #define SSL3_ST_FALSE_START (0x101 | SSL_ST_CONNECT)
+#define SSL3_ST_VERIFY_SERVER_CERT (0x102 | SSL_ST_CONNECT)
 /* write to server */
 #define SSL3_ST_CW_CLNT_HELLO_A (0x110 | SSL_ST_CONNECT)
 #define SSL3_ST_CW_CLNT_HELLO_B (0x111 | SSL_ST_CONNECT)
@@ -628,7 +356,6 @@ typedef struct ssl3_state_st {
 /* read from client */
 #define SSL3_ST_SR_INITIAL_BYTES (0x240 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_V2_CLIENT_HELLO (0x241 | SSL_ST_ACCEPT)
-/* Do not change the number values, they do matter */
 #define SSL3_ST_SR_CLNT_HELLO_A (0x110 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_CLNT_HELLO_B (0x111 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_CLNT_HELLO_C (0x112 | SSL_ST_ACCEPT)
@@ -643,6 +370,7 @@ typedef struct ssl3_state_st {
 #define SSL3_ST_SW_CERT_B (0x141 | SSL_ST_ACCEPT)
 #define SSL3_ST_SW_KEY_EXCH_A (0x150 | SSL_ST_ACCEPT)
 #define SSL3_ST_SW_KEY_EXCH_B (0x151 | SSL_ST_ACCEPT)
+#define SSL3_ST_SW_KEY_EXCH_C (0x152 | SSL_ST_ACCEPT)
 #define SSL3_ST_SW_CERT_REQ_A (0x160 | SSL_ST_ACCEPT)
 #define SSL3_ST_SW_CERT_REQ_B (0x161 | SSL_ST_ACCEPT)
 #define SSL3_ST_SW_SRVR_DONE_A (0x170 | SSL_ST_ACCEPT)
@@ -652,6 +380,7 @@ typedef struct ssl3_state_st {
 #define SSL3_ST_SR_CERT_B (0x181 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_KEY_EXCH_A (0x190 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_KEY_EXCH_B (0x191 | SSL_ST_ACCEPT)
+#define SSL3_ST_SR_KEY_EXCH_C (0x192 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_CERT_VRFY_A (0x1A0 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_CERT_VRFY_B (0x1A1 | SSL_ST_ACCEPT)
 #define SSL3_ST_SR_CHANGE (0x1B0 | SSL_ST_ACCEPT)
@@ -706,6 +435,7 @@ typedef struct ssl3_state_st {
 
 
 #ifdef  __cplusplus
-}
+}  /* extern C */
 #endif
-#endif
+
+#endif  /* OPENSSL_HEADER_SSL3_H */

@@ -61,6 +61,7 @@
 
 #include <stdio.h>  /* For FILE */
 
+#include <openssl/buffer.h>
 #include <openssl/err.h> /* for ERR_print_errors_fp */
 #include <openssl/ex_data.h>
 #include <openssl/stack.h>
@@ -75,8 +76,6 @@ extern "C" {
 
 
 /* Allocation and freeing. */
-
-DEFINE_STACK_OF(BIO);
 
 /* BIO_new creates a new BIO with the given type and a reference count of one.
  * It returns the fresh |BIO|, or NULL on error. */
@@ -310,18 +309,12 @@ OPENSSL_EXPORT BIO *BIO_find_type(BIO *bio, int type);
 OPENSSL_EXPORT void BIO_copy_next_retry(BIO *bio);
 
 
-/* Printf functions.
- *
- * These functions are versions of printf functions that output to a BIO rather
- * than a FILE. */
-#ifdef __GNUC__
-#define __bio_h__attr__ __attribute__
-#else
-#define __bio_h__attr__(x)
-#endif
+/* Printf functions. */
+
+/* BIO_printf behaves like |printf| but outputs to |bio| rather than a |FILE|.
+ * It returns the number of bytes written or a negative number on error. */
 OPENSSL_EXPORT int BIO_printf(BIO *bio, const char *format, ...)
-    __bio_h__attr__((__format__(__printf__, 2, 3)));
-#undef __bio_h__attr__
+    OPENSSL_PRINTF_FORMAT_FUNC(2, 3);
 
 
 /* Utility functions. */
@@ -376,12 +369,12 @@ OPENSSL_EXPORT int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len,
 /* BIO_s_mem returns a |BIO_METHOD| that uses a in-memory buffer. */
 OPENSSL_EXPORT const BIO_METHOD *BIO_s_mem(void);
 
-/* BIO_new_mem_buf creates BIO that reads and writes from |len| bytes at |buf|.
+/* BIO_new_mem_buf creates read-only BIO that reads from |len| bytes at |buf|.
  * It does not take ownership of |buf|. It returns the BIO or NULL on error.
  *
  * If |len| is negative, then |buf| is treated as a NUL-terminated string, but
  * don't depend on this in new code. */
-OPENSSL_EXPORT BIO *BIO_new_mem_buf(void *buf, int len);
+OPENSSL_EXPORT BIO *BIO_new_mem_buf(const void *buf, int len);
 
 /* BIO_mem_contents sets |*out_contents| to point to the current contents of
  * |bio| and |*out_len| to contain the length of that data. It returns one on
@@ -443,11 +436,18 @@ OPENSSL_EXPORT BIO *BIO_new_fd(int fd, int close_flag);
 
 /* BIO_set_fd sets the file descriptor of |bio| to |fd|. If |close_flag| is
  * non-zero then |fd| will be closed when |bio| is. It returns one on success
- * or zero on error. */
+ * or zero on error.
+ *
+ * This function may also be used with socket BIOs (see |BIO_s_socket| and
+ * |BIO_new_socket|). */
 OPENSSL_EXPORT int BIO_set_fd(BIO *bio, int fd, int close_flag);
 
-/* BIO_get_fd sets |*out_fd| to the file descriptor currently in use by |bio|.
- * It returns one on success and zero on error. */
+/* BIO_get_fd returns the file descriptor currently in use by |bio| or -1 if
+ * |bio| does not wrap a file descriptor. If there is a file descriptor and
+ * |out_fd| is not NULL, it also sets |*out_fd| to the file descriptor.
+ *
+ * This function may also be used with socket BIOs (see |BIO_s_socket| and
+ * |BIO_new_socket|). */
 OPENSSL_EXPORT int BIO_get_fd(BIO *bio, int *out_fd);
 
 
@@ -527,7 +527,17 @@ OPENSSL_EXPORT int BIO_set_read_buffer_size(BIO *bio, int buffer_size);
 OPENSSL_EXPORT int BIO_set_write_buffer_size(BIO *bio, int buffer_size);
 
 
-/* Socket BIOs. */
+/* Socket BIOs.
+ *
+ * Socket BIOs behave like file descriptor BIOs but, on Windows systems, wrap
+ * the system's |recv| and |send| functions instead of |read| and |write|. On
+ * Windows, file descriptors are provided by C runtime and are not
+ * interchangeable with sockets.
+ *
+ * Socket BIOs may be used with |BIO_set_fd| and |BIO_get_fd|.
+ *
+ * TODO(davidben): Add separate APIs and fix the internals to use |SOCKET|s
+ * around rather than rely on int casts. */
 
 OPENSSL_EXPORT const BIO_METHOD *BIO_s_socket(void);
 
@@ -567,6 +577,10 @@ OPENSSL_EXPORT int BIO_set_conn_port(BIO *bio, const char *port_str);
 /* BIO_set_nbio sets whether |bio| will use non-blocking I/O operations. It
  * returns one on success and zero otherwise. */
 OPENSSL_EXPORT int BIO_set_nbio(BIO *bio, int on);
+
+/* BIO_do_connect connects |bio| if it has not been connected yet. It returns
+ * one on success and <= 0 otherwise. */
+OPENSSL_EXPORT int BIO_do_connect(BIO *bio);
 
 
 /* Datagram BIOs.
@@ -685,12 +699,6 @@ OPENSSL_EXPORT int BIO_zero_copy_get_write_buf_done(BIO* bio,
                                                     size_t bytes_written);
 
 
-/* Deprecated functions. */
-
-/* ERR_print_errors is an alias for |BIO_print_errors|. */
-OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
-
-
 /* BIO_NOCLOSE and |BIO_CLOSE| can be used as symbolic arguments when a "close
  * flag" is passed to a BIO function. */
 #define BIO_NOCLOSE 0
@@ -724,6 +732,11 @@ OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
 #define BIO_CTRL_GET_CALLBACK	15  /* opt - set callback function */
 #define BIO_CTRL_SET_FILENAME	30	/* BIO_s_file special */
 
+/* These are never used, but exist to allow code to compile more easily. */
+#define BIO_CTRL_DUP	100
+#define BIO_CTRL_PUSH	101
+#define BIO_CTRL_POP	102
+
 
 /* Android compatibility section.
  *
@@ -735,11 +748,15 @@ OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
 
 /* Deprecated functions. */
 
-/* Returns a filter |BIO| that base64-encodes data written into it, and decodes
- * data read from it. |BIO_gets| is not supported. Call |BIO_flush| when done
- * writing, to signal that no more data are to be encoded. The flag
- * |BIO_FLAGS_BASE64_NO_NL| may be set to encode all the data on one line. */
+/* BIO_f_base64 returns a filter |BIO| that base64-encodes data written into
+ * it, and decodes data read from it. |BIO_gets| is not supported. Call
+ * |BIO_flush| when done writing, to signal that no more data are to be
+ * encoded. The flag |BIO_FLAGS_BASE64_NO_NL| may be set to encode all the data
+ * on one line. */
 OPENSSL_EXPORT const BIO_METHOD *BIO_f_base64(void);
+
+/* ERR_print_errors is an alias for |BIO_print_errors|. */
+OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
 
 
 /* Private functions */
@@ -800,7 +817,7 @@ struct bio_method_st {
 struct bio_st {
   const BIO_METHOD *method;
   /* bio, mode, argp, argi, argl, ret */
-  long (*callback)(struct bio_st *, int, const char *, int, long, long);
+  long (*callback)(BIO *, int, const char *, int, long, long);
   char *cb_arg; /* first argument for the callback */
 
   /* init is non-zero if this |BIO| has been initialised. */
@@ -819,7 +836,7 @@ struct bio_st {
   void *ptr;
   /* next_bio points to the next |BIO| in a chain. This |BIO| owns a reference
    * to |next_bio|. */
-  struct bio_st *next_bio; /* used by filter BIOs */
+  BIO *next_bio; /* used by filter BIOs */
   size_t num_read, num_write;
 };
 
@@ -846,7 +863,6 @@ struct bio_st {
 #define BIO_C_GET_MD_CTX			120
 #define BIO_C_GET_PROXY_PARAM			121
 #define BIO_C_SET_BUFF_READ_DATA		122 /* data to read first */
-#define BIO_C_GET_CONNECT			123
 #define BIO_C_GET_ACCEPT			124
 #define BIO_C_SET_SSL_RENEGOTIATE_BYTES		125
 #define BIO_C_GET_SSL_NUM_RENEGOTIATES		126
@@ -885,25 +901,6 @@ struct bio_st {
 }  /* extern C */
 #endif
 
-#define BIO_F_BIO_callback_ctrl 100
-#define BIO_F_BIO_ctrl 101
-#define BIO_F_BIO_new 102
-#define BIO_F_BIO_new_file 103
-#define BIO_F_BIO_new_mem_buf 104
-#define BIO_F_BIO_zero_copy_get_read_buf 105
-#define BIO_F_BIO_zero_copy_get_read_buf_done 106
-#define BIO_F_BIO_zero_copy_get_write_buf 107
-#define BIO_F_BIO_zero_copy_get_write_buf_done 108
-#define BIO_F_bio_io 109
-#define BIO_F_bio_make_pair 110
-#define BIO_F_bio_write 111
-#define BIO_F_buffer_ctrl 112
-#define BIO_F_conn_ctrl 113
-#define BIO_F_conn_state 114
-#define BIO_F_file_ctrl 115
-#define BIO_F_file_read 116
-#define BIO_F_mem_write 117
-#define BIO_F_BIO_printf 118
 #define BIO_R_BAD_FOPEN_MODE 100
 #define BIO_R_BROKEN_PIPE 101
 #define BIO_R_CONNECT_ERROR 102

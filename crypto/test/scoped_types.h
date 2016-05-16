@@ -18,13 +18,19 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <memory>
+
+#include <openssl/aead.h>
+#include <openssl/asn1.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
+#include <openssl/bytestring.h>
 #include <openssl/cmac.h>
+#include <openssl/curve25519.h>
 #include <openssl/dh.h>
+#include <openssl/ecdsa.h>
 #include <openssl/ec.h>
 #include <openssl/ec_key.h>
-#include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/mem.h>
@@ -32,8 +38,6 @@
 #include <openssl/rsa.h>
 #include <openssl/stack.h>
 #include <openssl/x509.h>
-
-#include "stl_compat.h"
 
 
 template<typename T, void (*func)(T*)>
@@ -65,11 +69,11 @@ struct FileCloser {
 };
 
 template<typename T, void (*func)(T*)>
-using ScopedOpenSSLType = bssl::unique_ptr<T, OpenSSLDeleter<T, func>>;
+using ScopedOpenSSLType = std::unique_ptr<T, OpenSSLDeleter<T, func>>;
 
 template<typename StackType, typename T, void (*func)(T*)>
 using ScopedOpenSSLStack =
-    bssl::unique_ptr<StackType, OpenSSLStackDeleter<StackType, T, func>>;
+    std::unique_ptr<StackType, OpenSSLStackDeleter<StackType, T, func>>;
 
 template<typename T, typename CleanupRet, void (*init_func)(T*),
          CleanupRet (*cleanup_func)(T*)>
@@ -94,6 +98,7 @@ class ScopedOpenSSLContext {
   T ctx_;
 };
 
+using ScopedASN1_TYPE = ScopedOpenSSLType<ASN1_TYPE, ASN1_TYPE_free>;
 using ScopedBIO = ScopedOpenSSLType<BIO, BIO_vfree>;
 using ScopedBIGNUM = ScopedOpenSSLType<BIGNUM, BN_free>;
 using ScopedBN_CTX = ScopedOpenSSLType<BN_CTX, BN_CTX_free>;
@@ -109,12 +114,19 @@ using ScopedEVP_PKEY_CTX = ScopedOpenSSLType<EVP_PKEY_CTX, EVP_PKEY_CTX_free>;
 using ScopedPKCS8_PRIV_KEY_INFO = ScopedOpenSSLType<PKCS8_PRIV_KEY_INFO,
                                                     PKCS8_PRIV_KEY_INFO_free>;
 using ScopedPKCS12 = ScopedOpenSSLType<PKCS12, PKCS12_free>;
+using ScopedSPAKE2_CTX = ScopedOpenSSLType<SPAKE2_CTX, SPAKE2_CTX_free>;
 using ScopedRSA = ScopedOpenSSLType<RSA, RSA_free>;
 using ScopedX509 = ScopedOpenSSLType<X509, X509_free>;
 using ScopedX509_ALGOR = ScopedOpenSSLType<X509_ALGOR, X509_ALGOR_free>;
+using ScopedX509_SIG = ScopedOpenSSLType<X509_SIG, X509_SIG_free>;
+using ScopedX509_STORE_CTX = ScopedOpenSSLType<X509_STORE_CTX, X509_STORE_CTX_free>;
 
 using ScopedX509Stack = ScopedOpenSSLStack<STACK_OF(X509), X509, X509_free>;
 
+using ScopedCBB = ScopedOpenSSLContext<CBB, void, CBB_zero, CBB_cleanup>;
+using ScopedEVP_AEAD_CTX = ScopedOpenSSLContext<EVP_AEAD_CTX, void,
+                                                EVP_AEAD_CTX_zero,
+                                                EVP_AEAD_CTX_cleanup>;
 using ScopedEVP_CIPHER_CTX = ScopedOpenSSLContext<EVP_CIPHER_CTX, int,
                                                   EVP_CIPHER_CTX_init,
                                                   EVP_CIPHER_CTX_cleanup>;
@@ -123,9 +135,9 @@ using ScopedEVP_MD_CTX = ScopedOpenSSLContext<EVP_MD_CTX, int, EVP_MD_CTX_init,
 using ScopedHMAC_CTX = ScopedOpenSSLContext<HMAC_CTX, void, HMAC_CTX_init,
                                             HMAC_CTX_cleanup>;
 
-using ScopedOpenSSLBytes = bssl::unique_ptr<uint8_t, OpenSSLFree<uint8_t>>;
-using ScopedOpenSSLString = bssl::unique_ptr<char, OpenSSLFree<char>>;
+using ScopedOpenSSLBytes = std::unique_ptr<uint8_t, OpenSSLFree<uint8_t>>;
+using ScopedOpenSSLString = std::unique_ptr<char, OpenSSLFree<char>>;
 
-using ScopedFILE = bssl::unique_ptr<FILE, FileCloser>;
+using ScopedFILE = std::unique_ptr<FILE, FileCloser>;
 
 #endif  // OPENSSL_HEADER_CRYPTO_TEST_SCOPED_TYPES_H

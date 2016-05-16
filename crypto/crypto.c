@@ -14,10 +14,12 @@
 
 #include <openssl/crypto.h>
 
+#include <openssl/cpu.h>
+
 #include "internal.h"
 
 
-#if !defined(OPENSSL_NO_ASM) && \
+#if !defined(OPENSSL_NO_ASM) && !defined(OPENSSL_STATIC_ARMCAP) && \
     (defined(OPENSSL_X86) || defined(OPENSSL_X86_64) || \
      defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64))
 /* x86, x86_64 and the ARMs need to record the result of a cpuid call for the
@@ -55,33 +57,51 @@
 uint32_t OPENSSL_ia32cap_P[4] = {0};
 #elif defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)
 
-#include "arm_arch.h"
+#include <openssl/arm_arch.h>
 
-#if defined(__ARM_NEON__)
-uint32_t OPENSSL_armcap_P = ARMV7_NEON | ARMV7_NEON_FUNCTIONAL;
+#if defined(OPENSSL_STATIC_ARMCAP)
+
+uint32_t OPENSSL_armcap_P =
+#if defined(OPENSSL_STATIC_ARMCAP_NEON) || defined(__ARM_NEON__)
+    ARMV7_NEON |
+#endif
+#if defined(OPENSSL_STATIC_ARMCAP_AES)
+    ARMV8_AES |
+#endif
+#if defined(OPENSSL_STATIC_ARMCAP_SHA1)
+    ARMV8_SHA1 |
+#endif
+#if defined(OPENSSL_STATIC_ARMCAP_SHA256)
+    ARMV8_SHA256 |
+#endif
+#if defined(OPENSSL_STATIC_ARMCAP_PMULL)
+    ARMV8_PMULL |
+#endif
+    0;
+
 #else
-uint32_t OPENSSL_armcap_P = ARMV7_NEON_FUNCTIONAL;
+uint32_t OPENSSL_armcap_P = 0;
 #endif
 
 #endif
 
 
-#if defined(OPENSSL_WINDOWS)
+#if defined(OPENSSL_WINDOWS) && !defined(BORINGSSL_NO_STATIC_INITIALIZER)
 #define OPENSSL_CDECL __cdecl
 #else
 #define OPENSSL_CDECL
 #endif
 
-#if !defined(BORINGSSL_NO_STATIC_INITIALIZER)
-#if !defined(OPENSSL_WINDOWS)
-static void do_library_init(void) __attribute__ ((constructor));
-#else
+#if defined(BORINGSSL_NO_STATIC_INITIALIZER)
+static CRYPTO_once_t once = CRYPTO_ONCE_INIT;
+#elif defined(OPENSSL_WINDOWS)
 #pragma section(".CRT$XCU", read)
 static void __cdecl do_library_init(void);
 __declspec(allocate(".CRT$XCU")) void(*library_init_constructor)(void) =
     do_library_init;
+#else
+static void do_library_init(void) __attribute__ ((constructor));
 #endif
-#endif  /* !BORINGSSL_NO_STATIC_INITIALIZER */
 
 /* do_library_init is the actual initialization function. If
  * BORINGSSL_NO_STATIC_INITIALIZER isn't defined, this is set as a static
@@ -97,9 +117,17 @@ static void OPENSSL_CDECL do_library_init(void) {
 void CRYPTO_library_init(void) {
   /* TODO(davidben): It would be tidier if this build knob could be replaced
    * with an internal lazy-init mechanism that would handle things correctly
-   * in-library. */
+   * in-library. https://crbug.com/542879 */
 #if defined(BORINGSSL_NO_STATIC_INITIALIZER)
-  do_library_init();
+  CRYPTO_once(&once, do_library_init);
+#endif
+}
+
+int CRYPTO_is_confidential_build(void) {
+#if defined(BORINGSSL_CONFIDENTIAL)
+  return 1;
+#else
+  return 0;
 #endif
 }
 
@@ -110,3 +138,13 @@ const char *SSLeay_version(int unused) {
 unsigned long SSLeay(void) {
   return OPENSSL_VERSION_NUMBER;
 }
+
+int CRYPTO_malloc_init(void) {
+  return 1;
+}
+
+void ENGINE_load_builtin_engines(void) {}
+
+void OPENSSL_load_builtin_modules(void) {}
+
+int FIPS_mode(void) { return 0; }

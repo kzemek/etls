@@ -701,9 +701,8 @@ ___
 }
 
 $code.=<<___;
-#if defined(__arm__)
 #ifndef __KERNEL__
-# include "arm_arch.h"
+# include <openssl/arm_arch.h>
 
 # define VFP_ABI_PUSH	vstmdb	sp!,{d8-d15}
 # define VFP_ABI_POP	vldmia	sp!,{d8-d15}
@@ -1007,7 +1006,6 @@ if (0) {		# following four functions are unsupported interface
 			# used for benchmarking...
 $code.=<<___;
 .globl	bsaes_enc_key_convert
-.hidden	bsaes_enc_key_convert
 .type	bsaes_enc_key_convert,%function
 .align	4
 bsaes_enc_key_convert:
@@ -1026,7 +1024,6 @@ bsaes_enc_key_convert:
 .size	bsaes_enc_key_convert,.-bsaes_enc_key_convert
 
 .globl	bsaes_encrypt_128
-.hidden	bsaes_encrypt_128
 .type	bsaes_encrypt_128,%function
 .align	4
 bsaes_encrypt_128:
@@ -1057,7 +1054,6 @@ bsaes_encrypt_128:
 .size	bsaes_encrypt_128,.-bsaes_encrypt_128
 
 .globl	bsaes_dec_key_convert
-.hidden	bsaes_dec_key_convert
 .type	bsaes_dec_key_convert,%function
 .align	4
 bsaes_dec_key_convert:
@@ -1078,7 +1074,6 @@ bsaes_dec_key_convert:
 .size	bsaes_dec_key_convert,.-bsaes_dec_key_convert
 
 .globl	bsaes_decrypt_128
-.hidden	bsaes_decrypt_128
 .type	bsaes_decrypt_128,%function
 .align	4
 bsaes_decrypt_128:
@@ -1118,7 +1113,6 @@ $code.=<<___;
 .extern AES_decrypt
 
 .global	bsaes_cbc_encrypt
-.hidden	bsaes_cbc_encrypt
 .type	bsaes_cbc_encrypt,%function
 .align	5
 bsaes_cbc_encrypt:
@@ -1394,7 +1388,6 @@ my $keysched = "sp";
 $code.=<<___;
 .extern	AES_encrypt
 .global	bsaes_ctr32_encrypt_blocks
-.hidden	bsaes_ctr32_encrypt_blocks
 .type	bsaes_ctr32_encrypt_blocks,%function
 .align	5
 bsaes_ctr32_encrypt_blocks:
@@ -1636,7 +1629,6 @@ my @T=@XMM[6..7];
 
 $code.=<<___;
 .globl	bsaes_xts_encrypt
-.hidden	bsaes_xts_encrypt
 .type	bsaes_xts_encrypt,%function
 .align	4
 bsaes_xts_encrypt:
@@ -2051,7 +2043,6 @@ $code.=<<___;
 .size	bsaes_xts_encrypt,.-bsaes_xts_encrypt
 
 .globl	bsaes_xts_decrypt
-.hidden	bsaes_xts_decrypt
 .type	bsaes_xts_decrypt,%function
 .align	4
 bsaes_xts_decrypt:
@@ -2496,7 +2487,6 @@ $code.=<<___;
 ___
 }
 $code.=<<___;
-#endif
 #endif
 ___
 

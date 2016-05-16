@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 if (${ARCH} STREQUAL "x86_64")
   set(
@@ -31,6 +31,14 @@ if (${ARCH} STREQUAL "arm")
   )
 endif()
 
+if (${ARCH} STREQUAL "aarch64")
+  set(
+    BN_ARCH_SOURCES
+
+    armv8-mont.${ASM_EXT}
+  )
+endif()
+
 add_library(
   bn
 
@@ -38,8 +46,8 @@ add_library(
 
   add.c
   asm/x86_64-gcc.c
-  asn1.c
   bn.c
+  bn_asn1.c
   cmp.c
   convert.c
   ctx.c
@@ -66,6 +74,7 @@ perlasm(bn-586.${ASM_EXT} asm/bn-586.pl)
 perlasm(co-586.${ASM_EXT} asm/co-586.pl)
 perlasm(x86-mont.${ASM_EXT} asm/x86-mont.pl)
 perlasm(armv4-mont.${ASM_EXT} asm/armv4-mont.pl)
+perlasm(armv8-mont.${ASM_EXT} asm/armv8-mont.pl)
 
 add_executable(
   bn_test
@@ -76,3 +85,4 @@ add_executable(
 )
 
 target_link_libraries(bn_test crypto)
+add_dependencies(all_tests bn_test)

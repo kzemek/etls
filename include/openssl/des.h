@@ -72,12 +72,7 @@ typedef struct DES_cblock_st {
 } DES_cblock;
 
 typedef struct DES_ks {
-  union {
-    DES_cblock cblock;
-    /* make sure things are correct size on machines with
-     * 8 byte longs */
-    uint32_t deslong[2];
-  } ks[16];
+  uint32_t subkeys[16][2];
 } DES_key_schedule;
 
 
@@ -144,6 +139,10 @@ OPENSSL_EXPORT void DES_ede2_cbc_encrypt(const uint8_t *in, uint8_t *out,
 
 /* Deprecated functions. */
 
+/* DES_set_key_unchecked calls |DES_set_key|. */
+OPENSSL_EXPORT void DES_set_key_unchecked(const DES_cblock *key,
+                                          DES_key_schedule *schedule);
+
 OPENSSL_EXPORT void DES_ede3_cfb64_encrypt(const uint8_t *in, uint8_t *out,
                                            long length, DES_key_schedule *ks1,
                                            DES_key_schedule *ks2,
@@ -156,6 +155,19 @@ OPENSSL_EXPORT void DES_ede3_cfb_encrypt(const uint8_t *in, uint8_t *out,
                                          DES_key_schedule *ks2,
                                          DES_key_schedule *ks3,
                                          DES_cblock *ivec, int enc);
+
+
+/* Private functions.
+ *
+ * These functions are only exported for use in |decrepit|. */
+
+OPENSSL_EXPORT void DES_decrypt3(uint32_t *data, const DES_key_schedule *ks1,
+                                 const DES_key_schedule *ks2,
+                                 const DES_key_schedule *ks3);
+
+OPENSSL_EXPORT void DES_encrypt3(uint32_t *data, const DES_key_schedule *ks1,
+                                 const DES_key_schedule *ks2,
+                                 const DES_key_schedule *ks3);
 
 
 #if defined(__cplusplus)

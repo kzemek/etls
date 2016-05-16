@@ -87,55 +87,19 @@
 #define BIO_FP_WRITE 0x04
 #define BIO_FP_APPEND 0x08
 
-static FILE *open_file(const char *filename, const char *mode) {
-#if defined(_WIN32) && defined(CP_UTF8)
-  int sz, len_0 = (int)strlen(filename) + 1;
-  DWORD flags;
-
-  /* Basically there are three cases to cover: a) filename is pure ASCII
-   * string; b) actual UTF-8 encoded string and c) locale-ized string, i.e. one
-   * containing 8-bit characters that are meaningful in current system locale.
-   * If filename is pure ASCII or real UTF-8 encoded string,
-   * MultiByteToWideChar succeeds and _wfopen works. If filename is locale-ized
-   * string, chances are that MultiByteToWideChar fails reporting
-   * ERROR_NO_UNICODE_TRANSLATION, in which case we fall back to fopen... */
-  if ((sz = MultiByteToWideChar(CP_UTF8, (flags = MB_ERR_INVALID_CHARS),
-                                filename, len_0, NULL, 0)) > 0 ||
-      (GetLastError() == ERROR_INVALID_FLAGS &&
-       (sz = MultiByteToWideChar(CP_UTF8, (flags = 0), filename, len_0, NULL,
-                                 0)) > 0)) {
-    WCHAR wmode[8];
-    WCHAR *wfilename = _alloca(sz * sizeof(WCHAR));
-
-    if (MultiByteToWideChar(CP_UTF8, flags, filename, len_0, wfilename, sz) &&
-        MultiByteToWideChar(CP_UTF8, 0, mode, strlen(mode) + 1, wmode,
-                            sizeof(wmode) / sizeof(wmode[0])) &&
-        (file = _wfopen(wfilename, wmode)) == NULL &&
-        (errno == ENOENT ||
-         errno == EBADF)) /* UTF-8 decode succeeded, but no file, filename
-                           * could still have been locale-ized... */
-      return fopen(filename, mode);
-  } else if (GetLastError() == ERROR_NO_UNICODE_TRANSLATION) {
-    return fopen(filename, mode);
-  }
-#else
-  return fopen(filename, mode);
-#endif
-}
-
 BIO *BIO_new_file(const char *filename, const char *mode) {
   BIO *ret;
   FILE *file;
 
-  file = open_file(filename, mode);
+  file = fopen(filename, mode);
   if (file == NULL) {
-    OPENSSL_PUT_SYSTEM_ERROR(fopen);
+    OPENSSL_PUT_SYSTEM_ERROR();
 
     ERR_add_error_data(5, "fopen('", filename, "','", mode, "')");
     if (errno == ENOENT) {
-      OPENSSL_PUT_ERROR(BIO, BIO_new_file, BIO_R_NO_SUCH_FILE);
+      OPENSSL_PUT_ERROR(BIO, BIO_R_NO_SUCH_FILE);
     } else {
-      OPENSSL_PUT_ERROR(BIO, BIO_new_file, BIO_R_SYS_LIB);
+      OPENSSL_PUT_ERROR(BIO, BIO_R_SYS_LIB);
     }
     return NULL;
   }
@@ -182,20 +146,19 @@ static int file_free(BIO *bio) {
 }
 
 static int file_read(BIO *b, char *out, int outl) {
-  int ret = 0;
-
   if (!b->init) {
     return 0;
   }
 
-  ret = fread(out, 1, outl, (FILE *)b->ptr);
+  size_t ret = fread(out, 1, outl, (FILE *)b->ptr);
   if (ret == 0 && ferror((FILE *)b->ptr)) {
-    OPENSSL_PUT_SYSTEM_ERROR(fread);
-    OPENSSL_PUT_ERROR(BIO, file_read, ERR_R_SYS_LIB);
-    ret = -1;
+    OPENSSL_PUT_SYSTEM_ERROR();
+    OPENSSL_PUT_ERROR(BIO, ERR_R_SYS_LIB);
+    return -1;
   }
 
-  return ret;
+  /* fread reads at most |outl| bytes, so |ret| fits in an int. */
+  return (int)ret;
 }
 
 static int file_write(BIO *b, const char *in, int inl) {
@@ -253,15 +216,15 @@ static long file_ctrl(BIO *b, int cmd, long num, void *ptr) {
       } else if (num & BIO_FP_READ) {
         BUF_strlcpy(p, "r", sizeof(p));
       } else {
-        OPENSSL_PUT_ERROR(BIO, file_ctrl, BIO_R_BAD_FOPEN_MODE);
+        OPENSSL_PUT_ERROR(BIO, BIO_R_BAD_FOPEN_MODE);
         ret = 0;
         break;
       }
-      fp = open_file(ptr, p);
+      fp = fopen(ptr, p);
       if (fp == NULL) {
-        OPENSSL_PUT_SYSTEM_ERROR(fopen);
+        OPENSSL_PUT_SYSTEM_ERROR();
         ERR_add_error_data(5, "fopen('", ptr, "','", p, "')");
-        OPENSSL_PUT_ERROR(BIO, file_ctrl, ERR_R_SYS_LIB);
+        OPENSSL_PUT_ERROR(BIO, ERR_R_SYS_LIB);
         ret = 0;
         break;
       }

@@ -1,4 +1,4 @@
-include_directories(. ../include)
+include_directories(../include)
 
 if(APPLE)
   if (${ARCH} STREQUAL "x86")
@@ -22,6 +22,7 @@ elseif(UNIX)
   endif()
   set(ASM_EXT S)
   enable_language(ASM)
+  set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -Wa,--noexecstack")
 else()
   if (CMAKE_CL_64)
     message("Using nasm")
@@ -53,41 +54,6 @@ function(perlasm dest src)
   )
 endfunction()
 
-if (${ARCH} STREQUAL "x86_64")
-  set(
-    CRYPTO_ARCH_SOURCES
-
-    cpu-x86_64-asm.${ASM_EXT}
-    cpu-intel.c
-  )
-endif()
-
-if (${ARCH} STREQUAL "x86")
-  set(
-    CRYPTO_ARCH_SOURCES
-
-    cpu-x86-asm.${ASM_EXT}
-    cpu-intel.c
-  )
-endif()
-
-if (${ARCH} STREQUAL "arm")
-  set(
-    CRYPTO_ARCH_SOURCES
-
-    cpu-arm.c
-    cpu-arm-asm.S
-  )
-endif()
-
-if (${ARCH} STREQUAL "aarch64")
-  set(
-    CRYPTO_ARCH_SOURCES
-
-    cpu-arm.c
-  )
-endif()
-
 # Level 0.1 - depends on nothing outside this set.
 add_subdirectory(stack)
 add_subdirectory(lhash)
@@ -107,6 +73,8 @@ add_subdirectory(rc4)
 add_subdirectory(conf)
 add_subdirectory(chacha)
 add_subdirectory(poly1305)
+add_subdirectory(curve25519)
+add_subdirectory(newhope)
 
 # Level 1, depends only on 0.*
 add_subdirectory(digest)
@@ -144,9 +112,11 @@ add_subdirectory(test)
 add_library(
   crypto
 
+  cpu-aarch64-linux.c
+  cpu-arm.c
+  cpu-arm-linux.c
+  cpu-intel.c
   crypto.c
-  directory_posix.c
-  directory_win.c
   ex_data.c
   mem.c
   refcount_c11.c
@@ -156,8 +126,6 @@ add_library(
   thread_pthread.c
   thread_win.c
   time_support.c
-
-  ${CRYPTO_ARCH_SOURCES}
 
   $<TARGET_OBJECTS:stack>
   $<TARGET_OBJECTS:lhash>
@@ -176,6 +144,7 @@ add_library(
   $<TARGET_OBJECTS:conf>
   $<TARGET_OBJECTS:chacha>
   $<TARGET_OBJECTS:poly1305>
+  $<TARGET_OBJECTS:curve25519>
   $<TARGET_OBJECTS:buf>
   $<TARGET_OBJECTS:bn>
   $<TARGET_OBJECTS:bio>
@@ -196,7 +165,8 @@ add_library(
   $<TARGET_OBJECTS:pem>
   $<TARGET_OBJECTS:x509>
   $<TARGET_OBJECTS:x509v3>
-  $<TARGET_OBJECTS:pkcs8>
+  $<TARGET_OBJECTS:pkcs8_lib>
+  $<TARGET_OBJECTS:newhope>
 )
 
 if(NOT MSVC AND NOT ANDROID)
@@ -212,6 +182,7 @@ add_executable(
 )
 
 target_link_libraries(constant_time_test crypto)
+add_dependencies(all_tests constant_time_test)
 
 add_executable(
   thread_test
@@ -222,6 +193,7 @@ add_executable(
 )
 
 target_link_libraries(thread_test crypto)
+add_dependencies(all_tests thread_test)
 
 add_executable(
   refcount_test
@@ -230,6 +202,4 @@ add_executable(
 )
 
 target_link_libraries(refcount_test crypto)
-
-perlasm(cpu-x86_64-asm.${ASM_EXT} cpu-x86_64-asm.pl)
-perlasm(cpu-x86-asm.${ASM_EXT} cpu-x86-asm.pl)
+add_dependencies(all_tests refcount_test)

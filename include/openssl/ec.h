@@ -81,14 +81,24 @@ extern "C" {
 typedef struct ec_group_st EC_GROUP;
 typedef struct ec_point_st EC_POINT;
 
-/** Enum for the point conversion form as defined in X9.62 (ECDSA)
- *  for the encoding of a elliptic curve point (x,y) */
+/* point_conversion_form_t enumerates forms, as defined in X9.62 (ECDSA), for
+ * the encoding of a elliptic curve point (x,y) */
 typedef enum {
-	/** the point is encoded as z||x, where the octet z specifies 
-	 *  which solution of the quadratic equation y is  */
-	POINT_CONVERSION_COMPRESSED = 2,
-	/** the point is encoded as z||x||y, where z is the octet 0x02  */
-	POINT_CONVERSION_UNCOMPRESSED = 4
+  /* POINT_CONVERSION_COMPRESSED indicates that the point is encoded as z||x,
+   * where the octet z specifies which solution of the quadratic equation y
+   * is. */
+  POINT_CONVERSION_COMPRESSED = 2,
+
+  /* POINT_CONVERSION_COMPRESSED indicates that the point is encoded as
+   * z||x||y, where z is the octet 0x04. */
+  POINT_CONVERSION_UNCOMPRESSED = 4,
+
+  /* POINT_CONVERSION_HYBRID indicates that the point is encoded as z||x||y,
+   * where z specifies which solution of the quadratic equation y is. This is
+   * not supported by the code and has never been observed in use.
+   *
+   * TODO(agl): remove once node.js no longer references this. */
+  POINT_CONVERSION_HYBRID = 6,
 } point_conversion_form_t;
 
 
@@ -120,10 +130,9 @@ OPENSSL_EXPORT int EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b,
  * in |group| that specifies the generator for the group. */
 OPENSSL_EXPORT const EC_POINT *EC_GROUP_get0_generator(const EC_GROUP *group);
 
-/* EC_GROUP_get_order sets |*order| to the order of |group|, if it's not
- * NULL. It returns one on success and zero otherwise. |ctx| is ignored. */
-OPENSSL_EXPORT int EC_GROUP_get_order(const EC_GROUP *group, BIGNUM *order,
-                                      BN_CTX *ctx);
+/* EC_GROUP_get0_order returns a pointer to the internal |BIGNUM| object in
+ * |group| that specifies the order of the group. */
+OPENSSL_EXPORT const BIGNUM *EC_GROUP_get0_order(const EC_GROUP *group);
 
 /* EC_GROUP_get_cofactor sets |*cofactor| to the cofactor of |group| using
  * |ctx|, if it's not NULL. It returns one on success and zero otherwise. */
@@ -144,16 +153,7 @@ OPENSSL_EXPORT int EC_GROUP_get_curve_name(const EC_GROUP *group);
 
 /* EC_GROUP_get_degree returns the number of bits needed to represent an
  * element of the field underlying |group|. */
-OPENSSL_EXPORT int EC_GROUP_get_degree(const EC_GROUP *group);
-
-/* EC_GROUP_precompute_mult precomputes multiplies of the generator in order to
- * speed up operations that involve calculating generator multiples. It returns
- * one on sucess and zero otherwise. If |ctx| is not NULL, it may be used. */
-OPENSSL_EXPORT int EC_GROUP_precompute_mult(EC_GROUP *group, BN_CTX *ctx);
-
-/* EC_GROUP_have_precompute_mult returns one if |group| contains precomputed
- * generator multiples. */
-OPENSSL_EXPORT int EC_GROUP_have_precompute_mult(const EC_GROUP *group);
+OPENSSL_EXPORT unsigned EC_GROUP_get_degree(const EC_GROUP *group);
 
 
 /* Points on elliptic curves. */
@@ -189,12 +189,13 @@ OPENSSL_EXPORT int EC_POINT_is_at_infinity(const EC_GROUP *group,
                                            const EC_POINT *point);
 
 /* EC_POINT_is_on_curve returns one if |point| is an element of |group| and
- * zero otheriwse. If |ctx| is non-NULL, it may be used. */
+ * and zero otherwise or when an error occurs. This is different from OpenSSL,
+ * which returns -1 on error. If |ctx| is non-NULL, it may be used. */
 OPENSSL_EXPORT int EC_POINT_is_on_curve(const EC_GROUP *group,
                                         const EC_POINT *point, BN_CTX *ctx);
 
-/* EC_POINT_cmp returns zero if |a| is equal to |b|, greater than zero is
- * non-equal and -1 on error. If |ctx| is not NULL, it may be used. */
+/* EC_POINT_cmp returns zero if |a| is equal to |b|, greater than zero if
+ * not equal and -1 on error. If |ctx| is not NULL, it may be used. */
 OPENSSL_EXPORT int EC_POINT_cmp(const EC_GROUP *group, const EC_POINT *a,
                                 const EC_POINT *b, BN_CTX *ctx);
 
@@ -220,8 +221,10 @@ OPENSSL_EXPORT int EC_POINT_get_affine_coordinates_GFp(const EC_GROUP *group,
                                                        BIGNUM *x, BIGNUM *y,
                                                        BN_CTX *ctx);
 
-/* EC_POINT_set_affine_coordinates_GFp sets the value of |p| to be (|x|, |y|). The
- * |ctx| argument may be used if not NULL. */
+/* EC_POINT_set_affine_coordinates_GFp sets the value of |point| to be
+ * (|x|, |y|). The |ctx| argument may be used if not NULL. It returns one
+ * on success or zero on error. Note that, unlike with OpenSSL, it's
+ * considered an error if the point is not on the curve. */
 OPENSSL_EXPORT int EC_POINT_set_affine_coordinates_GFp(const EC_GROUP *group,
                                                        EC_POINT *point,
                                                        const BIGNUM *x,
@@ -236,6 +239,13 @@ OPENSSL_EXPORT size_t EC_POINT_point2oct(const EC_GROUP *group,
                                          const EC_POINT *point,
                                          point_conversion_form_t form,
                                          uint8_t *buf, size_t len, BN_CTX *ctx);
+
+/* EC_POINT_point2cbb behaves like |EC_POINT_point2oct| but appends the
+ * serialised point to |cbb|. It returns one on success and zero on error. */
+OPENSSL_EXPORT int EC_POINT_point2cbb(CBB *out, const EC_GROUP *group,
+                                      const EC_POINT *point,
+                                      point_conversion_form_t form,
+                                      BN_CTX *ctx);
 
 /* EC_POINT_oct2point sets |point| from |len| bytes of X9.62 format
  * serialisation in |buf|. It returns one on success and zero otherwise. The
@@ -276,13 +286,6 @@ OPENSSL_EXPORT int EC_POINT_mul(const EC_GROUP *group, EC_POINT *r,
                                 const BIGNUM *n, const EC_POINT *q,
                                 const BIGNUM *m, BN_CTX *ctx);
 
-/* EC_POINTs_mul sets r = generator*n + sum(p[i]*m[i]). It returns one on
- * success and zero otherwise. If |ctx| is not NULL, it may be used. */
-OPENSSL_EXPORT int EC_POINTs_mul(const EC_GROUP *group, EC_POINT *r,
-                                 const BIGNUM *n, size_t num,
-                                 const EC_POINT *p[], const BIGNUM *m[],
-                                 BN_CTX *ctx);
-
 
 /* Deprecated functions. */
 
@@ -290,20 +293,42 @@ OPENSSL_EXPORT int EC_POINTs_mul(const EC_GROUP *group, EC_POINT *r,
  * on the equation y² = x³ + a·x + b. It returns the new group or NULL on
  * error.
  *
+ * This new group has no generator. It is an error to use a generator-less group
+ * with any functions except for |EC_GROUP_free|, |EC_POINT_new|,
+ * |EC_POINT_set_affine_coordinates_GFp|, and |EC_GROUP_set_generator|.
+ *
  * |EC_GROUP|s returned by this function will always compare as unequal via
  * |EC_GROUP_cmp| (even to themselves). |EC_GROUP_get_curve_name| will always
- * return |NID_undef|. */
+ * return |NID_undef|.
+ *
+ * Avoid using arbitrary curves and use |EC_GROUP_new_by_curve_name| instead. */
 OPENSSL_EXPORT EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p,
                                                 const BIGNUM *a,
                                                 const BIGNUM *b, BN_CTX *ctx);
 
 /* EC_GROUP_set_generator sets the generator for |group| to |generator|, which
- * must have the given order and cofactor. This should only be used with
- * |EC_GROUP| objects returned by |EC_GROUP_new_curve_GFp|. */
+ * must have the given order and cofactor. It may only be used with |EC_GROUP|
+ * objects returned by |EC_GROUP_new_curve_GFp| and may only be used once on
+ * each group. */
 OPENSSL_EXPORT int EC_GROUP_set_generator(EC_GROUP *group,
                                           const EC_POINT *generator,
                                           const BIGNUM *order,
                                           const BIGNUM *cofactor);
+
+/* EC_GROUP_new_arbitrary calls |EC_GROUP_new_curve_GFp| and
+ * |EC_GROUP_set_generator|.
+ *
+ * TODO(davidben): Remove this once
+ * https://android-review.googlesource.com/#/c/207990/ has cycled in. */
+OPENSSL_EXPORT EC_GROUP *EC_GROUP_new_arbitrary(
+    const BIGNUM *p, const BIGNUM *a, const BIGNUM *b, const BIGNUM *gx,
+    const BIGNUM *gy, const BIGNUM *order, const BIGNUM *cofactor);
+
+/* EC_GROUP_get_order sets |*order| to the order of |group|, if it's not
+ * NULL. It returns one on success and zero otherwise. |ctx| is ignored. Use
+ * |EC_GROUP_get0_order| instead. */
+OPENSSL_EXPORT int EC_GROUP_get_order(const EC_GROUP *group, BIGNUM *order,
+                                      BN_CTX *ctx);
 
 /* EC_GROUP_set_asn1_flag does nothing. */
 OPENSSL_EXPORT void EC_GROUP_set_asn1_flag(EC_GROUP *group, int flag);
@@ -323,84 +348,28 @@ OPENSSL_EXPORT int EC_METHOD_get_field_type(const EC_METHOD *meth);
 OPENSSL_EXPORT void EC_GROUP_set_point_conversion_form(
     EC_GROUP *group, point_conversion_form_t form);
 
+/* EC_builtin_curve describes a supported elliptic curve. */
+typedef struct {
+  int nid;
+  const char *comment;
+} EC_builtin_curve;
+
+/* EC_get_builtin_curves writes at most |max_num_curves| elements to
+ * |out_curves| and returns the total number that it would have written, had
+ * |max_num_curves| been large enough.
+ *
+ * The |EC_builtin_curve| items describe the supported elliptic curves. */
+OPENSSL_EXPORT size_t EC_get_builtin_curves(EC_builtin_curve *out_curves,
+                                            size_t max_num_curves);
 
 /* Old code expects to get EC_KEY from ec.h. */
-#if !defined(OPENSSL_HEADER_EC_KEY_H)
 #include <openssl/ec_key.h>
-#endif
 
 
 #if defined(__cplusplus)
 }  /* extern C */
 #endif
 
-#define EC_F_EC_GROUP_copy 100
-#define EC_F_EC_GROUP_get_curve_GFp 101
-#define EC_F_EC_GROUP_get_degree 102
-#define EC_F_EC_GROUP_new_by_curve_name 103
-#define EC_F_EC_KEY_check_key 104
-#define EC_F_EC_KEY_copy 105
-#define EC_F_EC_KEY_generate_key 106
-#define EC_F_EC_KEY_new_method 107
-#define EC_F_EC_KEY_set_public_key_affine_coordinates 108
-#define EC_F_EC_POINT_add 109
-#define EC_F_EC_POINT_cmp 110
-#define EC_F_EC_POINT_copy 111
-#define EC_F_EC_POINT_dbl 112
-#define EC_F_EC_POINT_dup 113
-#define EC_F_EC_POINT_get_affine_coordinates_GFp 114
-#define EC_F_EC_POINT_invert 115
-#define EC_F_EC_POINT_is_at_infinity 116
-#define EC_F_EC_POINT_is_on_curve 117
-#define EC_F_EC_POINT_make_affine 118
-#define EC_F_EC_POINT_new 119
-#define EC_F_EC_POINT_oct2point 120
-#define EC_F_EC_POINT_point2oct 121
-#define EC_F_EC_POINT_set_affine_coordinates_GFp 122
-#define EC_F_EC_POINT_set_compressed_coordinates_GFp 123
-#define EC_F_EC_POINT_set_to_infinity 124
-#define EC_F_EC_POINTs_make_affine 125
-#define EC_F_compute_wNAF 126
-#define EC_F_d2i_ECPKParameters 127
-#define EC_F_d2i_ECParameters 128
-#define EC_F_d2i_ECPrivateKey 129
-#define EC_F_ec_GFp_mont_field_decode 130
-#define EC_F_ec_GFp_mont_field_encode 131
-#define EC_F_ec_GFp_mont_field_mul 132
-#define EC_F_ec_GFp_mont_field_set_to_one 133
-#define EC_F_ec_GFp_mont_field_sqr 134
-#define EC_F_ec_GFp_mont_group_set_curve 135
-#define EC_F_ec_GFp_simple_group_check_discriminant 136
-#define EC_F_ec_GFp_simple_group_set_curve 137
-#define EC_F_ec_GFp_simple_make_affine 138
-#define EC_F_ec_GFp_simple_oct2point 139
-#define EC_F_ec_GFp_simple_point2oct 140
-#define EC_F_ec_GFp_simple_point_get_affine_coordinates 141
-#define EC_F_ec_GFp_simple_point_set_affine_coordinates 142
-#define EC_F_ec_GFp_simple_points_make_affine 143
-#define EC_F_ec_GFp_simple_set_compressed_coordinates 144
-#define EC_F_ec_asn1_group2pkparameters 145
-#define EC_F_ec_asn1_pkparameters2group 146
-#define EC_F_ec_group_new 147
-#define EC_F_ec_group_new_curve_GFp 148
-#define EC_F_ec_group_new_from_data 149
-#define EC_F_ec_point_set_Jprojective_coordinates_GFp 150
-#define EC_F_ec_pre_comp_new 151
-#define EC_F_ec_wNAF_mul 152
-#define EC_F_ec_wNAF_precompute_mult 153
-#define EC_F_i2d_ECPKParameters 154
-#define EC_F_i2d_ECParameters 155
-#define EC_F_i2d_ECPrivateKey 156
-#define EC_F_i2o_ECPublicKey 157
-#define EC_F_o2i_ECPublicKey 158
-#define EC_F_BN_to_felem 159
-#define EC_F_ec_GFp_nistp256_group_set_curve 160
-#define EC_F_ec_GFp_nistp256_point_get_affine_coordinates 161
-#define EC_F_ec_GFp_nistp256_points_mul 162
-#define EC_F_ec_group_copy 163
-#define EC_F_nistp256_pre_comp_new 164
-#define EC_F_EC_KEY_new_by_curve_name 165
-#define EC_F_EC_GROUP_new_curve_GFp 166
 #define EC_R_BUFFER_TOO_SMALL 100
 #define EC_R_COORDINATES_OUT_OF_RANGE 101
 #define EC_R_D2I_ECPKPARAMETERS_FAILURE 102
@@ -429,5 +398,8 @@ OPENSSL_EXPORT void EC_GROUP_set_point_conversion_form(
 #define EC_R_WRONG_ORDER 125
 #define EC_R_BIGNUM_OUT_OF_RANGE 126
 #define EC_R_WRONG_CURVE_PARAMETERS 127
+#define EC_R_DECODE_ERROR 128
+#define EC_R_ENCODE_ERROR 129
+#define EC_R_GROUP_MISMATCH 130
 
 #endif  /* OPENSSL_HEADER_EC_H */

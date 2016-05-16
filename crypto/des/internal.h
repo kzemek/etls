@@ -183,13 +183,13 @@ how to use xors :-) I got it to its final state.
     PERM_OP(l, r, tt, 4, 0x0f0f0f0fL);  \
   }
 
-#define LOAD_DATA(R, S, u, t, E0, E1) \
-  u = R ^ s[S];                            \
-  t = R ^ s[S + 1]
+#define LOAD_DATA(ks, R, S, u, t, E0, E1) \
+  u = R ^ ks->subkeys[S][0];              \
+  t = R ^ ks->subkeys[S][1]
 
-#define D_ENCRYPT(LL, R, S)                                                    \
+#define D_ENCRYPT(ks, LL, R, S)                                                \
   {                                                                            \
-    LOAD_DATA(R, S, u, t, E0, E1);                                             \
+    LOAD_DATA(ks, R, S, u, t, E0, E1);                                         \
     t = ROTATE(t, 4);                                                          \
     LL ^=                                                                      \
         DES_SPtrans[0][(u >> 2L) & 0x3f] ^ DES_SPtrans[2][(u >> 10L) & 0x3f] ^ \
@@ -202,24 +202,7 @@ how to use xors :-) I got it to its final state.
 #define ITERATIONS 16
 #define HALF_ITERATIONS 8
 
-#if defined(_MSC_VER)
-#define ROTATE(a, n) (_lrotr(a, n))
-#elif defined(__ICC)
-#define ROTATE(a, n) (_rotr(a, n))
-#elif defined(__GNUC__) && __GNUC__ >= 2 && !defined(OPENSSL_NO_ASM) && \
-      !defined(__STRICT_ANSI__) && \
-      (defined(OPENSSL_X86) || defined(OPENSSL_X86_64))
-#define ROTATE(a, n)                                       \
-  ({                                                       \
-    unsigned int ret;                                      \
-    asm("rorl %1,%0" : "=r"(ret) : "I"(n), "0"(a) : "cc"); \
-    ret;                                                   \
-  })
-#endif
-
-#ifndef ROTATE
 #define ROTATE(a, n) (((a) >> (n)) + ((a) << (32 - (n))))
-#endif
 
 
 #if defined(__cplusplus)

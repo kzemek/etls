@@ -14,10 +14,12 @@
 
 #include <openssl/rand.h>
 
+#include <assert.h>
 #include <limits.h>
 #include <string.h>
 
 #include <openssl/chacha.h>
+#include <openssl/cpu.h>
 #include <openssl/mem.h>
 
 #include "internal.h"
@@ -70,13 +72,55 @@ static void rand_thread_state_free(void *state) {
   OPENSSL_free(state);
 }
 
+#if defined(OPENSSL_X86_64) && !defined(OPENSSL_NO_ASM) && \
+    !defined(BORINGSSL_UNSAFE_FUZZER_MODE)
+
+/* These functions are defined in asm/rdrand-x86_64.pl */
+extern int CRYPTO_rdrand(uint8_t out[8]);
+extern int CRYPTO_rdrand_multiple8_buf(uint8_t *buf, size_t len);
+
+static int have_rdrand(void) {
+  return (OPENSSL_ia32cap_P[1] & (1u << 30)) != 0;
+}
+
+static int hwrand(uint8_t *buf, size_t len) {
+  if (!have_rdrand()) {
+    return 0;
+  }
+
+  const size_t len_multiple8 = len & ~7;
+  if (!CRYPTO_rdrand_multiple8_buf(buf, len_multiple8)) {
+    return 0;
+  }
+  len -= len_multiple8;
+
+  if (len != 0) {
+    assert(len < 8);
+
+    uint8_t rand_buf[8];
+    if (!CRYPTO_rdrand(rand_buf)) {
+      return 0;
+    }
+    memcpy(buf + len_multiple8, rand_buf, len);
+  }
+
+  return 1;
+}
+
+#else
+
+static int hwrand(uint8_t *buf, size_t len) {
+  return 0;
+}
+
+#endif
+
 int RAND_bytes(uint8_t *buf, size_t len) {
   if (len == 0) {
     return 1;
   }
 
-  if (!CRYPTO_have_hwrand() ||
-      !CRYPTO_hwrand(buf, len)) {
+  if (!hwrand(buf, len)) {
     /* Without a hardware RNG to save us from address-space duplication, the OS
      * entropy is used directly. */
     CRYPTO_sysrand(buf, len);
@@ -109,24 +153,28 @@ int RAND_bytes(uint8_t *buf, size_t len) {
   if (len >= sizeof(state->partial_block)) {
     size_t remaining = len;
     while (remaining > 0) {
-      // kMaxBytesPerCall is only 2GB, while ChaCha can handle 256GB. But this
-      // is sufficient and easier on 32-bit.
+      /* kMaxBytesPerCall is only 2GB, while ChaCha can handle 256GB. But this
+       * is sufficient and easier on 32-bit. */
       static const size_t kMaxBytesPerCall = 0x80000000;
       size_t todo = remaining;
       if (todo > kMaxBytesPerCall) {
         todo = kMaxBytesPerCall;
       }
-      CRYPTO_chacha_20(buf, buf, todo, state->key,
-                       (uint8_t *)&state->calls_used, 0);
+      uint8_t nonce[12];
+      memset(nonce, 0, 4);
+      memcpy(nonce + 4, &state->calls_used, sizeof(state->calls_used));
+      CRYPTO_chacha_20(buf, buf, todo, state->key, nonce, 0);
       buf += todo;
       remaining -= todo;
       state->calls_used++;
     }
   } else {
     if (sizeof(state->partial_block) - state->partial_block_used < len) {
+      uint8_t nonce[12];
+      memset(nonce, 0, 4);
+      memcpy(nonce + 4, &state->calls_used, sizeof(state->calls_used));
       CRYPTO_chacha_20(state->partial_block, state->partial_block,
-                       sizeof(state->partial_block), state->key,
-                       (uint8_t *)&state->calls_used, 0);
+                       sizeof(state->partial_block), state->key, nonce, 0);
       state->partial_block_used = 0;
     }
 
@@ -145,7 +193,12 @@ int RAND_pseudo_bytes(uint8_t *buf, size_t len) {
   return RAND_bytes(buf, len);
 }
 
-void RAND_seed(const void *buf, int num) {}
+void RAND_seed(const void *buf, int num) {
+  /* OpenSSH calls |RAND_seed| before jailing on the assumption that any needed
+   * file descriptors etc will be opened. */
+  uint8_t unused;
+  RAND_bytes(&unused, sizeof(unused));
+}
 
 int RAND_load_file(const char *path, long num) {
   if (num < 0) {  /* read the "whole file" */
@@ -156,6 +209,8 @@ int RAND_load_file(const char *path, long num) {
     return INT_MAX;
   }
 }
+
+const char *RAND_file_name(char *buf, size_t num) { return NULL; }
 
 void RAND_add(const void *buf, int num, double entropy) {}
 
@@ -171,8 +226,14 @@ int RAND_status(void) {
   return 1;
 }
 
-static const struct rand_meth_st kSSLeayMethod = {NULL, NULL, NULL,
-                                                  NULL, NULL, NULL};
+static const struct rand_meth_st kSSLeayMethod = {
+  RAND_seed,
+  RAND_bytes,
+  RAND_cleanup,
+  RAND_add,
+  RAND_pseudo_bytes,
+  RAND_status,
+};
 
 RAND_METHOD *RAND_SSLeay(void) {
   return (RAND_METHOD*) &kSSLeayMethod;

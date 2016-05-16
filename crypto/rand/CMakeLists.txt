@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 if (${ARCH} STREQUAL "x86_64")
   set(
@@ -13,10 +13,10 @@ add_library(
 
   OBJECT
 
+  deterministic.c
   rand.c
   urandom.c
   windows.c
-  hwrand.c
 
   ${RAND_ARCH_SOURCES}
 )

@@ -1,10 +1,11 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 add_library(
   bytestring
 
   OBJECT
 
+  asn1_compat.c
   ber.c
   cbs.c
   cbb.c
@@ -19,3 +20,4 @@ add_executable(
 )
 
 target_link_libraries(bytestring_test crypto)
+add_dependencies(all_tests bytestring_test)

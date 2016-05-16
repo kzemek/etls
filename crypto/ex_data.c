@@ -124,27 +124,24 @@
 struct crypto_ex_data_func_st {
   long argl;  /* Arbitary long */
   void *argp; /* Arbitary void pointer */
-  CRYPTO_EX_new *new_func;
   CRYPTO_EX_free *free_func;
   CRYPTO_EX_dup *dup_func;
 };
 
 int CRYPTO_get_ex_new_index(CRYPTO_EX_DATA_CLASS *ex_data_class, int *out_index,
-                            long argl, void *argp, CRYPTO_EX_new *new_func,
-                            CRYPTO_EX_dup *dup_func,
+                            long argl, void *argp, CRYPTO_EX_dup *dup_func,
                             CRYPTO_EX_free *free_func) {
   CRYPTO_EX_DATA_FUNCS *funcs;
   int ret = 0;
 
   funcs = OPENSSL_malloc(sizeof(CRYPTO_EX_DATA_FUNCS));
   if (funcs == NULL) {
-    OPENSSL_PUT_ERROR(CRYPTO, CRYPTO_get_ex_new_index, ERR_R_MALLOC_FAILURE);
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
   funcs->argl = argl;
   funcs->argp = argp;
-  funcs->new_func = new_func;
   funcs->dup_func = dup_func;
   funcs->free_func = free_func;
 
@@ -156,12 +153,13 @@ int CRYPTO_get_ex_new_index(CRYPTO_EX_DATA_CLASS *ex_data_class, int *out_index,
 
   if (ex_data_class->meth == NULL ||
       !sk_CRYPTO_EX_DATA_FUNCS_push(ex_data_class->meth, funcs)) {
-    OPENSSL_PUT_ERROR(CRYPTO, CRYPTO_get_ex_new_index, ERR_R_MALLOC_FAILURE);
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     OPENSSL_free(funcs);
     goto err;
   }
 
-  *out_index = sk_CRYPTO_EX_DATA_FUNCS_num(ex_data_class->meth) - 1;
+  *out_index = sk_CRYPTO_EX_DATA_FUNCS_num(ex_data_class->meth) - 1 +
+               ex_data_class->num_reserved;
   ret = 1;
 
 err:
@@ -175,7 +173,7 @@ int CRYPTO_set_ex_data(CRYPTO_EX_DATA *ad, int index, void *val) {
   if (ad->sk == NULL) {
     ad->sk = sk_void_new_null();
     if (ad->sk == NULL) {
-      OPENSSL_PUT_ERROR(CRYPTO, CRYPTO_set_ex_data, ERR_R_MALLOC_FAILURE);
+      OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
       return 0;
     }
   }
@@ -185,7 +183,7 @@ int CRYPTO_set_ex_data(CRYPTO_EX_DATA *ad, int index, void *val) {
   /* Add NULL values until the stack is long enough. */
   for (i = n; i <= index; i++) {
     if (!sk_void_push(ad->sk, NULL)) {
-      OPENSSL_PUT_ERROR(CRYPTO, CRYPTO_set_ex_data, ERR_R_MALLOC_FAILURE);
+      OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
       return 0;
     }
   }
@@ -222,62 +220,40 @@ static int get_func_pointers(STACK_OF(CRYPTO_EX_DATA_FUNCS) **out,
   CRYPTO_STATIC_MUTEX_unlock(&ex_data_class->lock);
 
   if (n > 0 && *out == NULL) {
-    OPENSSL_PUT_ERROR(CRYPTO, get_func_pointers, ERR_R_MALLOC_FAILURE);
+    OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
   return 1;
 }
 
-int CRYPTO_new_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, void *obj,
-                       CRYPTO_EX_DATA *ad) {
-  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
-  size_t i;
-
+void CRYPTO_new_ex_data(CRYPTO_EX_DATA *ad) {
   ad->sk = NULL;
-
-  if (!get_func_pointers(&func_pointers, ex_data_class)) {
-    return 0;
-  }
-
-  for (i = 0; i < sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers); i++) {
-    CRYPTO_EX_DATA_FUNCS *func_pointer =
-        sk_CRYPTO_EX_DATA_FUNCS_value(func_pointers, i);
-    if (func_pointer->new_func) {
-      func_pointer->new_func(obj, NULL, ad, i, func_pointer->argl,
-                             func_pointer->argp);
-    }
-  }
-
-  sk_CRYPTO_EX_DATA_FUNCS_free(func_pointers);
-
-  return 1;
 }
 
 int CRYPTO_dup_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, CRYPTO_EX_DATA *to,
                        const CRYPTO_EX_DATA *from) {
-  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
-  size_t i;
-
-  if (!from->sk) {
+  if (from->sk == NULL) {
     /* In this case, |from| is blank, which is also the initial state of |to|,
      * so there's nothing to do. */
     return 1;
   }
 
+  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
   if (!get_func_pointers(&func_pointers, ex_data_class)) {
     return 0;
   }
 
+  size_t i;
   for (i = 0; i < sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers); i++) {
     CRYPTO_EX_DATA_FUNCS *func_pointer =
         sk_CRYPTO_EX_DATA_FUNCS_value(func_pointers, i);
-    void *ptr = CRYPTO_get_ex_data(from, i);
+    void *ptr = CRYPTO_get_ex_data(from, i + ex_data_class->num_reserved);
     if (func_pointer->dup_func) {
-      func_pointer->dup_func(to, from, &ptr, i, func_pointer->argl,
-                             func_pointer->argp);
+      func_pointer->dup_func(to, from, &ptr, i + ex_data_class->num_reserved,
+                             func_pointer->argl, func_pointer->argp);
     }
-    CRYPTO_set_ex_data(to, i, ptr);
+    CRYPTO_set_ex_data(to, i + ex_data_class->num_reserved, ptr);
   }
 
   sk_CRYPTO_EX_DATA_FUNCS_free(func_pointers);
@@ -287,20 +263,25 @@ int CRYPTO_dup_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, CRYPTO_EX_DATA *to,
 
 void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, void *obj,
                          CRYPTO_EX_DATA *ad) {
-  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
-  size_t i;
-
-  if (!get_func_pointers(&func_pointers, ex_data_class)) {
+  if (ad->sk == NULL) {
+    /* Nothing to do. */
     return;
   }
 
+  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
+  if (!get_func_pointers(&func_pointers, ex_data_class)) {
+    /* TODO(davidben): This leaks memory on malloc error. */
+    return;
+  }
+
+  size_t i;
   for (i = 0; i < sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers); i++) {
     CRYPTO_EX_DATA_FUNCS *func_pointer =
         sk_CRYPTO_EX_DATA_FUNCS_value(func_pointers, i);
     if (func_pointer->free_func) {
-      void *ptr = CRYPTO_get_ex_data(ad, i);
-      func_pointer->free_func(obj, ptr, ad, i, func_pointer->argl,
-                              func_pointer->argp);
+      void *ptr = CRYPTO_get_ex_data(ad, i + ex_data_class->num_reserved);
+      func_pointer->free_func(obj, ptr, ad, i + ex_data_class->num_reserved,
+                              func_pointer->argl, func_pointer->argp);
     }
   }
 

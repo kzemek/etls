@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 add_library(
   cipher
@@ -37,3 +37,4 @@ add_executable(
 
 target_link_libraries(cipher_test crypto)
 target_link_libraries(aead_test crypto)
+add_dependencies(all_tests cipher_test aead_test)

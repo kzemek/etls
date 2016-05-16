@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package runner
 
 import (
 	"crypto"
@@ -153,7 +153,7 @@ func masterFromPreMasterSecret(version uint16, suite *cipherSuite, preMasterSecr
 
 // extendedMasterFromPreMasterSecret generates the master secret from the
 // pre-master secret when the Triple Handshake fix is in effect. See
-// https://tools.ietf.org/html/draft-ietf-tls-session-hash-01
+// https://tools.ietf.org/html/rfc7627
 func extendedMasterFromPreMasterSecret(version uint16, suite *cipherSuite, preMasterSecret []byte, h finishedHash) []byte {
 	masterSecret := make([]byte, masterSecretLength)
 	prfForVersion(version, suite)(masterSecret, preMasterSecret, extendedMasterSecretLabel, h.Sum())

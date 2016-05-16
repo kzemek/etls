@@ -45,7 +45,7 @@
 # processes one byte in 8.45 cycles, A9 - in 10.2, A15 - in 7.63,
 # Snapdragon S4 - in 9.33.
 #
-# Câmara, D.; Gouvêa, C. P. L.; López, J. & Dahab, R.: Fast Software
+# CÃ¢mara, D.; GouvÃªa, C. P. L.; LÃ³pez, J. & Dahab, R.: Fast Software
 # Polynomial Multiplication on ARM Processors using the NEON Engine.
 # 
 # http://conradoplg.cryptoland.net/files/2010/12/mocrysen13.pdf
@@ -133,15 +133,14 @@ ___
 }
 
 $code=<<___;
-#if defined(__arm__)
-#include "arm_arch.h"
+#include <openssl/arm_arch.h>
 
 .syntax unified
 
 .text
 .code	32
 
-#ifdef  __APPLE__
+#ifdef  __clang__
 #define ldrplb  ldrbpl
 #define ldrneb  ldrbne
 #endif
@@ -164,7 +163,6 @@ rem_4bit_get:
 .size	rem_4bit_get,.-rem_4bit_get
 
 .global	gcm_ghash_4bit
-.hidden	gcm_ghash_4bit
 .type	gcm_ghash_4bit,%function
 gcm_ghash_4bit:
 	sub	r12,pc,#8
@@ -261,7 +259,6 @@ $code.=<<___;
 .size	gcm_ghash_4bit,.-gcm_ghash_4bit
 
 .global	gcm_gmult_4bit
-.hidden	gcm_gmult_4bit
 .type	gcm_gmult_4bit,%function
 gcm_gmult_4bit:
 	stmdb	sp!,{r4-r11,lr}
@@ -392,7 +389,6 @@ $code.=<<___;
 .fpu	neon
 
 .global	gcm_init_neon
-.hidden	gcm_init_neon
 .type	gcm_init_neon,%function
 .align	4
 gcm_init_neon:
@@ -414,7 +410,6 @@ gcm_init_neon:
 .size	gcm_init_neon,.-gcm_init_neon
 
 .global	gcm_gmult_neon
-.hidden	gcm_gmult_neon
 .type	gcm_gmult_neon,%function
 .align	4
 gcm_gmult_neon:
@@ -433,7 +428,6 @@ gcm_gmult_neon:
 .size	gcm_gmult_neon,.-gcm_gmult_neon
 
 .global	gcm_ghash_neon
-.hidden	gcm_ghash_neon
 .type	gcm_ghash_neon,%function
 .align	4
 gcm_ghash_neon:
@@ -457,12 +451,12 @@ gcm_ghash_neon:
 	veor		$IN,$Xl			@ inp^=Xi
 .Lgmult_neon:
 ___
-	&clmul64x64	($Xl,$Hlo,"$IN#lo");	# H.lo·Xi.lo
+	&clmul64x64	($Xl,$Hlo,"$IN#lo");	# H.loÂ·Xi.lo
 $code.=<<___;
 	veor		$IN#lo,$IN#lo,$IN#hi	@ Karatsuba pre-processing
 ___
-	&clmul64x64	($Xm,$Hhl,"$IN#lo");	# (H.lo+H.hi)·(Xi.lo+Xi.hi)
-	&clmul64x64	($Xh,$Hhi,"$IN#hi");	# H.hi·Xi.hi
+	&clmul64x64	($Xm,$Hhl,"$IN#lo");	# (H.lo+H.hi)Â·(Xi.lo+Xi.hi)
+	&clmul64x64	($Xh,$Hhi,"$IN#hi");	# H.hiÂ·Xi.hi
 $code.=<<___;
 	veor		$Xm,$Xm,$Xl		@ Karatsuba post-processing
 	veor		$Xm,$Xm,$Xh
@@ -504,8 +498,6 @@ ___
 $code.=<<___;
 .asciz  "GHASH for ARMv4/NEON, CRYPTOGAMS by <appro\@openssl.org>"
 .align  2
-
-#endif
 ___
 
 foreach (split("\n",$code)) {
