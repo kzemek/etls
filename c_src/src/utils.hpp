@@ -20,15 +20,15 @@ namespace one {
 namespace etls {
 namespace utils {
 
-#ifdef _GNU_SOURCE
-inline void nameThread(std::thread &t, std::string name)
+inline void nameThread(std::string name)
 {
     assert(name.size() < 16);
-    pthread_setname_np(t.native_handle(), name.c_str());
-}
-#else
-inline void nameThread(std::thread, std::string) {}
+#if defined(_GNU_SOURCE)
+    pthread_setname_np(pthread_self(), name.c_str());
+#elif defined(APPLE)
+    pthread_setname_np(name.c_str());
 #endif
+}
 
 } // namespace utils
 } // namespace etls
