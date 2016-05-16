@@ -56,18 +56,22 @@
 
 #include <openssl/bn.h>
 
+#include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <openssl/bio.h>
+#include <openssl/bytestring.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
 #include "internal.h"
 
 BIGNUM *BN_bin2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
-  unsigned num_words, m;
+  size_t num_words;
+  unsigned m;
   BN_ULONG word = 0;
   BIGNUM *bn = NULL;
 
@@ -93,7 +97,10 @@ BIGNUM *BN_bin2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
     return NULL;
   }
 
-  ret->top = num_words;
+  /* |bn_wexpand| must check bounds on |num_words| to write it into
+   * |ret->dmax|. */
+  assert(num_words <= INT_MAX);
+  ret->top = (int)num_words;
   ret->neg = 0;
 
   while (len--) {
@@ -189,6 +196,11 @@ int BN_bn2bin_padded(uint8_t *out, size_t len, const BIGNUM *in) {
   return 1;
 }
 
+int BN_bn2cbb_padded(CBB *out, size_t len, const BIGNUM *in) {
+  uint8_t *ptr;
+  return CBB_add_space(out, &ptr, len) && BN_bn2bin_padded(ptr, len, in);
+}
+
 static const char hextable[] = "0123456789abcdef";
 
 char *BN_bn2hex(const BIGNUM *bn) {
@@ -196,9 +208,9 @@ char *BN_bn2hex(const BIGNUM *bn) {
   char *buf;
   char *p;
 
-  buf = (char *)OPENSSL_malloc(bn->top * BN_BYTES * 2 + 2);
+  buf = OPENSSL_malloc(bn->top * BN_BYTES * 2 + 2);
   if (buf == NULL) {
-    OPENSSL_PUT_ERROR(BN, BN_bn2hex, ERR_R_MALLOC_FAILURE);
+    OPENSSL_PUT_ERROR(BN, ERR_R_MALLOC_FAILURE);
     return NULL;
   }
 
@@ -227,47 +239,59 @@ char *BN_bn2hex(const BIGNUM *bn) {
   return buf;
 }
 
-/* decode_hex decodes |i| bytes of hex data from |in| and updates |bn|. */
-static void decode_hex(BIGNUM *bn, const char *in, int i) {
-  int h, m, j, k, c;
-  BN_ULONG l=0;
-
-  j = i; /* least significant 'hex' */
-  h = 0;
-  while (j > 0) {
-    m = ((BN_BYTES * 2) <= j) ? (BN_BYTES * 2) : j;
-    l = 0;
-    for (;;) {
-      c = in[j - m];
-      if ((c >= '0') && (c <= '9')) {
-        k = c - '0';
-      } else if ((c >= 'a') && (c <= 'f')) {
-        k = c - 'a' + 10;
-      } else if ((c >= 'A') && (c <= 'F')) {
-        k = c - 'A' + 10;
-      } else {
-        k = 0; /* paranoia */
-      }
-
-      l = (l << 4) | k;
-
-      if (--m <= 0) {
-        bn->d[h++] = l;
-        break;
-      }
-    }
-
-    j -= (BN_BYTES * 2);
+/* decode_hex decodes |in_len| bytes of hex data from |in| and updates |bn|. */
+static int decode_hex(BIGNUM *bn, const char *in, int in_len) {
+  if (in_len > INT_MAX/4) {
+    OPENSSL_PUT_ERROR(BN, BN_R_BIGNUM_TOO_LONG);
+    return 0;
+  }
+  /* |in_len| is the number of hex digits. */
+  if (bn_expand(bn, in_len * 4) == NULL) {
+    return 0;
   }
 
-  bn->top = h;
+  int i = 0;
+  while (in_len > 0) {
+    /* Decode one |BN_ULONG| at a time. */
+    int todo = BN_BYTES * 2;
+    if (todo > in_len) {
+      todo = in_len;
+    }
+
+    BN_ULONG word = 0;
+    int j;
+    for (j = todo; j > 0; j--) {
+      char c = in[in_len - j];
+
+      BN_ULONG hex;
+      if (c >= '0' && c <= '9') {
+        hex = c - '0';
+      } else if (c >= 'a' && c <= 'f') {
+        hex = c - 'a' + 10;
+      } else if (c >= 'A' && c <= 'F') {
+        hex = c - 'A' + 10;
+      } else {
+        hex = 0;
+        /* This shouldn't happen. The caller checks |isxdigit|. */
+        assert(0);
+      }
+      word = (word << 4) | hex;
+    }
+
+    bn->d[i++] = word;
+    in_len -= todo;
+  }
+  assert(i <= bn->dmax);
+  bn->top = i;
+  return 1;
 }
 
 /* decode_dec decodes |in_len| bytes of decimal data from |in| and updates |bn|. */
-static void decode_dec(BIGNUM *bn, const char *in, int in_len) {
+static int decode_dec(BIGNUM *bn, const char *in, int in_len) {
   int i, j;
   BN_ULONG l = 0;
 
+  /* Decode |BN_DEC_NUM| digits at a time. */
   j = BN_DEC_NUM - (in_len % BN_DEC_NUM);
   if (j == BN_DEC_NUM) {
     j = 0;
@@ -277,15 +301,18 @@ static void decode_dec(BIGNUM *bn, const char *in, int in_len) {
     l *= 10;
     l += in[i] - '0';
     if (++j == BN_DEC_NUM) {
-      BN_mul_word(bn, BN_DEC_CONV);
-      BN_add_word(bn, l);
+      if (!BN_mul_word(bn, BN_DEC_CONV) ||
+          !BN_add_word(bn, l)) {
+        return 0;
+      }
       l = 0;
       j = 0;
     }
   }
+  return 1;
 }
 
-typedef void (*decode_func) (BIGNUM *bn, const char *in, int i);
+typedef int (*decode_func) (BIGNUM *bn, const char *in, int in_len);
 typedef int (*char_test_func) (int c);
 
 static int bn_x2bn(BIGNUM **outp, const char *in, decode_func decode, char_test_func want_char) {
@@ -302,7 +329,7 @@ static int bn_x2bn(BIGNUM **outp, const char *in, decode_func decode, char_test_
     in++;
   }
 
-  for (i = 0; want_char((unsigned char)in[i]); i++) {}
+  for (i = 0; want_char((unsigned char)in[i]) && i + neg < INT_MAX; i++) {}
 
   num = i + neg;
   if (outp == NULL) {
@@ -320,12 +347,9 @@ static int bn_x2bn(BIGNUM **outp, const char *in, decode_func decode, char_test_
     BN_zero(ret);
   }
 
-  /* i is the number of hex digests; */
-  if (bn_expand(ret, i * 4) == NULL) {
+  if (!decode(ret, in, i)) {
     goto err;
   }
-
-  decode(ret, in, i);
 
   bn_correct_top(ret);
   if (!BN_is_zero(ret)) {
@@ -361,11 +385,10 @@ char *BN_bn2dec(const BIGNUM *a) {
    */
   i = BN_num_bits(a) * 3;
   num = i / 10 + i / 1000 + 1 + 1;
-  bn_data =
-      (BN_ULONG *)OPENSSL_malloc((num / BN_DEC_NUM + 1) * sizeof(BN_ULONG));
-  buf = (char *)OPENSSL_malloc(num + 3);
+  bn_data = OPENSSL_malloc((num / BN_DEC_NUM + 1) * sizeof(BN_ULONG));
+  buf = OPENSSL_malloc(num + 3);
   if ((buf == NULL) || (bn_data == NULL)) {
-    OPENSSL_PUT_ERROR(BN, BN_bn2dec, ERR_R_MALLOC_FAILURE);
+    OPENSSL_PUT_ERROR(BN, ERR_R_MALLOC_FAILURE);
     goto err;
   }
   t = BN_dup(a);
@@ -498,4 +521,87 @@ BN_ULONG BN_get_word(const BIGNUM *bn) {
     default:
       return BN_MASK2;
   }
+}
+
+size_t BN_bn2mpi(const BIGNUM *in, uint8_t *out) {
+  const size_t bits = BN_num_bits(in);
+  const size_t bytes = (bits + 7) / 8;
+  /* If the number of bits is a multiple of 8, i.e. if the MSB is set,
+   * prefix with a zero byte. */
+  int extend = 0;
+  if (bytes != 0 && (bits & 0x07) == 0) {
+    extend = 1;
+  }
+
+  const size_t len = bytes + extend;
+  if (len < bytes ||
+      4 + len < len ||
+      (len & 0xffffffff) != len) {
+    /* If we cannot represent the number then we emit zero as the interface
+     * doesn't allow an error to be signalled. */
+    if (out) {
+      memset(out, 0, 4);
+    }
+    return 4;
+  }
+
+  if (out == NULL) {
+    return 4 + len;
+  }
+
+  out[0] = len >> 24;
+  out[1] = len >> 16;
+  out[2] = len >> 8;
+  out[3] = len;
+  if (extend) {
+    out[4] = 0;
+  }
+  BN_bn2bin(in, out + 4 + extend);
+  if (in->neg && len > 0) {
+    out[4] |= 0x80;
+  }
+  return len + 4;
+}
+
+BIGNUM *BN_mpi2bn(const uint8_t *in, size_t len, BIGNUM *out) {
+  if (len < 4) {
+    OPENSSL_PUT_ERROR(BN, BN_R_BAD_ENCODING);
+    return NULL;
+  }
+  const size_t in_len = ((size_t)in[0] << 24) |
+                        ((size_t)in[1] << 16) |
+                        ((size_t)in[2] << 8) |
+                        ((size_t)in[3]);
+  if (in_len != len - 4) {
+    OPENSSL_PUT_ERROR(BN, BN_R_BAD_ENCODING);
+    return NULL;
+  }
+
+  int out_is_alloced = 0;
+  if (out == NULL) {
+    out = BN_new();
+    if (out == NULL) {
+      OPENSSL_PUT_ERROR(BN, ERR_R_MALLOC_FAILURE);
+      return NULL;
+    }
+    out_is_alloced = 1;
+  }
+
+  if (in_len == 0) {
+    BN_zero(out);
+    return out;
+  }
+
+  in += 4;
+  if (BN_bin2bn(in, in_len, out) == NULL) {
+    if (out_is_alloced) {
+      BN_free(out);
+    }
+    return NULL;
+  }
+  out->neg = ((*in) & 0x80) != 0;
+  if (out->neg) {
+    BN_clear_bit(out, BN_num_bits(out) - 1);
+  }
+  return out;
 }

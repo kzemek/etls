@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 add_library(
   lhash
@@ -17,3 +17,4 @@ add_executable(
 )
 
 target_link_libraries(lhash_test crypto)
+add_dependencies(all_tests lhash_test)

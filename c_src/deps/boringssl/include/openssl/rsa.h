@@ -123,8 +123,8 @@ OPENSSL_EXPORT int RSA_generate_multi_prime_key(RSA *rsa, int bits,
  * It returns 1 on success or zero on error.
  *
  * The |padding| argument must be one of the |RSA_*_PADDING| values. If in
- * doubt, |RSA_PKCS1_PADDING| is the most common but |RSA_PKCS1_OAEP_PADDING|
- * is the most secure. */
+ * doubt, use |RSA_PKCS1_OAEP_PADDING| for new protocols but
+ * |RSA_PKCS1_PADDING| is most common. */
 OPENSSL_EXPORT int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out,
                                size_t max_out, const uint8_t *in, size_t in_len,
                                int padding);
@@ -136,8 +136,14 @@ OPENSSL_EXPORT int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out,
  * It returns 1 on success or zero on error.
  *
  * The |padding| argument must be one of the |RSA_*_PADDING| values. If in
- * doubt, |RSA_PKCS1_PADDING| is the most common but |RSA_PKCS1_OAEP_PADDING|
- * is the most secure. */
+ * doubt, use |RSA_PKCS1_OAEP_PADDING| for new protocols.
+ *
+ * Passing |RSA_PKCS1_PADDING| into this function is deprecated and insecure. If
+ * implementing a protocol using RSAES-PKCS1-V1_5, use |RSA_NO_PADDING| and then
+ * check padding in constant-time combined with a swap to a random session key
+ * or other mitigation. See "Chosen Ciphertext Attacks Against Protocols Based
+ * on the RSA Encryption Standard PKCS #1", Daniel Bleichenbacher, Advances in
+ * Cryptology (Crypto '98). */
 OPENSSL_EXPORT int RSA_decrypt(RSA *rsa, size_t *out_len, uint8_t *out,
                                size_t max_out, const uint8_t *in, size_t in_len,
                                int padding);
@@ -146,46 +152,34 @@ OPENSSL_EXPORT int RSA_decrypt(RSA *rsa, size_t *out_len, uint8_t *out,
  * |rsa| and writes the encrypted data to |to|. The |to| buffer must have at
  * least |RSA_size| bytes of space. It returns the number of bytes written, or
  * -1 on error. The |padding| argument must be one of the |RSA_*_PADDING|
- * values. If in doubt, |RSA_PKCS1_PADDING| is the most common but
- * |RSA_PKCS1_OAEP_PADDING| is the most secure.
+ * values. If in doubt, use |RSA_PKCS1_OAEP_PADDING| for new protocols but
+ * |RSA_PKCS1_PADDING| is most common.
  *
  * WARNING: this function is dangerous because it breaks the usual return value
  * convention. Use |RSA_encrypt| instead. */
-OPENSSL_EXPORT int RSA_public_encrypt(int flen, const uint8_t *from,
+OPENSSL_EXPORT int RSA_public_encrypt(size_t flen, const uint8_t *from,
                                       uint8_t *to, RSA *rsa, int padding);
 
 /* RSA_private_decrypt decrypts |flen| bytes from |from| with the public key in
- * |rsa| and writes the plaintext to |to|. The |to| buffer must have at
- * least |RSA_size| bytes of space. It returns the number of bytes written, or
- * -1 on error. The |padding| argument must be one of the |RSA_*_PADDING|
- * values. If in doubt, |RSA_PKCS1_PADDING| is the most common but
- * |RSA_PKCS1_OAEP_PADDING| is the most secure.
+ * |rsa| and writes the plaintext to |to|. The |to| buffer must have at least
+ * |RSA_size| bytes of space. It returns the number of bytes written, or -1 on
+ * error. The |padding| argument must be one of the |RSA_*_PADDING| values. If
+ * in doubt, use |RSA_PKCS1_OAEP_PADDING| for new protocols. Passing
+ * |RSA_PKCS1_PADDING| into this function is deprecated and insecure. See
+ * |RSA_decrypt|.
  *
  * WARNING: this function is dangerous because it breaks the usual return value
  * convention. Use |RSA_decrypt| instead. */
-OPENSSL_EXPORT int RSA_private_decrypt(int flen, const uint8_t *from,
+OPENSSL_EXPORT int RSA_private_decrypt(size_t flen, const uint8_t *from,
                                        uint8_t *to, RSA *rsa, int padding);
-
-/* RSA_message_index_PKCS1_type_2 performs the first step of a PKCS #1 padding
- * check for decryption. If the |from_len| bytes pointed to at |from| are a
- * valid PKCS #1 message, it returns one and sets |*out_index| to the start of
- * the unpadded message. The unpadded message is a suffix of the input and has
- * length |from_len - *out_index|. Otherwise, it returns zero and sets
- * |*out_index| to zero. This function runs in time independent of the input
- * data and is intended to be used directly to avoid Bleichenbacher's attack.
- *
- * WARNING: This function behaves differently from the usual OpenSSL convention
- * in that it does NOT put an error on the queue in the error case. */
-OPENSSL_EXPORT int RSA_message_index_PKCS1_type_2(const uint8_t *from,
-                                                  size_t from_len,
-                                                  size_t *out_index);
 
 
 /* Signing / Verification */
 
-/* RSA_sign signs |in_len| bytes of digest from |in| with |rsa| and writes, at
- * most, |RSA_size(rsa)| bytes to |out|. On successful return, the actual
- * number of bytes written is written to |*out_len|.
+/* RSA_sign signs |in_len| bytes of digest from |in| with |rsa| using
+ * RSASSA-PKCS1-v1_5. It writes, at most, |RSA_size(rsa)| bytes to |out|. On
+ * successful return, the actual number of bytes written is written to
+ * |*out_len|.
  *
  * The |hash_nid| argument identifies the hash function used to calculate |in|
  * and is embedded in the resulting signature. For example, it might be
@@ -203,13 +197,14 @@ OPENSSL_EXPORT int RSA_sign(int hash_nid, const uint8_t *in,
  * It returns 1 on success or zero on error.
  *
  * The |padding| argument must be one of the |RSA_*_PADDING| values. If in
- * doubt, |RSA_PKCS1_PADDING| is the most common. */
+ * doubt, |RSA_PKCS1_PADDING| is the most common but |RSA_PKCS1_PSS_PADDING|
+ * (via the |EVP_PKEY| interface) is preferred for new protocols. */
 OPENSSL_EXPORT int RSA_sign_raw(RSA *rsa, size_t *out_len, uint8_t *out,
                                 size_t max_out, const uint8_t *in,
                                 size_t in_len, int padding);
 
-/* RSA_verify verifies that |sig_len| bytes from |sig| are a valid, PKCS#1
- * signature of |msg_len| bytes at |msg| by |rsa|.
+/* RSA_verify verifies that |sig_len| bytes from |sig| are a valid,
+ * RSASSA-PKCS1-v1_5 signature of |msg_len| bytes at |msg| by |rsa|.
  *
  * The |hash_nid| argument identifies the hash function used to calculate |in|
  * and is embedded in the resulting signature in order to prevent hash
@@ -230,7 +225,8 @@ OPENSSL_EXPORT int RSA_verify(int hash_nid, const uint8_t *msg, size_t msg_len,
  * It returns 1 on success or zero on error.
  *
  * The |padding| argument must be one of the |RSA_*_PADDING| values. If in
- * doubt, |RSA_PKCS1_PADDING| is the most common. */
+ * doubt, |RSA_PKCS1_PADDING| is the most common but |RSA_PKCS1_PSS_PADDING|
+ * (via the |EVP_PKEY| interface) is preferred for new protocols. */
 OPENSSL_EXPORT int RSA_verify_raw(RSA *rsa, size_t *out_len, uint8_t *out,
                                   size_t max_out, const uint8_t *in,
                                   size_t in_len, int padding);
@@ -239,22 +235,26 @@ OPENSSL_EXPORT int RSA_verify_raw(RSA *rsa, size_t *out_len, uint8_t *out,
  * |rsa| and writes the encrypted data to |to|. The |to| buffer must have at
  * least |RSA_size| bytes of space. It returns the number of bytes written, or
  * -1 on error. The |padding| argument must be one of the |RSA_*_PADDING|
- * values. If in doubt, |RSA_PKCS1_PADDING| is the most common.
+ * values. If in doubt, |RSA_PKCS1_PADDING| is the most common but
+ * |RSA_PKCS1_PSS_PADDING| (via the |EVP_PKEY| interface) is preferred for new
+ * protocols.
  *
  * WARNING: this function is dangerous because it breaks the usual return value
  * convention. Use |RSA_sign_raw| instead. */
-OPENSSL_EXPORT int RSA_private_encrypt(int flen, const uint8_t *from,
+OPENSSL_EXPORT int RSA_private_encrypt(size_t flen, const uint8_t *from,
                                        uint8_t *to, RSA *rsa, int padding);
 
 /* RSA_public_decrypt verifies |flen| bytes of signature from |from| using the
  * public key in |rsa| and writes the plaintext to |to|. The |to| buffer must
  * have at least |RSA_size| bytes of space. It returns the number of bytes
  * written, or -1 on error. The |padding| argument must be one of the
- * |RSA_*_PADDING| values. If in doubt, |RSA_PKCS1_PADDING| is the most common.
+ * |RSA_*_PADDING| values. If in doubt, |RSA_PKCS1_PADDING| is the most common
+ * but |RSA_PKCS1_PSS_PADDING| (via the |EVP_PKEY| interface) is preferred for
+ * new protocols.
  *
  * WARNING: this function is dangerous because it breaks the usual return value
  * convention. Use |RSA_verify_raw| instead. */
-OPENSSL_EXPORT int RSA_public_decrypt(int flen, const uint8_t *from,
+OPENSSL_EXPORT int RSA_public_decrypt(size_t flen, const uint8_t *from,
                                       uint8_t *to, RSA *rsa, int padding);
 
 
@@ -272,7 +272,7 @@ OPENSSL_EXPORT int RSA_is_opaque(const RSA *rsa);
  * of type |md|. Otherwise it returns zero. */
 OPENSSL_EXPORT int RSA_supports_digest(const RSA *rsa, const EVP_MD *md);
 
-/* RSAPublicKey_dup allocates a fresh |RSA| and copies the private key from
+/* RSAPublicKey_dup allocates a fresh |RSA| and copies the public key from
  * |rsa| into it. It returns the fresh |RSA| object, or NULL on error. */
 OPENSSL_EXPORT RSA *RSAPublicKey_dup(const RSA *rsa);
 
@@ -321,6 +321,17 @@ OPENSSL_EXPORT int RSA_padding_add_PKCS1_PSS_mgf1(RSA *rsa, uint8_t *EM,
                                                   const EVP_MD *mgf1Hash,
                                                   int sLen);
 
+/* RSA_padding_add_PKCS1_OAEP_mgf1 writes an OAEP padding of |from| to |to|
+ * with the given parameters and hash functions. If |md| is NULL then SHA-1 is
+ * used. If |mgf1md| is NULL then the value of |md| is used (which means SHA-1
+ * if that, in turn, is NULL).
+ *
+ * It returns one on success or zero on error. */
+OPENSSL_EXPORT int RSA_padding_add_PKCS1_OAEP_mgf1(
+    uint8_t *to, unsigned to_len, const uint8_t *from, unsigned from_len,
+    const uint8_t *param, unsigned param_len, const EVP_MD *md,
+    const EVP_MD *mgf1md);
+
 /* RSA_add_pkcs1_prefix builds a version of |msg| prefixed with the DigestInfo
  * header for the given hash function and sets |out_msg| to point to it. On
  * successful return, |*out_msg| may be allocated memory and, if so,
@@ -332,33 +343,52 @@ OPENSSL_EXPORT int RSA_add_pkcs1_prefix(uint8_t **out_msg, size_t *out_msg_len,
 
 /* ASN.1 functions. */
 
-/* d2i_RSAPublicKey parses an ASN.1, DER-encoded, RSA public key from |len|
- * bytes at |*inp|. If |out| is not NULL then, on exit, a pointer to the result
- * is in |*out|. If |*out| is already non-NULL on entry then the result is
- * written directly into |*out|, otherwise a fresh |RSA| is allocated. On
- * successful exit, |*inp| is advanced past the DER structure. It returns the
- * result or NULL on error. */
-OPENSSL_EXPORT RSA *d2i_RSAPublicKey(RSA **out, const uint8_t **inp, long len);
+/* RSA_parse_public_key parses a DER-encoded RSAPublicKey structure (RFC 3447)
+ * from |cbs| and advances |cbs|. It returns a newly-allocated |RSA| or NULL on
+ * error. */
+OPENSSL_EXPORT RSA *RSA_parse_public_key(CBS *cbs);
 
-/* i2d_RSAPublicKey marshals |in| to an ASN.1, DER structure. If |outp| is not
- * NULL then the result is written to |*outp| and |*outp| is advanced just past
- * the output. It returns the number of bytes in the result, whether written or
- * not, or a negative value on error. */
-OPENSSL_EXPORT int i2d_RSAPublicKey(const RSA *in, uint8_t **outp);
+/* RSA_parse_public_key_buggy behaves like |RSA_parse_public_key|, but it
+ * tolerates some invalid encodings. Do not use this function. */
+OPENSSL_EXPORT RSA *RSA_parse_public_key_buggy(CBS *cbs);
 
-/* d2i_RSAPrivateKey parses an ASN.1, DER-encoded, RSA private key from |len|
- * bytes at |*inp|. If |out| is not NULL then, on exit, a pointer to the result
- * is in |*out|. If |*out| is already non-NULL on entry then the result is
- * written directly into |*out|, otherwise a fresh |RSA| is allocated. On
- * successful exit, |*inp| is advanced past the DER structure. It returns the
- * result or NULL on error. */
-OPENSSL_EXPORT RSA *d2i_RSAPrivateKey(RSA **out, const uint8_t **inp, long len);
+/* RSA_public_key_from_bytes parses |in| as a DER-encoded RSAPublicKey structure
+ * (RFC 3447). It returns a newly-allocated |RSA| or NULL on error. */
+OPENSSL_EXPORT RSA *RSA_public_key_from_bytes(const uint8_t *in, size_t in_len);
 
-/* i2d_RSAPrivateKey marshals |in| to an ASN.1, DER structure. If |outp| is not
- * NULL then the result is written to |*outp| and |*outp| is advanced just past
- * the output. It returns the number of bytes in the result, whether written or
- * not, or a negative value on error. */
-OPENSSL_EXPORT int i2d_RSAPrivateKey(const RSA *in, uint8_t **outp);
+/* RSA_marshal_public_key marshals |rsa| as a DER-encoded RSAPublicKey structure
+ * (RFC 3447) and appends the result to |cbb|. It returns one on success and
+ * zero on failure. */
+OPENSSL_EXPORT int RSA_marshal_public_key(CBB *cbb, const RSA *rsa);
+
+/* RSA_public_key_to_bytes marshals |rsa| as a DER-encoded RSAPublicKey
+ * structure (RFC 3447) and, on success, sets |*out_bytes| to a newly allocated
+ * buffer containing the result and returns one. Otherwise, it returns zero. The
+ * result should be freed with |OPENSSL_free|. */
+OPENSSL_EXPORT int RSA_public_key_to_bytes(uint8_t **out_bytes, size_t *out_len,
+                                           const RSA *rsa);
+
+/* RSA_parse_private_key parses a DER-encoded RSAPrivateKey structure (RFC 3447)
+ * from |cbs| and advances |cbs|. It returns a newly-allocated |RSA| or NULL on
+ * error. */
+OPENSSL_EXPORT RSA *RSA_parse_private_key(CBS *cbs);
+
+/* RSA_private_key_from_bytes parses |in| as a DER-encoded RSAPrivateKey
+ * structure (RFC 3447). It returns a newly-allocated |RSA| or NULL on error. */
+OPENSSL_EXPORT RSA *RSA_private_key_from_bytes(const uint8_t *in,
+                                               size_t in_len);
+
+/* RSA_marshal_private_key marshals |rsa| as a DER-encoded RSAPrivateKey
+ * structure (RFC 3447) and appends the result to |cbb|. It returns one on
+ * success and zero on failure. */
+OPENSSL_EXPORT int RSA_marshal_private_key(CBB *cbb, const RSA *rsa);
+
+/* RSA_private_key_to_bytes marshals |rsa| as a DER-encoded RSAPrivateKey
+ * structure (RFC 3447) and, on success, sets |*out_bytes| to a newly allocated
+ * buffer containing the result and returns one. Otherwise, it returns zero. The
+ * result should be freed with |OPENSSL_free|. */
+OPENSSL_EXPORT int RSA_private_key_to_bytes(uint8_t **out_bytes,
+                                            size_t *out_len, const RSA *rsa);
 
 
 /* ex_data functions.
@@ -366,31 +396,35 @@ OPENSSL_EXPORT int i2d_RSAPrivateKey(const RSA *in, uint8_t **outp);
  * See |ex_data.h| for details. */
 
 OPENSSL_EXPORT int RSA_get_ex_new_index(long argl, void *argp,
-                                        CRYPTO_EX_new *new_func,
+                                        CRYPTO_EX_unused *unused,
                                         CRYPTO_EX_dup *dup_func,
                                         CRYPTO_EX_free *free_func);
 OPENSSL_EXPORT int RSA_set_ex_data(RSA *r, int idx, void *arg);
 OPENSSL_EXPORT void *RSA_get_ex_data(const RSA *r, int idx);
+
+
+/* Flags. */
 
 /* RSA_FLAG_OPAQUE specifies that this RSA_METHOD does not expose its key
  * material. This may be set if, for instance, it is wrapping some other crypto
  * API, like a platform key store. */
 #define RSA_FLAG_OPAQUE 1
 
-/* RSA_FLAG_CACHE_PUBLIC causes a precomputed Montgomery context to be created,
- * on demand, for the public key operations. */
+/* Deprecated and ignored. */
 #define RSA_FLAG_CACHE_PUBLIC 2
 
-/* RSA_FLAG_CACHE_PRIVATE causes a precomputed Montgomery context to be
- * created, on demand, for the private key operations. */
+/* Deprecated and ignored. */
 #define RSA_FLAG_CACHE_PRIVATE 4
 
-/* RSA_FLAG_NO_BLINDING disables blinding of private operations. */
+/* RSA_FLAG_NO_BLINDING disables blinding of private operations, which is a
+ * dangerous thing to do. It is deprecated and should not be used. It will
+ * be ignored whenever possible.
+ *
+ * This flag must be used if a key without the public exponent |e| is used for
+ * private key operations; avoid using such keys whenever possible. */
 #define RSA_FLAG_NO_BLINDING 8
 
-/* RSA_FLAG_EXT_PKEY means that private key operations will be handled by
- * |mod_exp| and that they do not depend on the private key components being
- * present: for example a key stored in external hardware. */
+/* RSA_FLAG_EXT_PKEY is deprecated and ignored. */
 #define RSA_FLAG_EXT_PKEY 0x20
 
 /* RSA_FLAG_SIGN_VER causes the |sign| and |verify| functions of |rsa_meth_st|
@@ -416,6 +450,55 @@ OPENSSL_EXPORT int RSA_blinding_on(RSA *rsa, BN_CTX *ctx);
 OPENSSL_EXPORT RSA *RSA_generate_key(int bits, unsigned long e, void *callback,
                                      void *cb_arg);
 
+/* d2i_RSAPublicKey parses an ASN.1, DER-encoded, RSA public key from |len|
+ * bytes at |*inp|. If |out| is not NULL then, on exit, a pointer to the result
+ * is in |*out|. Note that, even if |*out| is already non-NULL on entry, it
+ * will not be written to. Rather, a fresh |RSA| is allocated and the previous
+ * one is freed. On successful exit, |*inp| is advanced past the DER structure.
+ * It returns the result or NULL on error. */
+OPENSSL_EXPORT RSA *d2i_RSAPublicKey(RSA **out, const uint8_t **inp, long len);
+
+/* i2d_RSAPublicKey marshals |in| to an ASN.1, DER structure. If |outp| is not
+ * NULL then the result is written to |*outp| and |*outp| is advanced just past
+ * the output. It returns the number of bytes in the result, whether written or
+ * not, or a negative value on error. */
+OPENSSL_EXPORT int i2d_RSAPublicKey(const RSA *in, uint8_t **outp);
+
+/* d2i_RSAPrivateKey parses an ASN.1, DER-encoded, RSA private key from |len|
+ * bytes at |*inp|. If |out| is not NULL then, on exit, a pointer to the result
+ * is in |*out|. Note that, even if |*out| is already non-NULL on entry, it
+ * will not be written to. Rather, a fresh |RSA| is allocated and the previous
+ * one is freed. On successful exit, |*inp| is advanced past the DER structure.
+ * It returns the result or NULL on error. */
+OPENSSL_EXPORT RSA *d2i_RSAPrivateKey(RSA **out, const uint8_t **inp, long len);
+
+/* i2d_RSAPrivateKey marshals |in| to an ASN.1, DER structure. If |outp| is not
+ * NULL then the result is written to |*outp| and |*outp| is advanced just past
+ * the output. It returns the number of bytes in the result, whether written or
+ * not, or a negative value on error. */
+OPENSSL_EXPORT int i2d_RSAPrivateKey(const RSA *in, uint8_t **outp);
+
+/* RSA_padding_add_PKCS1_PSS acts like |RSA_padding_add_PKCS1_PSS_mgf1| but the
+ * |mgf1Hash| parameter of the latter is implicitly set to |Hash|. */
+OPENSSL_EXPORT int RSA_padding_add_PKCS1_PSS(RSA *rsa, uint8_t *EM,
+                                             const uint8_t *mHash,
+                                             const EVP_MD *Hash, int sLen);
+
+/* RSA_verify_PKCS1_PSS acts like |RSA_verify_PKCS1_PSS_mgf1| but the
+ * |mgf1Hash| parameter of the latter is implicitly set to |Hash|. */
+OPENSSL_EXPORT int RSA_verify_PKCS1_PSS(RSA *rsa, const uint8_t *mHash,
+                                        const EVP_MD *Hash, const uint8_t *EM,
+                                        int sLen);
+
+/* RSA_padding_add_PKCS1_OAEP acts like |RSA_padding_add_PKCS1_OAEP_mgf1| but
+ * the |md| and |mgf1md| paramaters of the latter are implicitly set to NULL,
+ * which means SHA-1. */
+OPENSSL_EXPORT int RSA_padding_add_PKCS1_OAEP(uint8_t *to, unsigned to_len,
+                                              const uint8_t *from,
+                                              unsigned from_len,
+                                              const uint8_t *param,
+                                              unsigned param_len);
+
 
 struct rsa_meth_st {
   struct openssl_method_common_st common;
@@ -431,6 +514,7 @@ struct rsa_meth_st {
   int (*sign)(int type, const uint8_t *m, unsigned int m_length,
               uint8_t *sigret, unsigned int *siglen, const RSA *rsa);
 
+  /* Ignored. Set this to NULL. */
   int (*verify)(int dtype, const uint8_t *m, unsigned int m_length,
                 const uint8_t *sigbuf, unsigned int siglen, const RSA *rsa);
 
@@ -443,6 +527,7 @@ struct rsa_meth_st {
 
   int (*decrypt)(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                  const uint8_t *in, size_t in_len, int padding);
+  /* Ignored. Set this to NULL. */
   int (*verify_raw)(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                     const uint8_t *in, size_t in_len, int padding);
 
@@ -461,11 +546,13 @@ struct rsa_meth_st {
   int (*private_transform)(RSA *rsa, uint8_t *out, const uint8_t *in,
                            size_t len);
 
-  int (*mod_exp)(BIGNUM *r0, const BIGNUM *I, RSA *rsa,
-                 BN_CTX *ctx); /* Can be null */
+  /* mod_exp is deprecated and ignored. Set it to NULL. */
+  int (*mod_exp)(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx);
+
+  /* bn_mod_exp is deprecated and ignored. Set it to NULL. */
   int (*bn_mod_exp)(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                     const BIGNUM *m, BN_CTX *ctx,
-                    BN_MONT_CTX *m_ctx);
+                    const BN_MONT_CTX *mont);
 
   int flags;
 
@@ -485,8 +572,6 @@ struct rsa_meth_st {
 typedef struct bn_blinding_st BN_BLINDING;
 
 struct rsa_st {
-  /* version is only used during ASN.1 (de)serialisation. */
-  long version;
   RSA_METHOD *meth;
 
   BIGNUM *n;
@@ -509,9 +594,9 @@ struct rsa_st {
 
   /* Used to cache montgomery values. The creation of these values is protected
    * by |lock|. */
-  BN_MONT_CTX *_method_mod_n;
-  BN_MONT_CTX *_method_mod_p;
-  BN_MONT_CTX *_method_mod_q;
+  BN_MONT_CTX *mont_n;
+  BN_MONT_CTX *mont_p;
+  BN_MONT_CTX *mont_q;
 
   /* num_blindings contains the size of the |blindings| and |blindings_inuse|
    * arrays. This member and the |blindings_inuse| array are protected by
@@ -529,77 +614,51 @@ struct rsa_st {
 }  /* extern C */
 #endif
 
-#define RSA_F_BN_BLINDING_convert_ex 100
-#define RSA_F_BN_BLINDING_create_param 101
-#define RSA_F_BN_BLINDING_invert_ex 102
-#define RSA_F_BN_BLINDING_new 103
-#define RSA_F_BN_BLINDING_update 104
-#define RSA_F_RSA_check_key 105
-#define RSA_F_RSA_new_method 106
-#define RSA_F_RSA_padding_add_PKCS1_OAEP_mgf1 107
-#define RSA_F_RSA_padding_add_PKCS1_PSS_mgf1 108
-#define RSA_F_RSA_padding_add_PKCS1_type_1 109
-#define RSA_F_RSA_padding_add_PKCS1_type_2 110
-#define RSA_F_RSA_padding_add_none 111
-#define RSA_F_RSA_padding_check_PKCS1_OAEP_mgf1 112
-#define RSA_F_RSA_padding_check_PKCS1_type_1 113
-#define RSA_F_RSA_padding_check_PKCS1_type_2 114
-#define RSA_F_RSA_padding_check_none 115
-#define RSA_F_RSA_recover_crt_params 116
-#define RSA_F_RSA_sign 117
-#define RSA_F_RSA_verify 118
-#define RSA_F_RSA_verify_PKCS1_PSS_mgf1 119
-#define RSA_F_decrypt 120
-#define RSA_F_encrypt 121
-#define RSA_F_keygen 122
-#define RSA_F_RSA_add_pkcs1_prefix 123
-#define RSA_F_private_transform 124
-#define RSA_F_rsa_setup_blinding 125
-#define RSA_F_sign_raw 126
-#define RSA_F_verify_raw 127
-#define RSA_F_keygen_multiprime 128
-#define RSA_R_BAD_E_VALUE 100
-#define RSA_R_BAD_FIXED_HEADER_DECRYPT 101
-#define RSA_R_BAD_PAD_BYTE_COUNT 102
-#define RSA_R_BAD_RSA_PARAMETERS 103
-#define RSA_R_BAD_SIGNATURE 104
-#define RSA_R_BLOCK_TYPE_IS_NOT_01 105
-#define RSA_R_BN_NOT_INITIALIZED 106
-#define RSA_R_CRT_PARAMS_ALREADY_GIVEN 107
-#define RSA_R_CRT_VALUES_INCORRECT 108
-#define RSA_R_DATA_LEN_NOT_EQUAL_TO_MOD_LEN 109
-#define RSA_R_DATA_TOO_LARGE 110
-#define RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE 111
-#define RSA_R_DATA_TOO_LARGE_FOR_MODULUS 112
-#define RSA_R_DATA_TOO_SMALL 113
-#define RSA_R_DATA_TOO_SMALL_FOR_KEY_SIZE 114
-#define RSA_R_DIGEST_TOO_BIG_FOR_RSA_KEY 115
-#define RSA_R_D_E_NOT_CONGRUENT_TO_1 116
-#define RSA_R_EMPTY_PUBLIC_KEY 117
-#define RSA_R_FIRST_OCTET_INVALID 118
-#define RSA_R_INCONSISTENT_SET_OF_CRT_VALUES 119
-#define RSA_R_INTERNAL_ERROR 120
-#define RSA_R_INVALID_MESSAGE_LENGTH 121
-#define RSA_R_KEY_SIZE_TOO_SMALL 122
-#define RSA_R_LAST_OCTET_INVALID 123
-#define RSA_R_MODULUS_TOO_LARGE 124
-#define RSA_R_NO_PUBLIC_EXPONENT 125
-#define RSA_R_NULL_BEFORE_BLOCK_MISSING 126
-#define RSA_R_N_NOT_EQUAL_P_Q 127
-#define RSA_R_OAEP_DECODING_ERROR 128
-#define RSA_R_ONLY_ONE_OF_P_Q_GIVEN 129
-#define RSA_R_OUTPUT_BUFFER_TOO_SMALL 130
-#define RSA_R_PADDING_CHECK_FAILED 131
-#define RSA_R_PKCS_DECODING_ERROR 132
-#define RSA_R_SLEN_CHECK_FAILED 133
-#define RSA_R_SLEN_RECOVERY_FAILED 134
-#define RSA_R_TOO_LONG 135
-#define RSA_R_TOO_MANY_ITERATIONS 136
-#define RSA_R_UNKNOWN_ALGORITHM_TYPE 137
-#define RSA_R_UNKNOWN_PADDING_TYPE 138
-#define RSA_R_VALUE_MISSING 139
-#define RSA_R_WRONG_SIGNATURE_LENGTH 140
-#define RSA_R_MUST_HAVE_AT_LEAST_TWO_PRIMES 141
-#define RSA_R_CANNOT_RECOVER_MULTI_PRIME_KEY 142
+#define RSA_R_BAD_ENCODING 100
+#define RSA_R_BAD_E_VALUE 101
+#define RSA_R_BAD_FIXED_HEADER_DECRYPT 102
+#define RSA_R_BAD_PAD_BYTE_COUNT 103
+#define RSA_R_BAD_RSA_PARAMETERS 104
+#define RSA_R_BAD_SIGNATURE 105
+#define RSA_R_BAD_VERSION 106
+#define RSA_R_BLOCK_TYPE_IS_NOT_01 107
+#define RSA_R_BN_NOT_INITIALIZED 108
+#define RSA_R_CANNOT_RECOVER_MULTI_PRIME_KEY 109
+#define RSA_R_CRT_PARAMS_ALREADY_GIVEN 110
+#define RSA_R_CRT_VALUES_INCORRECT 111
+#define RSA_R_DATA_LEN_NOT_EQUAL_TO_MOD_LEN 112
+#define RSA_R_DATA_TOO_LARGE 113
+#define RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE 114
+#define RSA_R_DATA_TOO_LARGE_FOR_MODULUS 115
+#define RSA_R_DATA_TOO_SMALL 116
+#define RSA_R_DATA_TOO_SMALL_FOR_KEY_SIZE 117
+#define RSA_R_DIGEST_TOO_BIG_FOR_RSA_KEY 118
+#define RSA_R_D_E_NOT_CONGRUENT_TO_1 119
+#define RSA_R_EMPTY_PUBLIC_KEY 120
+#define RSA_R_ENCODE_ERROR 121
+#define RSA_R_FIRST_OCTET_INVALID 122
+#define RSA_R_INCONSISTENT_SET_OF_CRT_VALUES 123
+#define RSA_R_INTERNAL_ERROR 124
+#define RSA_R_INVALID_MESSAGE_LENGTH 125
+#define RSA_R_KEY_SIZE_TOO_SMALL 126
+#define RSA_R_LAST_OCTET_INVALID 127
+#define RSA_R_MODULUS_TOO_LARGE 128
+#define RSA_R_MUST_HAVE_AT_LEAST_TWO_PRIMES 129
+#define RSA_R_NO_PUBLIC_EXPONENT 130
+#define RSA_R_NULL_BEFORE_BLOCK_MISSING 131
+#define RSA_R_N_NOT_EQUAL_P_Q 132
+#define RSA_R_OAEP_DECODING_ERROR 133
+#define RSA_R_ONLY_ONE_OF_P_Q_GIVEN 134
+#define RSA_R_OUTPUT_BUFFER_TOO_SMALL 135
+#define RSA_R_PADDING_CHECK_FAILED 136
+#define RSA_R_PKCS_DECODING_ERROR 137
+#define RSA_R_SLEN_CHECK_FAILED 138
+#define RSA_R_SLEN_RECOVERY_FAILED 139
+#define RSA_R_TOO_LONG 140
+#define RSA_R_TOO_MANY_ITERATIONS 141
+#define RSA_R_UNKNOWN_ALGORITHM_TYPE 142
+#define RSA_R_UNKNOWN_PADDING_TYPE 143
+#define RSA_R_VALUE_MISSING 144
+#define RSA_R_WRONG_SIGNATURE_LENGTH 145
 
 #endif  /* OPENSSL_HEADER_RSA_H */

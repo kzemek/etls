@@ -59,36 +59,40 @@
 
 #include <openssl/base.h>
 
-#include <openssl/asn1.h>
-
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
 
+/* Default implementations of RSA operations. */
+
+extern const RSA_METHOD RSA_default_method;
+
+size_t rsa_default_size(const RSA *rsa);
+int rsa_default_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
+                        const uint8_t *in, size_t in_len, int padding);
+int rsa_default_sign_raw(RSA *rsa, size_t *out_len, uint8_t *out,
+                         size_t max_out, const uint8_t *in, size_t in_len,
+                         int padding);
+int rsa_default_decrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
+                        const uint8_t *in, size_t in_len, int padding);
+int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
+                                  size_t len);
+int rsa_default_multi_prime_keygen(RSA *rsa, int bits, int num_primes,
+                                   BIGNUM *e_value, BN_GENCB *cb);
+int rsa_default_keygen(RSA *rsa, int bits, BIGNUM *e_value, BN_GENCB *cb);
+
+
 #define RSA_PKCS1_PADDING_SIZE 11
 
 
-/* BN_BLINDING flags */
-#define BN_BLINDING_NO_UPDATE 0x00000001
-#define BN_BLINDING_NO_RECREATE 0x00000002
-
-BN_BLINDING *BN_BLINDING_new(const BIGNUM *A, const BIGNUM *Ai, BIGNUM *mod);
+BN_BLINDING *BN_BLINDING_new(void);
 void BN_BLINDING_free(BN_BLINDING *b);
-int BN_BLINDING_update(BN_BLINDING *b, BN_CTX *ctx);
-int BN_BLINDING_convert(BIGNUM *n, BN_BLINDING *b, BN_CTX *ctx);
-int BN_BLINDING_invert(BIGNUM *n, BN_BLINDING *b, BN_CTX *ctx);
-int BN_BLINDING_convert_ex(BIGNUM *n, BIGNUM *r, BN_BLINDING *b, BN_CTX *);
-int BN_BLINDING_invert_ex(BIGNUM *n, const BIGNUM *r, BN_BLINDING *b, BN_CTX *);
-unsigned long BN_BLINDING_get_flags(const BN_BLINDING *);
-void BN_BLINDING_set_flags(BN_BLINDING *, unsigned long);
-BN_BLINDING *BN_BLINDING_create_param(
-    BN_BLINDING *b, const BIGNUM *e, BIGNUM *m, BN_CTX *ctx,
-    int (*bn_mod_exp)(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
-                      const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx),
-    BN_MONT_CTX *m_ctx);
-BN_BLINDING *rsa_setup_blinding(RSA *rsa, BN_CTX *in_ctx);
+int BN_BLINDING_convert(BIGNUM *n, BN_BLINDING *b, const BIGNUM *e,
+                        const BN_MONT_CTX *mont_ctx, BN_CTX *ctx);
+int BN_BLINDING_invert(BIGNUM *n, const BN_BLINDING *b, BN_MONT_CTX *mont_ctx,
+                       BN_CTX *ctx);
 
 
 int RSA_padding_add_PKCS1_type_1(uint8_t *to, unsigned to_len,
@@ -109,8 +113,6 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *to, unsigned to_len,
                                       const EVP_MD *md, const EVP_MD *mgf1md);
 int RSA_padding_add_none(uint8_t *to, unsigned to_len, const uint8_t *from,
                          unsigned from_len);
-int RSA_padding_check_none(uint8_t *to, unsigned to_len, const uint8_t *from,
-                           unsigned from_len);
 
 /* RSA_private_transform calls either the method-specific |private_transform|
  * function (if given) or the generic one. See the comment for
@@ -118,20 +120,6 @@ int RSA_padding_check_none(uint8_t *to, unsigned to_len, const uint8_t *from,
 int RSA_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
                           size_t len);
 
-typedef struct rsa_pss_params_st {
-  X509_ALGOR *hashAlgorithm;
-  X509_ALGOR *maskGenAlgorithm;
-  ASN1_INTEGER *saltLength;
-  ASN1_INTEGER *trailerField;
-} RSA_PSS_PARAMS;
-
-DECLARE_ASN1_FUNCTIONS(RSA_PSS_PARAMS)
-
-typedef struct rsa_oaep_params_st {
-  X509_ALGOR *hashFunc;
-  X509_ALGOR *maskGenFunc;
-  X509_ALGOR *pSourceFunc;
-} RSA_OAEP_PARAMS;
 
 /* RSA_additional_prime contains information about the third, forth etc prime
  * in a multi-prime RSA key. */
@@ -146,8 +134,8 @@ typedef struct RSA_additional_prime_st {
 
   /* r is the product of all primes (including p and q) prior to this one. */
   BIGNUM *r;
-  /* method_mod is managed by the |RSA_METHOD|. */
-  BN_MONT_CTX *method_mod;
+  /* mont is a |BN_MONT_CTX| modulo |prime|. */
+  BN_MONT_CTX *mont;
 } RSA_additional_prime;
 
 void RSA_additional_prime_free(RSA_additional_prime *ap);

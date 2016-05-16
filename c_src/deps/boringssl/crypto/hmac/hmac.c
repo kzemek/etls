@@ -59,6 +59,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include <openssl/digest.h>
 #include <openssl/mem.h>
 
 
@@ -97,7 +98,7 @@ void HMAC_CTX_cleanup(HMAC_CTX *ctx) {
   EVP_MD_CTX_cleanup(&ctx->i_ctx);
   EVP_MD_CTX_cleanup(&ctx->o_ctx);
   EVP_MD_CTX_cleanup(&ctx->md_ctx);
-  OPENSSL_cleanse(ctx, sizeof(ctx));
+  OPENSSL_cleanse(ctx, sizeof(HMAC_CTX));
 }
 
 int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
@@ -115,8 +116,8 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
    * case. Fix to API to avoid this. */
   if (md != ctx->md || key != NULL) {
     size_t i;
-    uint8_t pad[HMAC_MAX_MD_CBLOCK];
-    uint8_t key_block[HMAC_MAX_MD_CBLOCK];
+    uint8_t pad[EVP_MAX_MD_BLOCK_SIZE];
+    uint8_t key_block[EVP_MAX_MD_BLOCK_SIZE];
     unsigned key_block_len;
 
     size_t block_size = EVP_MD_block_size(md);
@@ -129,16 +130,16 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
         return 0;
       }
     } else {
-      assert(key_len >= 0 && key_len <= sizeof(key_block));
+      assert(key_len <= sizeof(key_block));
       memcpy(key_block, key, key_len);
       key_block_len = (unsigned)key_len;
     }
     /* Keys are then padded with zeros. */
-    if (key_block_len != HMAC_MAX_MD_CBLOCK) {
+    if (key_block_len != EVP_MAX_MD_BLOCK_SIZE) {
       memset(&key_block[key_block_len], 0, sizeof(key_block) - key_block_len);
     }
 
-    for (i = 0; i < HMAC_MAX_MD_CBLOCK; i++) {
+    for (i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
       pad[i] = 0x36 ^ key_block[i];
     }
     if (!EVP_DigestInit_ex(&ctx->i_ctx, md, impl) ||
@@ -146,7 +147,7 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
       return 0;
     }
 
-    for (i = 0; i < HMAC_MAX_MD_CBLOCK; i++) {
+    for (i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
       pad[i] = 0x5c ^ key_block[i];
     }
     if (!EVP_DigestInit_ex(&ctx->o_ctx, md, impl) ||

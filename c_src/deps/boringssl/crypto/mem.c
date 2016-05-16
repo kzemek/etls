@@ -1,4 +1,5 @@
-/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com) * All rights reserved.
+/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
+ * All rights reserved.
  *
  * This package is an SSL implementation written
  * by Eric Young (eay@cryptsoft.com).
@@ -103,9 +104,9 @@ void *OPENSSL_realloc_clean(void *ptr, size_t old_size, size_t new_size) {
 
 void OPENSSL_cleanse(void *ptr, size_t len) {
 #if defined(OPENSSL_WINDOWS)
-	SecureZeroMemory(ptr, len);
+  SecureZeroMemory(ptr, len);
 #else
-	memset(ptr, 0, len);
+  memset(ptr, 0, len);
 
 #if !defined(OPENSSL_NO_ASM)
   /* As best as we can tell, this is sufficient to break any optimisations that

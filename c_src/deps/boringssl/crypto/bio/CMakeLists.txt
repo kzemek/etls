@@ -1,4 +1,4 @@
-include_directories(. .. ../../include)
+include_directories(../../include)
 
 add_library(
   bio
@@ -30,3 +30,4 @@ target_link_libraries(bio_test crypto)
 if (WIN32)
   target_link_libraries(bio_test ws2_32)
 endif()
+add_dependencies(all_tests bio_test)

@@ -60,7 +60,6 @@
 #include <string.h>
 
 #include <openssl/err.h>
-#include <openssl/obj.h>
 #include <openssl/mem.h>
 
 #include "internal.h"
@@ -116,8 +115,7 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
   uint8_t *tmp_buf = NULL;
 
   if (in == NULL || in->digest == NULL) {
-    OPENSSL_PUT_ERROR(DIGEST, EVP_MD_CTX_copy_ex,
-                      DIGEST_R_INPUT_NOT_INITIALIZED);
+    OPENSSL_PUT_ERROR(DIGEST, DIGEST_R_INPUT_NOT_INITIALIZED);
     return 0;
   }
 
@@ -130,15 +128,15 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
   }
 
   EVP_MD_CTX_cleanup(out);
-  memcpy(out, in, sizeof(EVP_MD_CTX));
 
+  out->digest = in->digest;
   if (in->md_data && in->digest->ctx_size) {
     if (tmp_buf) {
       out->md_data = tmp_buf;
     } else {
       out->md_data = OPENSSL_malloc(in->digest->ctx_size);
       if (!out->md_data) {
-        OPENSSL_PUT_ERROR(DIGEST, EVP_MD_CTX_copy_ex, ERR_R_MALLOC_FAILURE);
+        OPENSSL_PUT_ERROR(DIGEST, ERR_R_MALLOC_FAILURE);
         return 0;
       }
     }
@@ -146,6 +144,7 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
   }
 
   assert(in->pctx == NULL || in->pctx_ops != NULL);
+  out->pctx_ops = in->pctx_ops;
   if (in->pctx && in->pctx_ops) {
     out->pctx = in->pctx_ops->dup(in->pctx);
     if (!out->pctx) {
@@ -166,12 +165,13 @@ int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *engine) {
   if (ctx->digest != type) {
     if (ctx->digest && ctx->digest->ctx_size > 0) {
       OPENSSL_free(ctx->md_data);
+      ctx->md_data = NULL;
     }
     ctx->digest = type;
     if (type->ctx_size > 0) {
       ctx->md_data = OPENSSL_malloc(type->ctx_size);
       if (ctx->md_data == NULL) {
-        OPENSSL_PUT_ERROR(DIGEST, EVP_DigestInit_ex, ERR_R_MALLOC_FAILURE);
+        OPENSSL_PUT_ERROR(DIGEST, ERR_R_MALLOC_FAILURE);
         return 0;
       }
     }
@@ -204,7 +204,7 @@ int EVP_DigestFinal_ex(EVP_MD_CTX *ctx, uint8_t *md_out, unsigned int *size) {
 }
 
 int EVP_DigestFinal(EVP_MD_CTX *ctx, uint8_t *md, unsigned int *size) {
-  EVP_DigestFinal_ex(ctx, md, size);
+  (void)EVP_DigestFinal_ex(ctx, md, size);
   EVP_MD_CTX_cleanup(ctx);
   return 1;
 }
@@ -231,11 +231,11 @@ const EVP_MD *EVP_MD_CTX_md(const EVP_MD_CTX *ctx) {
   return ctx->digest;
 }
 
-unsigned EVP_MD_CTX_size(const EVP_MD_CTX *ctx) {
+size_t EVP_MD_CTX_size(const EVP_MD_CTX *ctx) {
   return EVP_MD_size(EVP_MD_CTX_md(ctx));
 }
 
-unsigned EVP_MD_CTX_block_size(const EVP_MD_CTX *ctx) {
+size_t EVP_MD_CTX_block_size(const EVP_MD_CTX *ctx) {
   return EVP_MD_block_size(EVP_MD_CTX_md(ctx));
 }
 

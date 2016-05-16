@@ -74,7 +74,9 @@ void CRYPTO_STATIC_MUTEX_unlock(struct CRYPTO_STATIC_MUTEX *lock) {
 }
 
 void CRYPTO_once(CRYPTO_once_t *once, void (*init)(void)) {
-  pthread_once(once, init);
+  if (pthread_once(once, init) != 0) {
+    abort();
+  }
 }
 
 static pthread_mutex_t g_destructors_lock = PTHREAD_MUTEX_INITIALIZER;

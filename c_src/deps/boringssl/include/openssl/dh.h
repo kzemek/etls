@@ -77,9 +77,6 @@ extern "C" {
 /* DH_new returns a new, empty DH object or NULL on error. */
 OPENSSL_EXPORT DH *DH_new(void);
 
-/* DH_new_method acts the same as |DH_new| but takes an explicit |ENGINE|. */
-OPENSSL_EXPORT DH *DH_new_method(const ENGINE *engine);
-
 /* DH_free decrements the reference count of |dh| and frees it if the reference
  * count drops to zero. */
 OPENSSL_EXPORT void DH_free(DH *dh);
@@ -90,9 +87,8 @@ OPENSSL_EXPORT int DH_up_ref(DH *dh);
 
 /* Standard parameters.
  *
- * These functions return new DH objects with standard parameters configured
- * that use the given ENGINE, which may be NULL. They return NULL on allocation
- * failure. */
+ * These functions return new DH objects with standard parameters. They return
+ * NULL on allocation failure. The |engine| parameter is ignored. */
 
 /* These parameters are taken from RFC 5114. */
 
@@ -160,8 +156,9 @@ OPENSSL_EXPORT unsigned DH_num_bits(const DH *dh);
  * Note: these checks may be quite computationally expensive. */
 OPENSSL_EXPORT int DH_check(const DH *dh, int *out_flags);
 
-#define DH_CHECK_PUBKEY_TOO_SMALL 1
-#define DH_CHECK_PUBKEY_TOO_LARGE 2
+#define DH_CHECK_PUBKEY_TOO_SMALL 0x1
+#define DH_CHECK_PUBKEY_TOO_LARGE 0x2
+#define DH_CHECK_PUBKEY_INVALID 0x4
 
 /* DH_check_pub_key checks the suitability of |pub_key| as a public key for the
  * DH group in |dh| and sets |DH_CHECK_PUBKEY_*| flags in |*out_flags| if it
@@ -177,19 +174,15 @@ OPENSSL_EXPORT DH *DHparams_dup(const DH *dh);
 
 /* ASN.1 functions. */
 
-/* d2i_DHparams parses an ASN.1, DER encoded Diffie-Hellman parameters
- * structure from |len| bytes at |*inp|. If |ret| is not NULL then, on exit, a
- * pointer to the result is in |*ret|. If |*ret| is already non-NULL on entry
- * then the result is written directly into |*ret|, otherwise a fresh |DH| is
- * allocated. On successful exit, |*inp| is advanced past the DER structure. It
- * returns the result or NULL on error. */
-OPENSSL_EXPORT DH *d2i_DHparams(DH **ret, const unsigned char **inp, long len);
+/* DH_parse_parameters decodes a DER-encoded DHParameter structure (PKCS #3)
+ * from |cbs| and advances |cbs|. It returns a newly-allocated |DH| or NULL on
+ * error. */
+OPENSSL_EXPORT DH *DH_parse_parameters(CBS *cbs);
 
-/* i2d_DHparams marshals |in| to an ASN.1, DER structure. If |outp| is not NULL
- * then the result is written to |*outp| and |*outp| is advanced just past the
- * output. It returns the number of bytes in the result, whether written or
- * not, or a negative value on error. */
-OPENSSL_EXPORT int i2d_DHparams(const DH *in, unsigned char **outp);
+/* DH_marshal_parameters marshals |dh| as a DER-encoded DHParameter structure
+ * (PKCS #3) and appends the result to |cbb|. It returns one on success and zero
+ * on error. */
+OPENSSL_EXPORT int DH_marshal_parameters(CBB *cbb, const DH *dh);
 
 
 /* ex_data functions.
@@ -197,45 +190,47 @@ OPENSSL_EXPORT int i2d_DHparams(const DH *in, unsigned char **outp);
  * See |ex_data.h| for details. */
 
 OPENSSL_EXPORT int DH_get_ex_new_index(long argl, void *argp,
-                                       CRYPTO_EX_new *new_func,
+                                       CRYPTO_EX_unused *unused,
                                        CRYPTO_EX_dup *dup_func,
                                        CRYPTO_EX_free *free_func);
 OPENSSL_EXPORT int DH_set_ex_data(DH *d, int idx, void *arg);
 OPENSSL_EXPORT void *DH_get_ex_data(DH *d, int idx);
 
 
-/* dh_method contains function pointers to override the implementation of DH.
- * See |engine.h| for details. */
-struct dh_method {
-  struct openssl_method_common_st common;
+/* Deprecated functions. */
 
-  /* app_data is an opaque pointer for the method to use. */
-  void *app_data;
+/* DH_generate_parameters behaves like |DH_generate_parameters_ex|, which is
+ * what you should use instead. It returns NULL on error, or a newly-allocated
+ * |DH| on success. This function is provided for compatibility only. */
+OPENSSL_EXPORT DH *DH_generate_parameters(int prime_len, int generator,
+                                          void (*callback)(int, int, void *),
+                                          void *cb_arg);
 
-  /* init is called just before the return of |DH_new_method|. It returns one
-   * on success or zero on error. */
-  int (*init)(DH *dh);
+/* d2i_DHparams parses an ASN.1, DER encoded Diffie-Hellman parameters structure
+ * from |len| bytes at |*inp|. If |ret| is not NULL then, on exit, a pointer to
+ * the result is in |*ret|. Note that, even if |*ret| is already non-NULL on
+ * entry, it will not be written to. Rather, a fresh |DH| is allocated and the
+ * previous one is freed.
+ *
+ * On successful exit, |*inp| is advanced past the DER structure. It
+ * returns the result or NULL on error.
+ *
+ * Use |DH_parse_parameters| instead. */
+OPENSSL_EXPORT DH *d2i_DHparams(DH **ret, const unsigned char **inp, long len);
 
-  /* finish is called before |dh| is destructed. */
-  void (*finish)(DH *dh);
+/* i2d_DHparams marshals |in| to an ASN.1, DER structure. If |outp| is not NULL
+ * then the result is written to |*outp| and |*outp| is advanced just past the
+ * output. It returns the number of bytes in the result, whether written or
+ * not, or a negative value on error.
+ *
+ * Use |DH_marshal_parameters| instead. */
+OPENSSL_EXPORT int i2d_DHparams(const DH *in, unsigned char **outp);
 
-  /* generate_parameters is called by |DH_generate_parameters_ex|. */
-  int (*generate_parameters)(DH *dh, int prime_bits, int generator,
-                             BN_GENCB *cb);
-
-  /* generate_parameters is called by |DH_generate_key|. */
-  int (*generate_key)(DH *dh);
-
-  /* compute_key is called by |DH_compute_key|. */
-  int (*compute_key)(DH *dh, uint8_t *out, const BIGNUM *pub_key);
-};
 
 struct dh_st {
-  DH_METHOD *meth;
-
   BIGNUM *p;
   BIGNUM *g;
-  BIGNUM *pub_key;  /* g^x */
+  BIGNUM *pub_key;  /* g^x mod p */
   BIGNUM *priv_key; /* x */
 
   /* priv_length contains the length, in bits, of the private value. If zero,
@@ -262,13 +257,11 @@ struct dh_st {
 }  /* extern C */
 #endif
 
-#define DH_F_DH_new_method 100
-#define DH_F_compute_key 101
-#define DH_F_generate_key 102
-#define DH_F_generate_parameters 103
 #define DH_R_BAD_GENERATOR 100
 #define DH_R_INVALID_PUBKEY 101
 #define DH_R_MODULUS_TOO_LARGE 102
 #define DH_R_NO_PRIVATE_VALUE 103
+#define DH_R_DECODE_ERROR 104
+#define DH_R_ENCODE_ERROR 105
 
 #endif  /* OPENSSL_HEADER_DH_H */

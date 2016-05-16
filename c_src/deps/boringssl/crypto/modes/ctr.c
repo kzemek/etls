@@ -45,7 +45,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  * ==================================================================== */
-#include <openssl/modes.h>
+
+#include <openssl/type_check.h>
 
 #include <assert.h>
 #include <string.h>
@@ -58,19 +59,17 @@
 
 /* increment counter (128-bit int) by 1 */
 static void ctr128_inc(uint8_t *counter) {
-  uint32_t n = 16;
-  uint8_t c;
+  uint32_t n = 16, c = 1;
 
   do {
     --n;
-    c = counter[n];
-    ++c;
-    counter[n] = c;
-    if (c) {
-      return;
-    }
+    c += counter[n];
+    counter[n] = (uint8_t) c;
+    c >>= 8;
   } while (n);
 }
+
+OPENSSL_COMPILE_ASSERT((16 % sizeof(size_t)) == 0, bad_size_t_size);
 
 /* The input encrypted as though 128bit counter mode is being used.  The extra
  * state information to record how much of the 128bit block we have used is
@@ -91,7 +90,6 @@ void CRYPTO_ctr128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
   assert(key && ecount_buf && num);
   assert(len == 0 || (in && out));
   assert(*num < 16);
-  assert((16 % sizeof(size_t)) == 0);
 
   n = *num;
 
@@ -102,7 +100,7 @@ void CRYPTO_ctr128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
   }
 
 #if STRICT_ALIGNMENT
-  if (((size_t)in | (size_t)out | (size_t)ivec) % sizeof(size_t) != 0) {
+  if (((size_t)in | (size_t)out | (size_t)ecount_buf) % sizeof(size_t) != 0) {
     size_t l = 0;
     while (l < len) {
       if (n == 0) {
@@ -122,8 +120,9 @@ void CRYPTO_ctr128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
   while (len >= 16) {
     (*block)(ivec, ecount_buf, key);
     ctr128_inc(ivec);
-    for (; n < 16; n += sizeof(size_t)) {
-      *(size_t *)(out + n) = *(size_t *)(in + n) ^ *(size_t *)(ecount_buf + n);
+    for (n = 0; n < 16; n += sizeof(size_t)) {
+      *(size_t *)(out + n) = *(const size_t *)(in + n) ^
+                             *(const size_t *)(ecount_buf + n);
     }
     len -= 16;
     out += 16;
@@ -143,17 +142,13 @@ void CRYPTO_ctr128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
 
 /* increment upper 96 bits of 128-bit counter by 1 */
 static void ctr96_inc(uint8_t *counter) {
-  uint32_t n = 12;
-  uint8_t c;
+  uint32_t n = 12, c = 1;
 
   do {
     --n;
-    c = counter[n];
-    ++c;
-    counter[n] = c;
-    if (c) {
-      return;
-    }
+    c += counter[n];
+    counter[n] = (uint8_t) c;
+    c >>= 8;
   } while (n);
 }
 

@@ -1,4 +1,5 @@
-/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com) * All rights reserved.
+/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
+ * All rights reserved.
  *
  * This package is an SSL implementation written
  * by Eric Young (eay@cryptsoft.com).
@@ -82,15 +83,19 @@ OPENSSL_EXPORT int MD4_Update(MD4_CTX *md4, const void *data, size_t len);
  * returns one. */
 OPENSSL_EXPORT int MD4_Final(uint8_t *md, MD4_CTX *md4);
 
+/* MD4 writes the digest of |len| bytes from |data| to |out| and returns |out|.
+ * There must be at least |MD4_DIGEST_LENGTH| bytes of space in |out|. */
+OPENSSL_EXPORT uint8_t *MD4(const uint8_t *data, size_t len, uint8_t *out);
+
 /* MD4_Transform is a low-level function that performs a single, MD4 block
  * transformation using the state from |md4| and 64 bytes from |block|. */
 OPENSSL_EXPORT void MD4_Transform(MD4_CTX *md4, const uint8_t *block);
 
 struct md4_state_st {
-  uint32_t A, B, C, D;
+  uint32_t h[4];
   uint32_t Nl, Nh;
-  uint32_t data[16];
-  unsigned int num;
+  uint8_t data[MD4_CBLOCK];
+  unsigned num;
 };
 
 

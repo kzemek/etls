@@ -21,6 +21,10 @@
  * mem.h. */
 #include <openssl/mem.h>
 
+/* Upstream OpenSSL defines |CRYPTO_LOCK|, etc., in crypto.h rather than
+ * thread.h. */
+#include <openssl/thread.h>
+
 
 #if defined(__cplusplus)
 extern "C" {
@@ -32,13 +36,26 @@ extern "C" {
 
 /* CRYPTO_library_init initializes the crypto library. It must be called if the
  * library is built with BORINGSSL_NO_STATIC_INITIALIZER. Otherwise, it does
- * nothing and a static initializer is used instead. */
+ * nothing and a static initializer is used instead. It is safe to call this
+ * function multiple times and concurrently from multiple threads.
+ *
+ * On some ARM configurations, this function may require filesystem access and
+ * should be called before entering a sandbox. */
 OPENSSL_EXPORT void CRYPTO_library_init(void);
+
+/* CRYPTO_is_confidential_build returns one if the linked version of BoringSSL
+ * has been built with the BORINGSSL_CONFIDENTIAL define and zero otherwise.
+ *
+ * This is used by some consumers to identify whether they are using an
+ * internal version of BoringSSL. */
+OPENSSL_EXPORT int CRYPTO_is_confidential_build(void);
 
 
 /* Deprecated functions. */
 
-#define OPENSSL_VERSION_TEXT "BoringSSL"
+/* OPENSSL_VERSION_TEXT contains a string the identifies the version of
+ * “OpenSSL”. node.js requires a version number in this text. */
+#define OPENSSL_VERSION_TEXT "OpenSSL 1.0.2 (compatible; BoringSSL)"
 
 #define SSLEAY_VERSION 0
 
@@ -50,14 +67,21 @@ OPENSSL_EXPORT const char *SSLeay_version(int unused);
  * base.h. */
 OPENSSL_EXPORT unsigned long SSLeay(void);
 
+/* CRYPTO_malloc_init returns one. */
+OPENSSL_EXPORT int CRYPTO_malloc_init(void);
+
+/* ENGINE_load_builtin_engines does nothing. */
+OPENSSL_EXPORT void ENGINE_load_builtin_engines(void);
+
+/* OPENSSL_load_builtin_modules does nothing. */
+OPENSSL_EXPORT void OPENSSL_load_builtin_modules(void);
+
+/* FIPS_mode returns zero. */
+OPENSSL_EXPORT int FIPS_mode(void);
+
 
 #if defined(__cplusplus)
 }  /* extern C */
 #endif
-
-#define CRYPTO_F_CRYPTO_get_ex_new_index 100
-#define CRYPTO_F_CRYPTO_set_ex_data 101
-#define CRYPTO_F_get_class 102
-#define CRYPTO_F_get_func_pointers 103
 
 #endif  /* OPENSSL_HEADER_CRYPTO_H */

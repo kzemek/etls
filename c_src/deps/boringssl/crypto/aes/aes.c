@@ -49,6 +49,9 @@
 #include <openssl/aes.h>
 
 #include <assert.h>
+#include <stdlib.h>
+
+#include <openssl/cpu.h>
 
 #include "internal.h"
 
@@ -1057,6 +1060,44 @@ void AES_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
 
 #else
 
+#if defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)
+
+static int hwaes_capable(void) {
+  return CRYPTO_is_ARMv8_AES_capable();
+}
+
+int aes_v8_set_encrypt_key(const uint8_t *user_key, const int bits,
+                           AES_KEY *key);
+int aes_v8_set_decrypt_key(const uint8_t *user_key, const int bits,
+                           AES_KEY *key);
+void aes_v8_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key);
+void aes_v8_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key);
+
+#else
+
+static int hwaes_capable(void) {
+  return 0;
+}
+
+static int aes_v8_set_encrypt_key(const uint8_t *user_key, int bits, AES_KEY *key) {
+  abort();
+}
+
+static int aes_v8_set_decrypt_key(const uint8_t *user_key, int bits, AES_KEY *key) {
+  abort();
+}
+
+static void aes_v8_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+  abort();
+}
+
+static void aes_v8_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+  abort();
+}
+
+#endif
+
+
 /* In this case several functions are provided by asm code. However, one cannot
  * control asm symbol visibility with command line flags and such so they are
  * always hidden and wrapped by these C functions, which can be so
@@ -1064,22 +1105,38 @@ void AES_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
 
 void asm_AES_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key);
 void AES_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
-  asm_AES_encrypt(in, out, key);
+  if (hwaes_capable()) {
+    aes_v8_encrypt(in, out, key);
+  } else {
+    asm_AES_encrypt(in, out, key);
+  }
 }
 
 void asm_AES_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key);
 void AES_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
-  asm_AES_decrypt(in, out, key);
+  if (hwaes_capable()) {
+    aes_v8_decrypt(in, out, key);
+  } else {
+    asm_AES_decrypt(in, out, key);
+  }
 }
 
 int asm_AES_set_encrypt_key(const uint8_t *key, unsigned bits, AES_KEY *aeskey);
 int AES_set_encrypt_key(const uint8_t *key, unsigned bits, AES_KEY *aeskey) {
-  return asm_AES_set_encrypt_key(key, bits, aeskey);
+  if (hwaes_capable()) {
+    return aes_v8_set_encrypt_key(key, bits, aeskey);
+  } else {
+    return asm_AES_set_encrypt_key(key, bits, aeskey);
+  }
 }
 
 int asm_AES_set_decrypt_key(const uint8_t *key, unsigned bits, AES_KEY *aeskey);
 int AES_set_decrypt_key(const uint8_t *key, unsigned bits, AES_KEY *aeskey) {
-  return asm_AES_set_decrypt_key(key, bits, aeskey);
+  if (hwaes_capable()) {
+    return aes_v8_set_decrypt_key(key, bits, aeskey);
+  } else {
+    return asm_AES_set_decrypt_key(key, bits, aeskey);
+  }
 }
 
 #endif  /* OPENSSL_NO_ASM || (!OPENSSL_X86 && !OPENSSL_X86_64 && !OPENSSL_ARM) */

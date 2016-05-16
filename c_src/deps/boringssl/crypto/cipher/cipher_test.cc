@@ -63,12 +63,17 @@
 
 #include "../test/file_test.h"
 #include "../test/scoped_types.h"
-#include "../test/stl_compat.h"
 
 
 static const EVP_CIPHER *GetCipher(const std::string &name) {
   if (name == "DES-CBC") {
     return EVP_des_cbc();
+  } else if (name == "DES-ECB") {
+    return EVP_des_ecb();
+  } else if (name == "DES-EDE") {
+    return EVP_des_ede();
+  } else if (name == "DES-EDE-CBC") {
+    return EVP_des_ede_cbc();
   } else if (name == "DES-EDE3-CBC") {
     return EVP_des_ede3_cbc();
   } else if (name == "RC4") {
@@ -104,7 +109,7 @@ static const EVP_CIPHER *GetCipher(const std::string &name) {
 static bool TestOperation(FileTest *t,
                           const EVP_CIPHER *cipher,
                           bool encrypt,
-                          bool streaming,
+                          size_t chunk_size,
                           const std::vector<uint8_t> &key,
                           const std::vector<uint8_t> &iv,
                           const std::vector<uint8_t> &plaintext,
@@ -133,14 +138,14 @@ static bool TestOperation(FileTest *t,
                                iv.size(), 0)) {
         return false;
       }
-    } else if (iv.size() != (size_t)EVP_CIPHER_CTX_iv_length(ctx.get())) {
+    } else if (iv.size() != EVP_CIPHER_CTX_iv_length(ctx.get())) {
       t->PrintLine("Bad IV length.");
       return false;
     }
   }
   if (is_aead && !encrypt &&
       !EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, tag.size(),
-                           const_cast<uint8_t*>(bssl::vector_data(&tag)))) {
+                           const_cast<uint8_t*>(tag.data()))) {
     return false;
   }
   // The ciphers are run with no padding. For each of the ciphers we test, the
@@ -156,41 +161,45 @@ static bool TestOperation(FileTest *t,
   // |EVP_CipherUpdate| calls when empty.
   int unused, result_len1 = 0, result_len2;
   if (!EVP_CIPHER_CTX_set_key_length(ctx.get(), key.size()) ||
-      !EVP_CipherInit_ex(ctx.get(), nullptr, nullptr, bssl::vector_data(&key),
-                         bssl::vector_data(&iv), -1) ||
+      !EVP_CipherInit_ex(ctx.get(), nullptr, nullptr, key.data(), iv.data(),
+                         -1) ||
       (!aad.empty() &&
-       !EVP_CipherUpdate(ctx.get(), nullptr, &unused, bssl::vector_data(&aad),
+       !EVP_CipherUpdate(ctx.get(), nullptr, &unused, aad.data(),
                          aad.size())) ||
       !EVP_CIPHER_CTX_set_padding(ctx.get(), 0)) {
     t->PrintLine("Operation failed.");
     return false;
   }
-  if (streaming) {
-    for (size_t i = 0; i < in->size(); i++) {
-      uint8_t c = (*in)[i];
+  if (chunk_size != 0) {
+    for (size_t i = 0; i < in->size();) {
+      size_t todo = chunk_size;
+      if (i + todo > in->size()) {
+        todo = in->size() - i;
+      }
+
       int len;
-      if (!EVP_CipherUpdate(ctx.get(), bssl::vector_data(&result) + result_len1,
-                            &len, &c, 1)) {
+      if (!EVP_CipherUpdate(ctx.get(), result.data() + result_len1, &len,
+                            in->data() + i, todo)) {
         t->PrintLine("Operation failed.");
         return false;
       }
       result_len1 += len;
+      i += todo;
     }
   } else if (!in->empty() &&
-             !EVP_CipherUpdate(ctx.get(), bssl::vector_data(&result),
-                               &result_len1, bssl::vector_data(in),
-                               in->size())) {
+             !EVP_CipherUpdate(ctx.get(), result.data(), &result_len1,
+                               in->data(), in->size())) {
     t->PrintLine("Operation failed.");
     return false;
   }
-  if (!EVP_CipherFinal_ex(ctx.get(), bssl::vector_data(&result) + result_len1,
+  if (!EVP_CipherFinal_ex(ctx.get(), result.data() + result_len1,
                           &result_len2)) {
     t->PrintLine("Operation failed.");
     return false;
   }
   result.resize(result_len1 + result_len2);
-  if (!t->ExpectBytesEqual(bssl::vector_data(out), out->size(),
-                           bssl::vector_data(&result), result.size())) {
+  if (!t->ExpectBytesEqual(out->data(), out->size(), result.data(),
+                           result.size())) {
     return false;
   }
   if (encrypt && is_aead) {
@@ -201,7 +210,7 @@ static bool TestOperation(FileTest *t,
     }
     if (!EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, tag.size(),
                              rtag) ||
-        !t->ExpectBytesEqual(bssl::vector_data(&tag), tag.size(), rtag,
+        !t->ExpectBytesEqual(tag.data(), tag.size(), rtag,
                              tag.size())) {
       return false;
     }
@@ -254,20 +263,20 @@ static bool TestCipher(FileTest *t, void *arg) {
     }
   }
 
-  // By default, both directions are run, unless overridden by the operation.
-  if (operation != kDecrypt) {
-    if (!TestOperation(t, cipher, true /* encrypt */, false /* single-shot */,
-                       key, iv, plaintext, ciphertext, aad, tag) ||
-        !TestOperation(t, cipher, true /* encrypt */, true /* streaming */, key,
-                       iv, plaintext, ciphertext, aad, tag)) {
+  const std::vector<size_t> chunk_sizes = {0,  1,  2,  5,  7,  8,  9,  15, 16,
+                                           17, 31, 32, 33, 63, 64, 65, 512};
+
+  for (size_t chunk_size : chunk_sizes) {
+    // By default, both directions are run, unless overridden by the operation.
+    if (operation != kDecrypt &&
+        !TestOperation(t, cipher, true /* encrypt */, chunk_size, key, iv,
+                       plaintext, ciphertext, aad, tag)) {
       return false;
     }
-  }
-  if (operation != kEncrypt) {
-    if (!TestOperation(t, cipher, false /* decrypt */, false /* single-shot */,
-                       key, iv, plaintext, ciphertext, aad, tag) ||
-        !TestOperation(t, cipher, false /* decrypt */, true /* streaming */,
-                       key, iv, plaintext, ciphertext, aad, tag)) {
+
+    if (operation != kEncrypt &&
+        !TestOperation(t, cipher, false /* decrypt */, chunk_size, key, iv,
+                       plaintext, ciphertext, aad, tag)) {
       return false;
     }
   }

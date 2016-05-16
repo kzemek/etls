@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package runner
 
 import (
 	"bytes"
@@ -139,8 +139,8 @@ func (hs *serverHandshakeState) readClientHello() (isResume bool, err error) {
 		c.sendAlert(alertUnexpectedMessage)
 		return false, unexpectedMessageError(hs.clientHello, msg)
 	}
-	if config.Bugs.RequireFastradioPadding && len(hs.clientHello.raw) < 1000 {
-		return false, errors.New("tls: ClientHello record size should be larger than 1000 bytes when padding enabled.")
+	if size := config.Bugs.RequireClientHelloSize; size != 0 && len(hs.clientHello.raw) != size {
+		return false, fmt.Errorf("tls: ClientHello record size is %d, but expected %d", len(hs.clientHello.raw), size)
 	}
 
 	if c.isDTLS && !config.Bugs.SkipHelloVerifyRequest {
@@ -203,6 +203,15 @@ func (hs *serverHandshakeState) readClientHello() (isResume bool, err error) {
 		hs.clientHello.signatureAndHashes = config.signatureAndHashesForServer()
 	}
 
+	// Check the client cipher list is consistent with the version.
+	if hs.clientHello.vers < VersionTLS12 {
+		for _, id := range hs.clientHello.cipherSuites {
+			if isTLS12Cipher(id) {
+				return false, fmt.Errorf("tls: client offered TLS 1.2 cipher before TLS 1.2")
+			}
+		}
+	}
+
 	c.vers, ok = config.mutualVersion(hs.clientHello.vers)
 	if !ok {
 		c.sendAlert(alertProtocolVersion)
@@ -210,8 +219,11 @@ func (hs *serverHandshakeState) readClientHello() (isResume bool, err error) {
 	}
 	c.haveVers = true
 
-	hs.hello = new(serverHelloMsg)
-	hs.hello.isDTLS = c.isDTLS
+	hs.hello = &serverHelloMsg{
+		isDTLS:          c.isDTLS,
+		customExtension: config.Bugs.CustomExtension,
+		npnLast:         config.Bugs.SwapNPNAndALPN,
+	}
 
 	supportedCurve := false
 	preferredCurves := config.curvePreferences()
@@ -274,7 +286,7 @@ Curves:
 		hs.hello.secureRenegotiation = hs.clientHello.secureRenegotiation
 	}
 
-	if c.config.Bugs.NoRenegotiationInfo {
+	if c.noRenegotiationInfo() {
 		hs.hello.secureRenegotiation = nil
 	}
 
@@ -285,12 +297,18 @@ Curves:
 	}
 
 	if len(hs.clientHello.alpnProtocols) > 0 {
-		if selectedProto, fallback := mutualProtocol(hs.clientHello.alpnProtocols, c.config.NextProtos); !fallback {
+		if proto := c.config.Bugs.ALPNProtocol; proto != nil {
+			hs.hello.alpnProtocol = *proto
+			hs.hello.alpnProtocolEmpty = len(*proto) == 0
+			c.clientProtocol = *proto
+			c.usedALPN = true
+		} else if selectedProto, fallback := mutualProtocol(hs.clientHello.alpnProtocols, c.config.NextProtos); !fallback {
 			hs.hello.alpnProtocol = selectedProto
 			c.clientProtocol = selectedProto
 			c.usedALPN = true
 		}
-	} else {
+	}
+	if len(hs.clientHello.alpnProtocols) == 0 || c.config.Bugs.NegotiateALPNAndNPN {
 		// Although sending an empty NPN extension is reasonable, Firefox has
 		// had a bug around this. Best to send nothing at all if
 		// config.NextProtos is empty. See
@@ -335,12 +353,22 @@ Curves:
 		hs.hello.srtpProtectionProfile = c.config.Bugs.SendSRTPProtectionProfile
 	}
 
+	if expected := c.config.Bugs.ExpectedCustomExtension; expected != nil {
+		if hs.clientHello.customExtension != *expected {
+			return false, fmt.Errorf("tls: bad custom extension contents %q", hs.clientHello.customExtension)
+		}
+	}
+
 	_, hs.ecdsaOk = hs.cert.PrivateKey.(*ecdsa.PrivateKey)
 
 	// For test purposes, check that the peer never offers a session when
 	// renegotiating.
 	if c.cipherSuite != nil && len(hs.clientHello.sessionId) > 0 && c.config.Bugs.FailIfResumeOnRenego {
 		return false, errors.New("tls: offered resumption on renegotiation")
+	}
+
+	if c.config.Bugs.FailIfSessionOffered && (len(hs.clientHello.sessionTicket) > 0 || len(hs.clientHello.sessionId) > 0) {
+		return false, errors.New("tls: client offered a session ticket or ID")
 	}
 
 	if hs.checkForResumption() {
@@ -459,6 +487,10 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 	// that we're doing a resumption.
 	hs.hello.sessionId = hs.clientHello.sessionId
 	hs.hello.ticketSupported = c.config.Bugs.RenewTicketOnResume
+
+	if c.config.Bugs.SendSCTListOnResume != nil {
+		hs.hello.sctList = c.config.Bugs.SendSCTListOnResume
+	}
 
 	hs.finishedHash = newFinishedHash(c.vers, hs.suite)
 	hs.finishedHash.discardHandshakeBuffer()
@@ -598,13 +630,22 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 	// certificate message, even if it's empty.
 	if config.ClientAuth >= RequestClientCert {
 		var certMsg *certificateMsg
-		if certMsg, ok = msg.(*certificateMsg); !ok {
+		var certificates [][]byte
+		if certMsg, ok = msg.(*certificateMsg); ok {
+			if c.vers == VersionSSL30 && len(certMsg.certificates) == 0 {
+				return errors.New("tls: empty certificate message in SSL 3.0")
+			}
+
+			hs.writeClientHash(certMsg.marshal())
+			certificates = certMsg.certificates
+		} else if c.vers != VersionSSL30 {
+			// In TLS, the Certificate message is required. In SSL
+			// 3.0, the peer skips it when sending no certificates.
 			c.sendAlert(alertUnexpectedMessage)
 			return unexpectedMessageError(certMsg, msg)
 		}
-		hs.writeClientHash(certMsg.marshal())
 
-		if len(certMsg.certificates) == 0 {
+		if len(certificates) == 0 {
 			// The client didn't actually send a certificate
 			switch config.ClientAuth {
 			case RequireAnyClientCert, RequireAndVerifyClientCert:
@@ -613,14 +654,16 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 			}
 		}
 
-		pub, err = hs.processCertsFromClient(certMsg.certificates)
+		pub, err = hs.processCertsFromClient(certificates)
 		if err != nil {
 			return err
 		}
 
-		msg, err = c.readHandshake()
-		if err != nil {
-			return err
+		if ok {
+			msg, err = c.readHandshake()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -670,6 +713,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 			if !isSupportedSignatureAndHash(signatureAndHash, config.signatureAndHashesForServer()) {
 				return errors.New("tls: unsupported hash function for client certificate")
 			}
+			c.clientCertSignatureHash = signatureAndHash.hash
 		} else {
 			// Before TLS 1.2 the signature algorithm was implicit
 			// from the key type, and only one hash per signature
@@ -850,10 +894,12 @@ func (hs *serverHandshakeState) sendSessionTicket() error {
 
 	m := new(newSessionTicketMsg)
 
-	var err error
-	m.ticket, err = c.encryptTicket(&state)
-	if err != nil {
-		return err
+	if !c.config.Bugs.SendEmptySessionTicket {
+		var err error
+		m.ticket, err = c.encryptTicket(&state)
+		if err != nil {
+			return err
+		}
 	}
 
 	hs.writeServerHash(m.marshal())
@@ -883,7 +929,11 @@ func (hs *serverHandshakeState) sendFinished(out []byte) error {
 	c.dtlsFlushHandshake()
 
 	if !c.config.Bugs.SkipChangeCipherSpec {
-		c.writeRecord(recordTypeChangeCipherSpec, []byte{1})
+		ccs := []byte{1}
+		if c.config.Bugs.BadChangeCipherSpec != nil {
+			ccs = c.config.Bugs.BadChangeCipherSpec
+		}
+		c.writeRecord(recordTypeChangeCipherSpec, ccs)
 	}
 
 	if c.config.Bugs.AppDataAfterChangeCipherSpec != nil {
@@ -1030,4 +1080,15 @@ func (c *Conn) tryCipherSuite(id uint16, supportedCipherSuites []uint16, version
 	}
 
 	return nil
+}
+
+func isTLS12Cipher(id uint16) bool {
+	for _, cipher := range cipherSuites {
+		if cipher.id != id {
+			continue
+		}
+		return cipher.flags&suiteTLS12 != 0
+	}
+	// Unknown cipher.
+	return false
 }

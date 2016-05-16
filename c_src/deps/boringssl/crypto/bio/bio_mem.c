@@ -64,13 +64,13 @@
 #include <openssl/mem.h>
 
 
-BIO *BIO_new_mem_buf(void *buf, int len) {
+BIO *BIO_new_mem_buf(const void *buf, int len) {
   BIO *ret;
   BUF_MEM *b;
   const size_t size = len < 0 ? strlen((char *)buf) : (size_t)len;
 
   if (!buf && len != 0) {
-    OPENSSL_PUT_ERROR(BIO, BIO_new_mem_buf, BIO_R_NULL_PARAMETER);
+    OPENSSL_PUT_ERROR(BIO, BIO_R_NULL_PARAMETER);
     return NULL;
   }
 
@@ -80,7 +80,8 @@ BIO *BIO_new_mem_buf(void *buf, int len) {
   }
 
   b = (BUF_MEM *)ret->ptr;
-  b->data = buf;
+  /* BIO_FLAGS_MEM_RDONLY ensures |b->data| is not written to. */
+  b->data = (void *)buf;
   b->length = size;
   b->max = size;
 
@@ -167,7 +168,7 @@ static int mem_write(BIO *bio, const char *in, int inl) {
   b = (BUF_MEM *)bio->ptr;
 
   if (bio->flags & BIO_FLAGS_MEM_RDONLY) {
-    OPENSSL_PUT_ERROR(BIO, mem_write, BIO_R_WRITE_TO_READ_ONLY_BIO);
+    OPENSSL_PUT_ERROR(BIO, BIO_R_WRITE_TO_READ_ONLY_BIO);
     goto err;
   }
 
@@ -176,7 +177,7 @@ static int mem_write(BIO *bio, const char *in, int inl) {
   if (INT_MAX - blen < inl) {
     goto err;
   }
-  if (BUF_MEM_grow_clean(b, blen + inl) != (blen + inl)) {
+  if (BUF_MEM_grow_clean(b, blen + inl) != ((size_t) blen) + inl) {
     goto err;
   }
   memcpy(&b->data[blen], in, inl);

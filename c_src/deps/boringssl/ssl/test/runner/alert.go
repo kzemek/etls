@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package runner
 
 import "strconv"
 
@@ -22,6 +22,7 @@ const (
 	alertRecordOverflow         alert = 22
 	alertDecompressionFailure   alert = 30
 	alertHandshakeFailure       alert = 40
+	alertNoCertficate           alert = 41
 	alertBadCertificate         alert = 42
 	alertUnsupportedCertificate alert = 43
 	alertCertificateRevoked     alert = 44

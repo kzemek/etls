@@ -54,13 +54,13 @@
  * copied and put under another distribution licence
  * [including the GNU Public Licence.] */
 
-#ifndef OPENSSL_HEADER_OBJECTS_H
-#define OPENSSL_HEADER_OBJECTS_H
+#ifndef OPENSSL_HEADER_OBJ_H
+#define OPENSSL_HEADER_OBJ_H
 
 #include <openssl/base.h>
 
 #include <openssl/bytestring.h>
-#include <openssl/obj_mac.h>
+#include <openssl/nid.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -125,7 +125,7 @@ OPENSSL_EXPORT const ASN1_OBJECT *OBJ_nid2obj(int nid);
 /* OBJ_nid2sn returns the short name for |nid|, or NULL if |nid| is unknown. */
 OPENSSL_EXPORT const char *OBJ_nid2sn(int nid);
 
-/* OBJ_nid2sn returns the long name for |nid|, or NULL if |nid| is unknown. */
+/* OBJ_nid2ln returns the long name for |nid|, or NULL if |nid| is unknown. */
 OPENSSL_EXPORT const char *OBJ_nid2ln(int nid);
 
 /* OBJ_nid2cbb writes |nid| as an ASN.1 OBJECT IDENTIFIER to |out|. It returns
@@ -189,14 +189,36 @@ OPENSSL_EXPORT int OBJ_find_sigid_by_algs(int *out_sign_nid, int digest_nid,
                                           int pkey_nid);
 
 
+/* Deprecated functions. */
+
+typedef struct obj_name_st {
+  int type;
+  const char *name;
+} OBJ_NAME;
+
+#define OBJ_NAME_TYPE_MD_METH 1
+#define OBJ_NAME_TYPE_CIPHER_METH 2
+
+/* OBJ_NAME_do_all_sorted calls |callback| zero or more times, each time with
+ * the name of a different primitive. If |type| is |OBJ_NAME_TYPE_MD_METH| then
+ * the primitives will be hash functions, alternatively if |type| is
+ * |OBJ_NAME_TYPE_CIPHER_METH| then the primitives will be ciphers or cipher
+ * modes.
+ *
+ * This function is ill-specified and should never be used. */
+OPENSSL_EXPORT void OBJ_NAME_do_all_sorted(
+    int type, void (*callback)(const OBJ_NAME *, void *arg), void *arg);
+
+/* OBJ_NAME_do_all calls |OBJ_NAME_do_all_sorted|. */
+OPENSSL_EXPORT void OBJ_NAME_do_all(int type, void (*callback)(const OBJ_NAME *,
+                                                               void *arg),
+                                    void *arg);
+
+
 #if defined(__cplusplus)
 }  /* extern C */
 #endif
 
-#define OBJ_F_OBJ_create 100
-#define OBJ_F_OBJ_dup 101
-#define OBJ_F_OBJ_nid2obj 102
-#define OBJ_F_OBJ_txt2obj 103
 #define OBJ_R_UNKNOWN_NID 100
 
-#endif  /* OPENSSL_HEADER_OBJECTS_H */
+#endif  /* OPENSSL_HEADER_OBJ_H */
