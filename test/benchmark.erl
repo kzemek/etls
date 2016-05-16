@@ -206,7 +206,8 @@ recv_n(Transport, active, Sock, Size, SizeLeft, Times) ->
 listen(ssl2, Port) -> ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]);
 listen(ssl, Port) -> ssl:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}, {reuseaddr, true}]);
 listen(ssl2_nif, Port) ->
-    ssl2_nif:listen(Port, "server.pem", "server.key").
+    ssl2_nif:listen(Port, "server.pem", "server.key", "verify_none",
+                    false, false, "", [], [], []).
 
 
 connect(ssl2, Packet, Host, Port) -> ssl2:connect(Host, Port, [{packet, Packet}]);
@@ -216,7 +217,8 @@ connect(ssl, Packet, Host, Port) ->
     {ok, Sock};
 connect(ssl2_nif, _Packet, Host, Port) ->
     Ref = make_ref(),
-    ok = ssl2_nif:connect(Ref, Host, Port),
+    ok = ssl2_nif:connect(Ref, Host, Port, "", "", "verify_none",
+                          false, false, "", [], [], []),
     receive {Ref, R} -> R end.
 
 
