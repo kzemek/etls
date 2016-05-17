@@ -46,7 +46,7 @@ Add TLS as a `rebar` dependency to your project:
 
 ```erlang
 {deps, [
-  {ssl2, "1.0.2", {git, "https://github.com/kzemek/erlang_tls.git", {tag, "1.0.2"}}}
+  {ssl2, "1.0.3", {git, "https://github.com/kzemek/erlang_tls.git", {tag, "1.0.3"}}}
 }.
 ```
 
