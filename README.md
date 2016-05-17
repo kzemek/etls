@@ -18,13 +18,13 @@ Benchmark ran on OS X 10.11.5, 2,2 GHz Intel Core i7 (4 cores with HT). The
 benchmark consisted of **10 concurrent connections**, each sending **10
 messages**, each of **size 100 MB** for a total of **1 GB per connection**. The
 bandwidth has been calculated using time measured between the first message sent
-and the last message received. The tests were compiled with and ran on Erlang
-19.0-rc1.
+and the last message received.
 
-| transport | bandwidth |
-|:----------|:----------|
-| ssl       | 111 MB/s  |
-| ssl2      | 833 MB/s  |
+| OTP version | transport | bandwidth |
+|:------------|:----------|:----------|
+| 18.3        | ssl       | 70 MB/s   |
+| 19.0-rc1    | ssl       | 111 MB/s  |
+| 19.0-rc1    | ssl2      | 833 MB/s  |
 
 ## Build
 
