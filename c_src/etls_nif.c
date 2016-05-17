@@ -1,6 +1,6 @@
 #include <erl_nif.h>
-#include <openssl/ssl.h>
 #include <openssl/bio.h>
+#include <openssl/ssl.h>
 
 struct priv_data_t {
     SSL_CTX *ssl_ctx;
@@ -251,6 +251,17 @@ static ERL_NIF_TERM ssl_set_connect_state(
     return enif_make_atom(env, "ok");
 }
 
+static ERL_NIF_TERM ssl_set_accept_state(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    SSL *ssl = get_ssl(env, argv[0]);
+    if (!ssl)
+        return enif_make_badarg(env);
+
+    SSL_set_accept_state(ssl);
+    return enif_make_atom(env, "ok");
+}
+
 static ERL_NIF_TERM ssl_do_handshake(
     ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -292,14 +303,56 @@ static ERL_NIF_TERM ssl_read(
 
     int read = SSL_read(ssl, bin.data, num);
     if (read >= 0) {
-        if (!enif_realloc_binary(&bin, read))
+        if (!enif_realloc_binary(&bin, read)) {
+            enif_release_binary(&bin);
             return oom(env);
+        }
 
         return enif_make_binary(env, &bin);
     }
 
     enif_release_binary(&bin);
     return enif_make_int(env, read);
+}
+
+static ERL_NIF_TERM ssl_use_certificate_file(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    SSL *ssl = get_ssl(env, argv[0]);
+    if (!ssl)
+        return enif_make_badarg(env);
+
+    unsigned int filename_size;
+    if (!enif_get_list_length(env, argv[1], &filename_size))
+        return enif_make_badarg(env);
+
+    char filename[filename_size + 1];
+    if (!enif_get_string(
+            env, argv[1], filename, filename_size + 1, ERL_NIF_LATIN1))
+        return enif_make_badarg(env);
+
+    return enif_make_int(
+        env, SSL_use_certificate_file(ssl, filename, SSL_FILETYPE_PEM));
+}
+
+static ERL_NIF_TERM ssl_use_privatekey_file(
+    ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    SSL *ssl = get_ssl(env, argv[0]);
+    if (!ssl)
+        return enif_make_badarg(env);
+
+    unsigned int filename_size;
+    if (!enif_get_list_length(env, argv[1], &filename_size))
+        return enif_make_badarg(env);
+
+    char filename[filename_size + 1];
+    if (!enif_get_string(
+            env, argv[1], filename, filename_size + 1, ERL_NIF_LATIN1))
+        return enif_make_badarg(env);
+
+    return enif_make_int(
+        env, SSL_use_PrivateKey_file(ssl, filename, SSL_FILETYPE_PEM));
 }
 
 static ErlNifFunc nif_funcs[] = {{"bio_new", 0, bio_new},
@@ -309,6 +362,9 @@ static ErlNifFunc nif_funcs[] = {{"bio_new", 0, bio_new},
     {"ssl_set_connect_state", 1, ssl_set_connect_state},
     {"ssl_do_handshake", 1, ssl_do_handshake, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     {"ssl_write", 2, ssl_write, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-    {"ssl_read", 2, ssl_read, ERL_NIF_DIRTY_JOB_CPU_BOUND}};
+    {"ssl_read", 2, ssl_read, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"ssl_set_accept_state", 1, ssl_set_accept_state},
+    {"ssl_use_certificate_file", 2, ssl_use_certificate_file},
+    {"ssl_use_privatekey_file", 2, ssl_use_privatekey_file}};
 
 ERL_NIF_INIT(etls_nif, nif_funcs, load, 0, 0, unload)

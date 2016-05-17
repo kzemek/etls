@@ -19,7 +19,8 @@
 %% API
 -export([bio_new/0, bio_read/1, bio_write/2, ssl_new/0, ssl_get_error/2,
   ssl_set_connect_state/1, ssl_do_handshake/1, ssl_set_bio/3, ssl_write/2,
-  ssl_read/2]).
+  ssl_read/2, ssl_set_accept_state/1, ssl_use_certificate_file/2,
+  ssl_use_privatekey_file/2]).
 
 -spec bio_new() -> bio_handle().
 bio_new() ->
@@ -49,6 +50,10 @@ ssl_set_bio(_SSL, _RBio, _WBio) ->
 ssl_set_connect_state(_SSL) ->
   erlang:nif_error(etls_ssl_nif_not_loaded).
 
+-spec ssl_set_accept_state(ssl_handle()) -> ok.
+ssl_set_accept_state(_SSL) ->
+  erlang:nif_error(etls_ssl_nif_not_loaded).
+
 -spec ssl_do_handshake(ssl_handle()) -> integer().
 ssl_do_handshake(_SSL) ->
   erlang:nif_error(etls_ssl_nif_not_loaded).
@@ -59,6 +64,14 @@ ssl_write(_SSL, _Data) ->
 
 -spec ssl_read(ssl_handle(), non_neg_integer()) -> binary() | integer().
 ssl_read(_SSL, _Num) ->
+  erlang:nif_error(etls_ssl_nif_not_loaded).
+
+-spec ssl_use_certificate_file(ssl_handle(), string()) -> integer().
+ssl_use_certificate_file(_SSL, _FileName) ->
+  erlang:nif_error(etls_ssl_nif_not_loaded).
+
+-spec ssl_use_privatekey_file(ssl_handle(), string()) -> integer().
+ssl_use_privatekey_file(_SSL, _FileName) ->
   erlang:nif_error(etls_ssl_nif_not_loaded).
 
 -spec init() -> ok | {error, Reason :: atom()}.

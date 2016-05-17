@@ -21,6 +21,11 @@ message(STATUS "Detecting erl_interface lib directory -- ${ERL_INTERFACE_LIB_DIR
 set(BORINGSSL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/../boringssl/include)
 set(BORINGSSL_BUILD_DIR ${CMAKE_SOURCE_DIR}/../_build/boringssl/)
 
+if(APPLE)
+    set(CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS
+        "${CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS} -flat_namespace -undefined dynamic_lookup")
+endif(APPLE)
+
 link_directories(${ERL_INTERFACE_LIB_DIR})
 include_directories(SYSTEM
   ${ERTS_INCLUDE_DIR}

@@ -11,34 +11,30 @@
 
 %% API exports
 -export_type([sslsocket/0]).
--export([connect/2, connect/3, send/2, recv/2, recv/3]).
+-export([connect/2, connect/3, send/2, recv/2, recv/3, ssl_accept/2,
+         ssl_accept/3]).
 
 %%====================================================================
 %% API functions
 %%====================================================================
 
-connect(Socket, SslOptions) ->
+connect(Socket, SslOptions) when is_port(Socket) ->
   connect(Socket, SslOptions, infinity).
 
-connect(Socket, SslOptions, Timeout) ->
-  inet:setopts(Socket, [{active, false}, binary]),
-  SSL = etls_nif:ssl_new(),
-  InputBio = etls_nif:bio_new(),
-  OutputBio = etls_nif:bio_new(),
-
-  etls_nif:ssl_set_bio(SSL, InputBio, OutputBio),
+connect(Socket, SslOptions, Timeout) when is_port(Socket) ->
+  Handle = #etls_handle{ssl = SSL} = create_handle(Socket),
   etls_nif:ssl_set_connect_state(SSL),
+  apply_options(Handle, SslOptions),
+  handshake(Handle, Timeout).
 
-  Handle = #etls_handle{
-    ssl = SSL,
-    socket = Socket,
-    input_bio = InputBio,
-    output_bio = OutputBio},
+ssl_accept(Socket, SslOptions) when is_port(Socket) ->
+  ssl_accept(Socket, SslOptions, infinity).
 
-  case handshake(Handle, Timeout) of
-    ok -> {ok, Handle};
-    Other -> Other
-  end.
+ssl_accept(Socket, SslOptions, Timeout) when is_port(Socket) ->
+  Handle = #etls_handle{ssl = SSL} = create_handle(Socket),
+  etls_nif:ssl_set_accept_state(SSL),
+  apply_options(Handle, SslOptions),
+  handshake(Handle, Timeout).
 
 send(Socket, Data) when not is_binary(Data) ->
   send(Socket, iolist_to_binary(Data));
@@ -64,6 +60,33 @@ recv(Socket, Size, Timeout) ->
 %% Internal functions
 %%====================================================================
 
+create_handle(Socket) ->
+  SSL = etls_nif:ssl_new(),
+  InputBio = etls_nif:bio_new(),
+  OutputBio = etls_nif:bio_new(),
+
+  etls_nif:ssl_set_bio(SSL, InputBio, OutputBio),
+
+  #etls_handle{
+    ssl = SSL,
+    socket = Socket,
+    input_bio = InputBio,
+    output_bio = OutputBio}.
+
+apply_options(Handle, []) ->
+  inet:setopts(Handle#etls_handle.socket, [{active, false}, binary]),
+  ok;
+apply_options(Handle, [{certfile, Path} | SslOptions]) ->
+  SSL = Handle#etls_handle.ssl,
+  1 = etls_nif:ssl_use_certificate_file(SSL, Path),
+  % etls_nif:ssl_use_privatekey_file(SSL, Path),
+  apply_options(Handle, SslOptions);
+apply_options(Handle, [{keyfile, Path} | SslOptions]) ->
+  1 = etls_nif:ssl_use_privatekey_file(Handle#etls_handle.ssl, Path),
+  apply_options(Handle, SslOptions);
+apply_options(Handle, [_ | SslOptions]) ->
+  apply_options(Handle, SslOptions).
+
 recv(Socket, Size, Timeout, Acc) ->
   #etls_handle{ssl = SSL} = Socket,
   ReqSize = case Size of 0 -> 1024; _ -> Size end,
@@ -87,18 +110,25 @@ recv(Socket, Size, Timeout, Acc) ->
   end.
 
 handshake(Handle, Timeout) ->
+  case do_handshake(Handle, Timeout) of
+    ok -> {ok, Handle};
+    Other -> Other
+  end.
+
+do_handshake(Handle, Timeout) ->
   #etls_handle{ssl = SSL} = Handle,
   case etls_nif:ssl_do_handshake(SSL) of
     1 -> push_data(Handle);
     RetCode ->
       case handle_error(Handle, RetCode, Timeout) of
-        ok -> handshake(Handle, Timeout);
+        ok -> do_handshake(Handle, Timeout);
         Other -> Other
       end
   end.
 
 handle_error(Handle, RetCode, Timeout) ->
-  case etls_nif:ssl_get_error(Handle#etls_handle.ssl, RetCode) of
+  SSL = Handle#etls_handle.ssl,
+  case etls_nif:ssl_get_error(SSL, RetCode) of
     'SSL_ERROR_WANT_READ' ->
       push_data(Handle),
       get_data(Handle, Timeout);
@@ -108,6 +138,9 @@ handle_error(Handle, RetCode, Timeout) ->
 
     'SSL_ERROR_ZERO_RETURN' ->
       {error, closed};
+
+    % 'SSL_ERROR_SSL' ->
+    %   {error, etls_nif:err_get_error(SSL)},
 
     Error -> {error, Error}
   end.
