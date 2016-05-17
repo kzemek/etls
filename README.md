@@ -76,6 +76,18 @@ application:start(ssl2),
 ssl2:send(Socket, "foo").
 ```
 
+## Using with Ranch
+
+`ssl2` can be easily used with [Ranch] by [starting a
+listener](http://ninenines.eu/docs/en/ranch/1.2/guide/listeners/) with
+`ranch_ssl2` as the transport module:
+
+```erlang
+{ok, _} = ranch:start_listener(tcp_echo, 100,
+                               ranch_ssl2, [{port, 5555}, {certfile, CertPath}],
+                               echo_protocol, []).
+```
+
 ## APIs
 
 ### Implemented `ssl` functions
@@ -120,5 +132,6 @@ The following `ssl`/`inet` options are currently supported:
 
 [Asio]: http://think-async.com/
 [BoringSSL]: https://boringssl.googlesource.com/boringssl/
+[Ranch]: https://github.com/ninenines/ranch
 [`ssl`]: http://erlang.org/doc/man/ssl.html
 [`inet`]: http://erlang.org/doc/man/inet.html
