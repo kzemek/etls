@@ -90,6 +90,8 @@ listener](http://ninenines.eu/docs/en/ranch/1.2/guide/listeners/) with
 
 ## APIs
 
+API documentation can be found at [hexdocs](https://hexdocs.pm/erlang_tls/).
+
 ### Implemented `ssl` functions
 
 The following `ssl`/[`inet`] functions are currently implemented:
