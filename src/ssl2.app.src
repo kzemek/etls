@@ -1,12 +1,17 @@
 {application, ssl2,
     [
-        {description, "A NIF-based replacement for OTP SSL module"},
+        {pkg_name, erlang_tls},
+        {description, "An alternative NIF-based implementation of Erlang ssl module."},
         {vsn, "1.0.3"},
+        {maintainers, ["Konrad Zemek"]},
         {registered, [ssl2_sup]},
         {applications, [
             kernel,
             stdlib
         ]},
         {mod, {ssl2_app, []}},
-        {env, []}
+        {env, []},
+        {licenses, ["MIT", "OpenSSL", "SSLeay", "ISC", "Intel", "Boost", "Google"]},
+        {links, [{"GitHub", "https://github.com/kzemek/erlang_tls"}]},
+        {build_tools, [<<"make">>, <<"rebar">>, <<"rebar3">>]}
     ]}.
