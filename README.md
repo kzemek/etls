@@ -50,6 +50,8 @@ Add TLS as a `rebar` dependency to your project:
 }.
 ```
 
+You can also take advantage of the [hex.pm package].
+
 Now you can use `ssl2` module much like you would use `ssl`:
 
 ```erlang
@@ -90,7 +92,7 @@ listener](http://ninenines.eu/docs/en/ranch/1.2/guide/listeners/) with
 
 ## APIs
 
-API documentation can be found at [hexdocs](https://hexdocs.pm/erlang_tls/).
+API documentation can be found at [hexdocs.pm].
 
 ### Implemented `ssl` functions
 
@@ -137,3 +139,5 @@ The following `ssl`/`inet` options are currently supported:
 [Ranch]: https://github.com/ninenines/ranch
 [`ssl`]: http://erlang.org/doc/man/ssl.html
 [`inet`]: http://erlang.org/doc/man/inet.html
+[hex.pm package]: https://hex.pm/packages/erlang_tls/
+[hexdocs.pm]: https://hexdocs.pm/erlang_tls/
