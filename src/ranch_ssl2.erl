@@ -2,7 +2,7 @@
 %%% @author Konrad Zemek
 %%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
-%%% cited in 'LICENSE.txt'.
+%%% cited in 'LICENSE.md'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc

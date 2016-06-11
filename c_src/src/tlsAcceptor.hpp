@@ -3,7 +3,7 @@
  * @author Konrad Zemek
  * @copyright (C) 2015 ACK CYFRONET AGH
  * @copyright This software is released under the MIT license cited in
- * 'LICENSE.txt'
+ * 'LICENSE.md'
  */
 
 #ifndef ONE_ETLS_TLS_ACCEPTOR_HPP

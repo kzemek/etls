@@ -1,7 +1,7 @@
 ##
 # Author: Konrad Zemek
 # Copyright (C) 2015 ACK CYFRONET AGH
-# This software is released under the MIT license cited in 'LICENSE.txt'
+# This software is released under the MIT license cited in 'LICENSE.md'
 #
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/deps/gmock

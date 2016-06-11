@@ -3,7 +3,7 @@
  * @author Konrad Zemek
  * @copyright (C) 2015 ACK CYFRONET AGH
  * @copyright This software is released under the MIT license cited in
- * 'LICENSE.txt'
+ * 'LICENSE.md'
  *
  * This file contains a simple benchmark of possible single-connection bandwidth
  * and message throughput using ASIO + SSL.
