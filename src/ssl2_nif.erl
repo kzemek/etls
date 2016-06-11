@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.md'.
 %%% @end
 %%%--------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%% Erlang wrapper for SSL2 NIF module.
 %%% @end

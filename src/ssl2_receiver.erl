@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.md'.
 %%% @end
 %%%--------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%% A gen_fsm responsible for receive-related actions on a socket,
 %%% including active notifications.

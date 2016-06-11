@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.md'.
 %%% @end
 %%%--------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%% The main SSL2 supervisor.
 %%% @end

@@ -5,6 +5,7 @@
 %%% cited in 'LICENSE.md'.
 %%% @end
 %%%--------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%% A supervisor responsible for managing send and receive gen_fsms
 %%% for a single socket.
