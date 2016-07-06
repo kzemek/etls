@@ -6,11 +6,11 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% An implementation of ranch_transport behavior on top of ssl2.
+%%% An implementation of ranch_transport behavior on top of etls.
 %%% For function documentation check Ranch's ranch_transport docs.
 %%% @end
 %%%-------------------------------------------------------------------
--module(ranch_ssl2).
+-module(ranch_etls).
 -author("Konrad Zemek").
 
 %% API
@@ -26,7 +26,7 @@
 %%--------------------------------------------------------------------
 -spec name() -> atom().
 name() ->
-    ssl2.
+    etls.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -44,38 +44,38 @@ secure() ->
 %%--------------------------------------------------------------------
 -spec messages() -> {OK :: atom(), Closed :: atom(), Error :: atom()}.
 messages() ->
-    {ssl2, ssl2_closed, ssl2_error}.
+    {etls, etls_closed, etls_error}.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback listen/1.
 %% @end
 %%--------------------------------------------------------------------
--spec listen([ssl2:option() | ssl2:ssl_option()]) ->
-    {ok, ssl2:socket()} |{error, atom()}.
+-spec listen([etls:option() | etls:ssl_option()]) ->
+    {ok, etls:socket()} |{error, atom()}.
 listen(Opts) ->
     Port = proplists:get_value(port, Opts),
-    ssl2:listen(Port, Opts).
+    etls:listen(Port, Opts).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback accept/2.
 %% @end
 %%--------------------------------------------------------------------
--spec accept(ssl2:acceptor(), timeout()) ->
-    {ok, ssl2:socket()} |
+-spec accept(etls:acceptor(), timeout()) ->
+    {ok, etls:socket()} |
     {error, closed | timeout | atom()}.
 accept(Socket, Timeout) ->
-    ssl2:accept(Socket, Timeout).
+    etls:accept(Socket, Timeout).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback accept_ack/2.
 %% @end
 %%--------------------------------------------------------------------
--spec accept_ack(ssl2:socket(), timeout()) -> ok.
+-spec accept_ack(etls:socket(), timeout()) -> ok.
 accept_ack(Socket, Timeout) ->
-    case ssl2:handshake(Socket, Timeout) of
+    case etls:handshake(Socket, Timeout) of
         ok ->
             ok;
     %% Socket most likely stopped responding, don't error out.
@@ -93,8 +93,8 @@ accept_ack(Socket, Timeout) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec connect(string(), inet:port_number(),
-    [ssl2:option() | ssl2:ssl_option()]) ->
-    {ok, ssl2:socket()} |
+    [etls:option() | etls:ssl_option()]) ->
+    {ok, etls:socket()} |
     {error, atom()}.
 connect(Host, Port, Opts) ->
     connect(Host, Port, Opts, infinity).
@@ -104,100 +104,100 @@ connect(Host, Port, Opts) ->
 %% {@link ranch_transport} callback connect/4.
 %% @end
 %%--------------------------------------------------------------------
--spec connect(string(), inet:port_number(), [ssl2:option() | ssl2:ssl_option()],
+-spec connect(string(), inet:port_number(), [etls:option() | etls:ssl_option()],
     timeout()) ->
-    {ok, ssl2:socket()} |
+    {ok, etls:socket()} |
     {error, atom()}.
 connect(Host, Port, Opts, Timeout) ->
-    ssl2:connect(Host, Port, Opts, Timeout).
+    etls:connect(Host, Port, Opts, Timeout).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback recv/3.
 %% @end
 %%--------------------------------------------------------------------
--spec recv(ssl2:socket(), non_neg_integer(), timeout()) ->
+-spec recv(etls:socket(), non_neg_integer(), timeout()) ->
     {ok, any()} |
     {error, closed | timeout | atom()}.
 recv(Socket, Size, Timeout) ->
-    ssl2:recv(Socket, Size, Timeout).
+    etls:recv(Socket, Size, Timeout).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback send/2.
 %% @end
 %%--------------------------------------------------------------------
--spec send(ssl2:socket(), iodata()) -> ok | {error, atom()}.
+-spec send(etls:socket(), iodata()) -> ok | {error, atom()}.
 send(Socket, Data) ->
-    ssl2:send(Socket, Data).
+    etls:send(Socket, Data).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback setopts/2.
 %% @end
 %%--------------------------------------------------------------------
--spec setopts(ssl2:socket(), [ssl2:option() | ssl2:ssl_option()]) ->
+-spec setopts(etls:socket(), [etls:option() | etls:ssl_option()]) ->
     ok | {error, atom()}.
 setopts(Socket, Opts) ->
-    ssl2:setopts(Socket, Opts).
+    etls:setopts(Socket, Opts).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback controlling_process/2.
 %% @end
 %%--------------------------------------------------------------------
--spec controlling_process(ssl2:socket(), pid()) ->
+-spec controlling_process(etls:socket(), pid()) ->
     ok | {error, closed | atom()}.
 controlling_process(Socket, Pid) ->
-    ssl2:controlling_process(Socket, Pid).
+    etls:controlling_process(Socket, Pid).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback peername/1.
 %% @end
 %%--------------------------------------------------------------------
--spec peername(ssl2:socket()) ->
+-spec peername(etls:socket()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, atom()}.
 peername(Socket) ->
-    ssl2:peername(Socket).
+    etls:peername(Socket).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback sockname/1.
 %% @end
 %%--------------------------------------------------------------------
--spec sockname(ssl2:socket() | ssl2:acceptor()) ->
+-spec sockname(etls:socket() | etls:acceptor()) ->
     {ok, {inet:ip_address(), inet:port_number()}} |
     {error, atom()}.
 sockname(Socket) ->
-    ssl2:sockname(Socket).
+    etls:sockname(Socket).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback shutdown/2.
 %% @end
 %%--------------------------------------------------------------------
--spec shutdown(ssl2:socket(), read | write | read_write) ->
+-spec shutdown(etls:socket(), read | write | read_write) ->
     ok | {error, atom()}.
 shutdown(Socket, Type) ->
-    ssl2:shutdown(Socket, Type).
+    etls:shutdown(Socket, Type).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback close/1.
 %% @end
 %%--------------------------------------------------------------------
--spec close(ssl2:socket()) -> ok.
+-spec close(etls:socket()) -> ok.
 close(Socket) ->
-    ssl2:close(Socket).
+    etls:close(Socket).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link ranch_transport} callback sendfile/2.
 %% @end
 %%--------------------------------------------------------------------
--spec sendfile(ssl2:socket(), file:name() | file:fd()) ->
+-spec sendfile(etls:socket(), file:name() | file:fd()) ->
     {ok, non_neg_integer()} |
     {error, atom()}.
 sendfile(Socket, Filename) ->
@@ -208,7 +208,7 @@ sendfile(Socket, Filename) ->
 %% {@link ranch_transport} callback sendfile/4.
 %% @end
 %%--------------------------------------------------------------------
--spec sendfile(ssl2:socket(), file:name() | file:fd(),
+-spec sendfile(etls:socket(), file:name() | file:fd(),
     non_neg_integer(), non_neg_integer()) ->
     {ok, non_neg_integer()} |
     {error, atom()}.
@@ -220,7 +220,7 @@ sendfile(Socket, File, Offset, Bytes) ->
 %% {@link ranch_transport} callback sendfile/5.
 %% @end
 %%--------------------------------------------------------------------
--spec sendfile(ssl2:socket(), file:name() | file:fd(), non_neg_integer(),
+-spec sendfile(etls:socket(), file:name() | file:fd(), non_neg_integer(),
     non_neg_integer(), ranch_transport:sendfile_opts()) ->
     {ok, non_neg_integer()} |
     {error, atom()}.

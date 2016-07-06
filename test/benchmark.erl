@@ -9,7 +9,7 @@
 %%% Performance benchmarks of erlang-tls.
 %%% The module benchmarks connection's bandwidth and message throughput
 %%% using various configuration parameters specified in config/1.
-%%% The benchmark is run from console by calling run/0. ssl2's and
+%%% The benchmark is run from console by calling run/0. etls's and
 %%% dependencies' ebin directories must be present in the code path,
 %%% and the CWD must be set to <erlang-tls dir>/test.
 %%% @end
@@ -31,7 +31,7 @@
 
 run() ->
     ssl:start(),
-    application:start(ssl2),
+    application:start(etls),
     OutputCases = lists:foldl(
         fun(TestCase, Acc) ->
             io:format(user, "Running case ~p~n", [TestCase]),
@@ -67,7 +67,7 @@ cases() ->
 config(bandwidth_benchmark) ->
     [
         #bandwidth_config{transport = Transport} ||
-        Transport <- [reference, ssl2_nif, ssl2]
+        Transport <- [reference, etls_nif, etls]
     ];
 config(parameters_benchmark) ->
     [
@@ -79,7 +79,7 @@ config(parameters_benchmark) ->
             message_size = element(1, Size),
             messages_num = element(2, Size)
         } ||
-        Transport <- [ssl2, ssl2_nif],
+        Transport <- [etls, etls_nif],
         Active <- [passive],
         Packet <- [0],
         Connections <- [10],
@@ -203,55 +203,55 @@ recv_n(Transport, active, Sock, Size, SizeLeft, Times) ->
     end.
 
 
-listen(ssl2, Port) -> ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]);
+listen(etls, Port) -> etls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]);
 listen(ssl, Port) -> ssl:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}, {reuseaddr, true}]);
-listen(ssl2_nif, Port) ->
-    ssl2_nif:listen(Port, "server.pem", "server.key", "verify_none",
+listen(etls_nif, Port) ->
+    etls_nif:listen(Port, "server.pem", "server.key", "verify_none",
                     false, false, "", [], [], []).
 
 
-connect(ssl2, Packet, Host, Port) -> ssl2:connect(Host, Port, [{packet, Packet}]);
+connect(etls, Packet, Host, Port) -> etls:connect(Host, Port, [{packet, Packet}]);
 connect(ssl, Packet, Host, Port) ->
     {ok, Sock} = ssl:connect(Host, Port, [{verify, verify_none}]),
     ok = ssl:setopts(Sock, [{binary, true}, {nodelay, true}, {active, false}, {packet, Packet}]),
     {ok, Sock};
-connect(ssl2_nif, _Packet, Host, Port) ->
+connect(etls_nif, _Packet, Host, Port) ->
     Ref = make_ref(),
-    ok = ssl2_nif:connect(Ref, Host, Port, "", "", "verify_none",
+    ok = etls_nif:connect(Ref, Host, Port, "", "", "verify_none",
                           false, false, "", [], [], []),
     receive {Ref, R} -> R end.
 
 
-accept(ssl2, Acc, Packet) ->
-    {ok, Sock} = ssl2:accept(Acc),
-    ok = ssl2:handshake(Sock),
-    ok = ssl2:setopts(Sock, [{packet, Packet}]),
+accept(etls, Acc, Packet) ->
+    {ok, Sock} = etls:accept(Acc),
+    ok = etls:handshake(Sock),
+    ok = etls:setopts(Sock, [{packet, Packet}]),
     {ok, Sock};
 accept(ssl, Acc, Packet) ->
     {ok, Sock} = ssl:transport_accept(Acc),
     ok = ssl:ssl_accept(Sock),
     ok = ssl:setopts(Sock, [{binary, true}, {nodelay, true}, {active, false}, {packet, Packet}]),
     {ok, Sock};
-accept(ssl2_nif, Acc, _Packet) ->
+accept(etls_nif, Acc, _Packet) ->
     Ref = make_ref(),
-    ok = ssl2_nif:accept(Ref, Acc),
+    ok = etls_nif:accept(Ref, Acc),
     {ok, Sock} = receive {Ref, R} -> R end,
-    ok = ssl2_nif:handshake(Ref, Sock),
+    ok = etls_nif:handshake(Ref, Sock),
     ok = receive {Ref, R2} -> R2 end,
     {ok, Sock}.
 
 
-send(ssl2, Sock, Message) -> ssl2:send(Sock, Message);
+send(etls, Sock, Message) -> etls:send(Sock, Message);
 send(ssl, Sock, Message) -> ssl:send(Sock, Message);
-send(ssl2_nif, Sock, Message) ->
-    ok = ssl2_nif:send(Sock, Message),
+send(etls_nif, Sock, Message) ->
+    ok = etls_nif:send(Sock, Message),
     receive R -> R end.
 
 
-recv(ssl2, Sock, Size) -> ssl2:recv(Sock, Size);
+recv(etls, Sock, Size) -> etls:recv(Sock, Size);
 recv(ssl, Sock, Size) -> ssl:recv(Sock, Size);
-recv(ssl2_nif, Sock, Size) ->
-    ok = ssl2_nif:recv(Sock, Size),
+recv(etls_nif, Sock, Size) ->
+    ok = etls_nif:recv(Sock, Size),
     receive R -> R end.
 
 
@@ -288,7 +288,7 @@ case_output(parameters_benchmark, Configs) ->
     #{parameters_benchmark => #{
         configs => Configs,
         name => parameters_benchmark,
-        description => <<"Benchmark of bandwidth/throughput of ssl2 relative to its configuration.">>
+        description => <<"Benchmark of bandwidth/throughput of etls relative to its configuration.">>
     }}.
 
 

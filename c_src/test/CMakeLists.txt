@@ -10,15 +10,12 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/deps/gmock
 file(COPY server.pem server.key DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp)
 
-add_library(erlang_tls_test SHARED
+add_library(etls_test STATIC
     ${CMAKE_CURRENT_BINARY_DIR}/dummy.cpp
     ${PROJECT_SOURCES})
-target_link_libraries(erlang_tls_test PUBLIC
-    ${ERLANG_TLS_LIBRARIES})
-target_include_directories(erlang_tls_test SYSTEM PUBLIC
-    ${ERLANG_TLS_SYSTEM_INCLUDE_DIRS})
-target_include_directories(erlang_tls_test PUBLIC
-    ${ERLANG_TLS_INCLUDE_DIRS})
+target_link_libraries(etls_test PUBLIC ${ETLS_LIBRARIES})
+target_include_directories(etls_test SYSTEM PUBLIC ${ETLS_SYSTEM_INCLUDE_DIRS})
+target_include_directories(etls_test PUBLIC ${ETLS_INCLUDE_DIRS})
 
 set(TESTS
     tlsAcceptor_test.cpp
@@ -34,7 +31,7 @@ foreach(TEST_FILE ${TESTS})
     target_include_directories(${TEST_NAME} PRIVATE SYSTEM
         ${PROJECT_SOURCE_DIR}/deps/gtest/include)
     target_link_libraries(${TEST_NAME} PRIVATE
-        erlang_tls_test
+        etls_test
         gtest_main)
 
     add_test(${TEST_NAME} ${TEST_NAME})
@@ -43,4 +40,3 @@ endforeach()
 
 add_executable(bandwidthCap bandwidthCap.cpp)
 target_link_libraries(bandwidthCap PRIVATE compile_options common_libraries)
-

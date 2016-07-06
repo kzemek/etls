@@ -6,8 +6,8 @@
  * 'LICENSE.md'
  */
 
-#ifndef ONE_ETLS_SSL2_APPLICATION_HPP
-#define ONE_ETLS_SSL2_APPLICATION_HPP
+#ifndef ONE_ETLS_TLS_APPLICATION_HPP
+#define ONE_ETLS_TLS_APPLICATION_HPP
 
 #include <asio/executor_work.hpp>
 #include <asio/io_service.hpp>
@@ -16,8 +16,8 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <vector>
 #include <thread>
+#include <vector>
 
 namespace one {
 namespace etls {
@@ -57,4 +57,4 @@ private:
 } // namespace etls
 } // namespace one
 
-#endif // ONE_ETLS_SSL2_APPLICATION_HPP
+#endif // ONE_ETLS_TLS_APPLICATION_HPP

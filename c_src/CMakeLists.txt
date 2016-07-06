@@ -5,7 +5,7 @@
 #
 
 cmake_minimum_required(VERSION 3.1.0)
-project(erlang_tls C CXX)
+project(etls C CXX)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY True)
 set(CMAKE_POSITION_INDEPENDENT_CODE True)
@@ -40,14 +40,13 @@ enable_testing()
 add_subdirectory(src)
 add_subdirectory(test EXCLUDE_FROM_ALL)
 
-add_library(erlang_tls SHARED src/wrapper.cpp ${PROJECT_SOURCES})
-target_link_libraries(erlang_tls PRIVATE
-    ${ERLANG_TLS_LIBRARIES})
-target_include_directories(erlang_tls SYSTEM PRIVATE
+add_library(etls SHARED src/wrapper.cpp ${PROJECT_SOURCES})
+target_link_libraries(etls PRIVATE ${ETLS_LIBRARIES})
+target_include_directories(etls SYSTEM PRIVATE
     ${ERLANG_ERTS_INCLUDE_PATH}
-    ${ERLANG_TLS_SYSTEM_INCLUDE_DIRS})
-target_include_directories(erlang_tls PRIVATE
-    ${ERLANG_TLS_INCLUDE_DIRS})
-set_target_properties(erlang_tls PROPERTIES SUFFIX .so)
+    ${ETLS_SYSTEM_INCLUDE_DIRS})
+target_include_directories(etls PRIVATE
+    ${ETLS_INCLUDE_DIRS})
+set_target_properties(etls PROPERTIES SUFFIX .so)
 
-install(TARGETS erlang_tls DESTINATION .)
+install(TARGETS etls DESTINATION .)

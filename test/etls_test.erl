@@ -5,9 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc ssl2 module tests.
+%%% @doc etls module tests.
 %%%--------------------------------------------------------------------
--module(ssl2_test).
+-module(etls_test).
 -author("Konrad Zemek").
 
 -include_lib("eunit/include/eunit.hrl").
@@ -61,10 +61,10 @@ server_test_() ->
 %%%===================================================================
 
 listen_should_be_callable_test() ->
-    ssl2:listen(12345, [{certfile, "server.pem"}]).
+    etls:listen(12345, [{certfile, "server.pem"}]).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
-    ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    etls:connect("localhost", Port, [], ?TIMEOUT),
     receive
         {Ref, Result} ->
             ?_assertEqual(connected, Result)
@@ -72,7 +72,7 @@ connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
 
 send_should_send_a_message({Ref, Server, Sock}) ->
     Data = random_data(),
-    ok = ssl2:send(Sock, Data),
+    ok = etls:send(Sock, Data),
     Server ! {'receive', byte_size(Data)},
     receive
         {Ref, 'receive', Result} ->
@@ -84,7 +84,7 @@ receive_should_receive_a_message({Ref, Server, Sock}) ->
     Server ! {send, Data},
     receive
         {Ref, send, Result} ->
-            RecvResult = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
+            RecvResult = etls:recv(Sock, byte_size(Data), ?TIMEOUT),
 
             {?LINE, fun() ->
                 ?assertEqual(ok, Result),
@@ -97,7 +97,7 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
     Server ! {send, Data},
     receive
         {Ref, send, Result} ->
-            RecvResult = ssl2:recv(Sock, 0, ?TIMEOUT),
+            RecvResult = etls:recv(Sock, 0, ?TIMEOUT),
 
             {?LINE, fun() ->
                 ?assertEqual(ok, Result),
@@ -108,14 +108,14 @@ receive_should_receive_a_message_when_size_is_zero({Ref, Server, Sock}) ->
 accept_should_accept_connections({Ref, Port}) ->
     Self = self(),
 
-    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    {ok, ListenSock} = etls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
 
     spawn(
         fun() ->
             Self ! {Ref, gen_tcp:connect("localhost", Port, [], ?TIMEOUT)}
         end),
 
-    {ok, _Sock} = ssl2:accept(ListenSock, ?TIMEOUT),
+    {ok, _Sock} = etls:accept(ListenSock, ?TIMEOUT),
 
     receive
         {Ref, Result} ->
@@ -125,14 +125,14 @@ accept_should_accept_connections({Ref, Port}) ->
 sockets_should_communicate({Ref, Port}) ->
     Self = self(),
 
-    {ok, ListenSock} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    {ok, ListenSock} = etls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
     spawn(
         fun() ->
-            Self ! {Ref, ssl2:connect("localhost", Port, [], ?TIMEOUT)}
+            Self ! {Ref, etls:connect("localhost", Port, [], ?TIMEOUT)}
         end),
 
-    {ok, ServerSock} = ssl2:accept(ListenSock, ?TIMEOUT),
-    ok = ssl2:handshake(ServerSock, ?TIMEOUT),
+    {ok, ServerSock} = etls:accept(ListenSock, ?TIMEOUT),
+    ok = etls:handshake(ServerSock, ?TIMEOUT),
 
     {ok, ClientSock} =
         receive
@@ -143,11 +143,11 @@ sockets_should_communicate({Ref, Port}) ->
     ServerSend = random_data(),
     ClientSend = random_data(),
 
-    ok = ssl2:send(ServerSock, ServerSend),
-    ok = ssl2:send(ClientSock, ClientSend),
+    ok = etls:send(ServerSock, ServerSend),
+    ok = etls:send(ClientSock, ClientSend),
 
-    ServerRecv = ssl2:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
-    ClientRecv = ssl2:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
+    ServerRecv = etls:recv(ServerSock, byte_size(ClientSend), ?TIMEOUT),
+    ClientRecv = etls:recv(ClientSock, byte_size(ServerSend), ?TIMEOUT),
 
     {?LINE, fun() ->
         ?assertEqual({ok, ClientSend}, ServerRecv),
@@ -155,7 +155,7 @@ sockets_should_communicate({Ref, Port}) ->
     end}.
 
 connect_should_honor_active_once({_Ref, Server, Port}) ->
-    {ok, Sock} = ssl2:connect("localhost", Port, [{active, once}], ?TIMEOUT),
+    {ok, Sock} = etls:connect("localhost", Port, [{active, once}], ?TIMEOUT),
 
     Data1 = random_data(),
     Data2 = random_data(),
@@ -165,13 +165,13 @@ connect_should_honor_active_once({_Ref, Server, Port}) ->
 
     Result1 =
         receive
-            {ssl2, Sock, ReceivedData} ->
+            {etls, Sock, ReceivedData} ->
                 {ok, ReceivedData}
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
 
-    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+    Result2 = etls:recv(Sock, byte_size(Data2), ?TIMEOUT),
 
     {?LINE, fun() ->
         ?assertEqual({ok, Data1}, Result1),
@@ -179,7 +179,7 @@ connect_should_honor_active_once({_Ref, Server, Port}) ->
     end}.
 
 connect_should_honor_active_true({_Ref, Server, Port}) ->
-    {ok, Sock} = ssl2:connect("localhost", Port, [{active, true}], ?TIMEOUT),
+    {ok, Sock} = etls:connect("localhost", Port, [{active, true}], ?TIMEOUT),
 
     Data1 = random_data(),
     Data2 = random_data(),
@@ -189,7 +189,7 @@ connect_should_honor_active_true({_Ref, Server, Port}) ->
 
     Receive = fun() ->
         receive
-            {ssl2, Sock, ReceivedData} ->
+            {etls, Sock, ReceivedData} ->
                 {ok, ReceivedData}
         after ?TIMEOUT ->
             {error, test_timeout}
@@ -205,7 +205,7 @@ connect_should_honor_active_true({_Ref, Server, Port}) ->
     end}.
 
 setopts_should_honor_active_once({_Ref, Server, Sock}) ->
-    ssl2:setopts(Sock, [{active, once}]),
+    etls:setopts(Sock, [{active, once}]),
 
     Data1 = random_data(),
     Data2 = random_data(),
@@ -215,13 +215,13 @@ setopts_should_honor_active_once({_Ref, Server, Sock}) ->
 
     Result1 =
         receive
-            {ssl2, Sock, ReceivedData} ->
+            {etls, Sock, ReceivedData} ->
                 {ok, ReceivedData}
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
 
-    Result2 = ssl2:recv(Sock, byte_size(Data2), ?TIMEOUT),
+    Result2 = etls:recv(Sock, byte_size(Data2), ?TIMEOUT),
 
     {?LINE, fun() ->
         ?assertEqual({ok, Data1}, Result1),
@@ -229,7 +229,7 @@ setopts_should_honor_active_once({_Ref, Server, Sock}) ->
     end}.
 
 setopts_should_honor_active_true({_Ref, Server, Sock}) ->
-    ssl2:setopts(Sock, [{active, true}]),
+    etls:setopts(Sock, [{active, true}]),
 
     Data1 = random_data(),
     Data2 = random_data(),
@@ -239,7 +239,7 @@ setopts_should_honor_active_true({_Ref, Server, Sock}) ->
 
     Receive = fun() ->
         receive
-            {ssl2, Sock, ReceivedData} ->
+            {etls, Sock, ReceivedData} ->
                 {ok, ReceivedData}
         after ?TIMEOUT ->
             {error, test_timeout}
@@ -255,11 +255,11 @@ setopts_should_honor_active_true({_Ref, Server, Sock}) ->
     end}.
 
 socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
-    ssl2:setopts(Sock, [{active, true}]),
+    etls:setopts(Sock, [{active, true}]),
     Server ! stop,
     Result =
         receive
-            {ssl2_closed, Sock} -> ok
+            {etls_closed, Sock} -> ok
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
@@ -267,12 +267,12 @@ socket_should_notify_about_closure_when_active({_Ref, Server, Sock}) ->
     ?_assertEqual(ok, Result).
 
 connect_should_respect_packet_options({Ref, Server, Port}) ->
-    {ok, Sock} = ssl2:connect("localhost", Port, [{packet, 2}]),
+    {ok, Sock} = etls:connect("localhost", Port, [{packet, 2}]),
 
     Data = random_data(),
     DS = byte_size(Data),
 
-    ok = ssl2:send(Sock, Data),
+    ok = etls:send(Sock, Data),
     ExpectedData = <<DS:2/big-unsigned-integer-unit:8, Data/binary>>,
 
     Server ! {'receive', DS + 2},
@@ -280,7 +280,7 @@ connect_should_respect_packet_options({Ref, Server, Port}) ->
 
     receive
         {Ref, 'receive', Result} ->
-            Received = ssl2:recv(Sock, 12345, ?TIMEOUT),
+            Received = etls:recv(Sock, 12345, ?TIMEOUT),
             {?LINE, fun() ->
                 ?assertEqual({ok, ExpectedData}, Result),
                 ?assertEqual({ok, Data}, Received)
@@ -288,12 +288,12 @@ connect_should_respect_packet_options({Ref, Server, Port}) ->
     end.
 
 setopts_should_respect_packet_options({Ref, Server, Sock}) ->
-    ok = ssl2:setopts(Sock, [{packet, 4}]),
+    ok = etls:setopts(Sock, [{packet, 4}]),
 
     Data = random_data(),
     DS = byte_size(Data),
 
-    ok = ssl2:send(Sock, Data),
+    ok = etls:send(Sock, Data),
     ExpectedData = <<DS:4/big-unsigned-integer-unit:8, Data/binary>>,
 
     Server ! {'receive', DS + 4},
@@ -301,7 +301,7 @@ setopts_should_respect_packet_options({Ref, Server, Sock}) ->
 
     receive
         {Ref, 'receive', Result} ->
-            Received = ssl2:recv(Sock, 54321, ?TIMEOUT),
+            Received = etls:recv(Sock, 54321, ?TIMEOUT),
             {?LINE, fun() ->
                 ?assertEqual({ok, ExpectedData}, Result),
                 ?assertEqual({ok, Data}, Received)
@@ -310,13 +310,13 @@ setopts_should_respect_packet_options({Ref, Server, Sock}) ->
 
 recv_should_allow_for_new_caller_after_timeout({_Ref, Server, Sock}) ->
     Data = random_data(),
-    {error, timeout} = ssl2:recv(Sock, byte_size(Data), 0),
+    {error, timeout} = etls:recv(Sock, byte_size(Data), 0),
     Server ! {send, Data},
-    Result = ssl2:recv(Sock, byte_size(Data), ?TIMEOUT),
+    Result = etls:recv(Sock, byte_size(Data), ?TIMEOUT),
     ?_assertEqual({ok, Data}, Result).
 
 recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
-    ok = ssl2:setopts(Sock, [{active, true}]),
+    ok = etls:setopts(Sock, [{active, true}]),
 
     Data1 = random_data(),
     Data2 = random_data(),
@@ -324,7 +324,7 @@ recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
     SpawnRef = make_ref(),
 
     spawn(fun() ->
-        Self ! {SpawnRef, ssl2:recv(Sock, byte_size(Data1), ?TIMEOUT)} end),
+        Self ! {SpawnRef, etls:recv(Sock, byte_size(Data1), ?TIMEOUT)} end),
 
     Server ! {send, Data1},
     Server ! {send, Data2},
@@ -333,7 +333,7 @@ recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
         {SpawnRef, Result} ->
             Result2 =
                 receive
-                    {ssl2, Sock, Data2} -> Data2
+                    {etls, Sock, Data2} -> Data2
                 after ?TIMEOUT ->
                     {error, test_timeout}
                 end,
@@ -345,20 +345,20 @@ recv_should_allow_for_recv_while_active({_Ref, Server, Sock}) ->
     end.
 
 socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
-    ok = ssl2:setopts(Sock, [{active, true}]),
+    ok = etls:setopts(Sock, [{active, true}]),
     Data = random_data(),
     Self = self(),
     NewRef = make_ref(),
 
     Pid = spawn(fun() ->
         receive
-            {ssl2, Sock, Result} -> Self ! {NewRef, Result}
+            {etls, Sock, Result} -> Self ! {NewRef, Result}
         after ?TIMEOUT ->
             Self ! {NewRef, {error, test_timeout}}
         end
     end),
 
-    ok = ssl2:controlling_process(Sock, Pid),
+    ok = etls:controlling_process(Sock, Pid),
     Server ! {send, Data},
 
     receive
@@ -367,51 +367,51 @@ socket_should_allow_to_set_controlling_process({_Ref, Server, Sock}) ->
     end.
 
 socket_should_hold_peername({_Ref, _Server, Port}) ->
-    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
-    [?_assertEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:peername(Sock))].
+    {ok, Sock} = etls:connect("localhost", Port, [], ?TIMEOUT),
+    [?_assertEqual({ok, {{127, 0, 0, 1}, Port}}, etls:peername(Sock))].
 
 socket_should_hold_sockname({_Ref, _Server, Port}) ->
-    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    {ok, Sock} = etls:connect("localhost", Port, [], ?TIMEOUT),
     {?LINE, fun() ->
-        ?assertMatch({ok, {{127, 0, 0, 1}, _}}, ssl2:sockname(Sock)),
-        ?assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, ssl2:sockname(Sock))
+        ?assertMatch({ok, {{127, 0, 0, 1}, _}}, etls:sockname(Sock)),
+        ?assertNotEqual({ok, {{127, 0, 0, 1}, Port}}, etls:sockname(Sock))
     end}.
 
 acceptor_should_hold_sockname({_Ref, Port}) ->
-    {ok, Acceptor} = ssl2:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
-    ?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, ssl2:sockname(Acceptor)).
+    {ok, Acceptor} = etls:listen(Port, [{certfile, "server.pem"}, {keyfile, "server.key"}]),
+    ?_assertEqual({ok, {{0, 0, 0, 0}, Port}}, etls:sockname(Acceptor)).
 
 socket_should_be_closeable({_Ref, _Server, Sock}) ->
-    ssl2:setopts(Sock, [{active, once}]),
-    ok = ssl2:close(Sock),
+    etls:setopts(Sock, [{active, once}]),
+    ok = etls:close(Sock),
     Result =
         receive
-            {ssl2_closed, Sock} = R -> R
+            {etls_closed, Sock} = R -> R
         after ?TIMEOUT ->
             {error, test_timeout}
         end,
-    ?_assertEqual({ssl2_closed, Sock}, Result).
+    ?_assertEqual({etls_closed, Sock}, Result).
 
 socket_should_return_peer_certificate({_Ref, _Server, Sock}) ->
-    {ok, Der} = ssl2:peercert(Sock),
+    {ok, Der} = etls:peercert(Sock),
     Cert = public_key:pkix_decode_cert(Der, otp),
     TBSCert = Cert#'OTPCertificate'.tbsCertificate,
     Serial = TBSCert#'OTPTBSCertificate'.serialNumber,
     ?_assertEqual(10728077368415183536, Serial).
 
 socket_should_return_error_closed_when_closed({_Ref, _Server, Sock}) ->
-    ok = ssl2:close(Sock),
-    SendResult = ssl2:send(Sock, random_data()),
-    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+    ok = etls:close(Sock),
+    SendResult = etls:send(Sock, random_data()),
+    RecvResult = etls:recv(Sock, 1234, ?TIMEOUT),
     {?LINE, fun() ->
         ?assertEqual({error, closed}, SendResult),
         ?assertEqual({error, closed}, RecvResult)
     end}.
 
 socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
-    ok = ssl2:shutdown(Sock, read),
-    SendResult = ssl2:send(Sock, random_data()),
-    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+    ok = etls:shutdown(Sock, read),
+    SendResult = etls:send(Sock, random_data()),
+    RecvResult = etls:recv(Sock, 1234, ?TIMEOUT),
     {?LINE, fun() ->
         ?assertEqual(ok, SendResult),
         ?assertEqual({error, closed}, RecvResult)
@@ -420,7 +420,7 @@ socket_should_be_read_shutdownable({_Ref, _Server, Sock}) ->
 socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
     {_, _, Supervisor, _, _} = Sock,
     Server ! {shutdown, write},
-    RecvResult = ssl2:recv(Sock, 1234, ?TIMEOUT),
+    RecvResult = etls:recv(Sock, 1234, ?TIMEOUT),
 
     timer:sleep(250),
 
@@ -430,11 +430,11 @@ socket_should_close_on_remote_write_shutdown({_Ref, Server, Sock}) ->
     end}.
 
 socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) ->
-    ssl2:setopts(Sock, [{exit_on_close, false}]),
+    etls:setopts(Sock, [{exit_on_close, false}]),
 
     {_, _, Supervisor, _, _} = Sock,
     Server ! {shutdown, write},
-    RecvResult = ssl2:recv(Sock, 1234),
+    RecvResult = etls:recv(Sock, 1234),
 
     timer:sleep(250),
 
@@ -449,7 +449,7 @@ socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) 
 
 start_server() ->
     ssl:start(temporary),
-    ssl2_app:start(temporary, []),
+    etls_app:start(temporary, []),
 
     Self = self(),
     Ref = make_ref(),
@@ -467,7 +467,7 @@ stop_server({_Ref, Server, _Port}) ->
 
 start_connection() ->
     {Ref, Server, Port} = start_server(),
-    {ok, Sock} = ssl2:connect("localhost", Port, [], ?TIMEOUT),
+    {ok, Sock} = etls:connect("localhost", Port, [], ?TIMEOUT),
     receive
         {Ref, connected} -> ok
     after ?TIMEOUT ->
@@ -480,7 +480,7 @@ stop_connection({_Ref, Server, _Sock}) ->
     clear_queue().
 
 prepare_args() ->
-    ssl2_app:start(temporary, []),
+    etls_app:start(temporary, []),
     {make_ref(), random_port()}.
 
 cleanup({_Ref, _Port}) ->

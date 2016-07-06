@@ -7,10 +7,10 @@
 %%%--------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%% Erlang wrapper for SSL2 NIF module.
+%%% Erlang wrapper for etls NIF module.
 %%% @end
 %%%--------------------------------------------------------------------
--module(ssl2_nif).
+-module(etls_nif).
 -author("Konrad Zemek").
 
 -on_load(init/0).
@@ -46,7 +46,7 @@
     ok | {error, Reason :: atom()}.
 connect(_Ref, _Host, _Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
     _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -58,7 +58,7 @@ connect(_Ref, _Host, _Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
 -spec send(Socket :: socket(), Data :: iodata()) ->
     ok | {error, Reason :: atom()}.
 send(_Sock, _Data) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -71,7 +71,7 @@ send(_Sock, _Data) ->
 -spec recv(Socket :: socket(), Size :: non_neg_integer()) ->
     ok | {error, Reason :: atom()}.
 recv(_Sock, _Size) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -86,7 +86,7 @@ recv(_Sock, _Size) ->
     {error, Reason :: atom()}.
 listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
     _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -98,7 +98,7 @@ listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
 -spec accept(Ref :: reference(), Acceptor :: acceptor()) ->
     ok | {error, Reason :: atom()}.
 accept(_Ref, _Acceptor) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -110,7 +110,7 @@ accept(_Ref, _Acceptor) ->
 -spec handshake(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: atom()}.
 handshake(_Ref, _Sock) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -122,7 +122,7 @@ handshake(_Ref, _Sock) ->
 -spec peername(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: atom()}.
 peername(_Ref, _Sock) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -135,7 +135,7 @@ peername(_Ref, _Sock) ->
 -spec sockname(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: atom()}.
 sockname(_Ref, _Sock) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -148,7 +148,7 @@ sockname(_Ref, _Sock) ->
 -spec acceptor_sockname(Ref :: reference(), Socket :: acceptor()) ->
     ok | {error, Reason :: atom()}.
 acceptor_sockname(_Ref, _Acceptor) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -160,7 +160,7 @@ acceptor_sockname(_Ref, _Acceptor) ->
 -spec close(Ref :: reference(), Socket :: socket()) ->
     ok | {error, Reason :: atom()}.
 close(_Ref, _Sock) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -171,7 +171,7 @@ close(_Ref, _Sock) ->
 -spec certificate_chain(Socket :: socket()) ->
     {ok, [binary()]} | {error, Reason :: atom()}.
 certificate_chain(_Sock) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -184,7 +184,7 @@ certificate_chain(_Sock) ->
     Type :: read | write | read_write) ->
     ok | {error, Reason :: atom()}.
 shutdown(_Ref, _Sock, _Type) ->
-    erlang:nif_error(ssl2_nif_not_loaded).
+    erlang:nif_error(etls_nif_not_loaded).
 
 %%%===================================================================
 %%% Internal functions
@@ -200,9 +200,9 @@ shutdown(_Ref, _Sock, _Type) ->
 %%--------------------------------------------------------------------
 -spec init() -> ok | {error, Reason :: atom()}.
 init() ->
-    LibName = "liberlang_tls",
+    LibName = "libetls",
     LibPath =
-        case code:priv_dir(ssl2) of
+        case code:priv_dir(etls) of
             {error, bad_name} ->
                 case filelib:is_dir(filename:join(["..", priv])) of
                     true ->

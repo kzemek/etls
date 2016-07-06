@@ -6,21 +6,21 @@
 %%% @end
 %%%--------------------------------------------------------------------
 %%% @doc
-%%% Main API module for SSL2.
+%%% Main API module for etls.
 %%% @end
 %%%--------------------------------------------------------------------
--module(ssl2).
+-module(etls).
 -author("Konrad Zemek").
 
 -record(sock_ref, {
-    socket :: ssl2_nif:socket(),
+    socket :: etls_nif:socket(),
     supervisor :: pid(),
     receiver :: pid(),
     sender :: pid()
 }).
 
 -record(acceptor_ref, {
-    acceptor :: ssl2_nif:acceptor()
+    acceptor :: etls_nif:acceptor()
 }).
 
 %% API
@@ -85,7 +85,7 @@ connect(Host, Port, Options, Timeout) ->
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
         RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
 
-    case ssl2_nif:connect(Ref, Host, Port, CertPath, KeyPath, VerifyType,
+    case etls_nif:connect(Ref, Host, Port, CertPath, KeyPath, VerifyType,
         FailIfNoPeerCert, VerifyClientOnce, RFC2818Hostname,
         CAs, CRLs, Chain) of
         ok ->
@@ -158,7 +158,7 @@ listen(Port, Options) ->
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
         RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
 
-    case ssl2_nif:listen(Port, CertPath, KeyPath, VerifyType, FailIfNoPeerCert,
+    case etls_nif:listen(Port, CertPath, KeyPath, VerifyType, FailIfNoPeerCert,
         VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain) of
         {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
@@ -177,7 +177,7 @@ accept(AcceptorRef) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Accepts an incoming connection on an acceptor.
-%% The returned socket should be passed to ssl2:handshake to establish
+%% The returned socket should be passed to etls:handshake to establish
 %% the secure connection.
 %% @end
 %%--------------------------------------------------------------------
@@ -186,7 +186,7 @@ accept(AcceptorRef) ->
     {error, Reason :: timeout | atom()}.
 accept(#acceptor_ref{acceptor = Acceptor}, Timeout) ->
     Ref = make_ref(),
-    case ssl2_nif:accept(Ref, Acceptor) of
+    case etls_nif:accept(Ref, Acceptor) of
         ok ->
             receive
                 {Ref, {ok, Sock}} -> start_socket_processes(Sock, []);
@@ -210,14 +210,14 @@ handshake(Socket) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Performs a TLS handshake on the new TCP socket.
-%% The socket should be created by ssl2:accept .
+%% The socket should be created by etls:accept .
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake(Socket :: socket(), Timeout :: timeout()) ->
     ok | {error, Reason :: timeout | any()}.
 handshake(#sock_ref{socket = Sock}, Timeout) ->
     Ref = make_ref(),
-    case ssl2_nif:handshake(Ref, Sock) of
+    case etls_nif:handshake(Ref, Sock) of
         ok ->
             receive
                 {Ref, Result} -> Result
@@ -262,7 +262,7 @@ controlling_process(#sock_ref{receiver = Receiver}, Pid) ->
     {error, Reason :: atom()}.
 peername(#sock_ref{socket = Sock}) ->
     Ref = make_ref(),
-    case ssl2_nif:peername(Ref, Sock) of
+    case etls_nif:peername(Ref, Sock) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -277,13 +277,13 @@ peername(#sock_ref{socket = Sock}) ->
     {error, Reason :: atom()}.
 sockname(#sock_ref{socket = Sock}) ->
     Ref = make_ref(),
-    case ssl2_nif:sockname(Ref, Sock) of
+    case etls_nif:sockname(Ref, Sock) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end;
 sockname(#acceptor_ref{acceptor = Acceptor}) ->
     Ref = make_ref(),
-    case ssl2_nif:acceptor_sockname(Ref, Acceptor) of
+    case etls_nif:acceptor_sockname(Ref, Acceptor) of
         ok -> receive {Ref, Result} -> parse_name_result(Result) end;
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -295,9 +295,9 @@ sockname(#acceptor_ref{acceptor = Acceptor}) ->
 %%--------------------------------------------------------------------
 -spec close(Socket :: socket()) -> ok | {error, Reason :: atom()}.
 close(#sock_ref{socket = Sock, supervisor = Sup}) ->
-    ok = supervisor:terminate_child(ssl2_sup, Sup),
+    ok = supervisor:terminate_child(etls_sup, Sup),
     Ref = make_ref(),
-    case ssl2_nif:close(Ref, Sock) of
+    case etls_nif:close(Ref, Sock) of
         ok -> receive {Ref, Result} -> Result end;
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -325,7 +325,7 @@ peercert(SockRef) ->
 -spec certificate_chain(Socket :: socket()) ->
     {ok, [der_encoded()]} | {error, Reason :: atom()}.
 certificate_chain(#sock_ref{socket = Sock}) ->
-    case ssl2_nif:certificate_chain(Sock) of
+    case etls_nif:certificate_chain(Sock) of
         {ok, Chain} -> {ok, Chain};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -351,7 +351,7 @@ shutdown(SockRef, Type) ->
     end,
 
     Ref = make_ref(),
-    case ssl2_nif:shutdown(Ref, Sock, Type) of
+    case etls_nif:shutdown(Ref, Sock, Type) of
         ok -> receive {Ref, Result} -> Result end;
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -367,12 +367,12 @@ shutdown(SockRef, Type) ->
 %% Returns a reference for the socket that is usable by the client.
 %% @end
 %%--------------------------------------------------------------------
--spec start_socket_processes(Socket :: ssl2_nif:socket(),
+-spec start_socket_processes(Socket :: etls_nif:socket(),
     Options :: [option()]) ->
     {ok, SockRef :: socket()}.
 start_socket_processes(Sock, Options) ->
     Args = [Sock, Options, self()],
-    {ok, Sup} = supervisor:start_child(ssl2_sup, Args),
+    {ok, Sup} = supervisor:start_child(etls_sup, Args),
 
     Children = supervisor:which_children(Sup),
     {_, Receiver, _, _} = lists:keyfind(receiver, 1, Children),
@@ -388,7 +388,7 @@ start_socket_processes(Sock, Options) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Parses the results of ssl2_nif:peername and ssl2_nif:sockname functions.
+%% Parses the results of etls_nif:peername and etls_nif:sockname functions.
 %% @end
 %%--------------------------------------------------------------------
 -spec parse_name_result({ok, {StrAddress :: string(),

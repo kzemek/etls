@@ -1,13 +1,13 @@
-# TLS
+# etls
 
-An alternative implementation of Erlang TLS layer.
+An alternative implementation of Erlang TCP/TLS layer.
 
-TLS is a NIF-based implementation of the whole TLS stack, built on top of [Asio]
-and [BoringSSL]. It manages its own native threads to asynchronously handle
-socket operations.
+*etls* is a NIF-based implementation of the whole TLS stack, built on top of
+[Asio] and [BoringSSL]. It manages its own native threads to asynchronously
+handle socket operations.
 
 The main (and very important) benefit of using this project instead of Erlang's
-built-in [`ssl`] is hardware acceleration. `ssl2` module achieves an order of
+built-in [`ssl`] is hardware acceleration. `etls` module achieves an order of
 magnitude higher bandwidth when encoding/decoding data.
 
 Currently only `TLSv1.2` is supported, and default [BoringSSL] cipher is used.
@@ -24,7 +24,7 @@ and the last message received.
 |:------------|:----------|:----------|
 | 18.3        | ssl       | 70 MB/s   |
 | 19.0-rc1    | ssl       | 111 MB/s  |
-| 19.0-rc1    | ssl2      | 833 MB/s  |
+| 19.0-rc1    | etls      | 833 MB/s  |
 
 ## Build
 
@@ -44,29 +44,29 @@ To build the project, simply run `make` from its directory.
 
 # User Guide
 
-Add TLS as a `rebar` dependency to your project:
+Add `etls` as a `rebar` dependency to your project:
 
 ```erlang
 {deps, [
-  {ssl2, "1.0.3", {git, "https://github.com/kzemek/erlang_tls.git", {tag, "1.0.3"}}}
+  {etls, "1.0.3", {git, "https://github.com/kzemek/etls.git", {tag, "1.0.3"}}}
 }.
 ```
 
 You can also take advantage of the [hex.pm package].
 
-Now you can use `ssl2` module much like you would use `ssl`:
+Now you can use `etls` module much like you would use `ssl`:
 
 ```erlang
 % Server side
-application:start(ssl2),
+application:start(etls),
 
 {ok, ListenSocket} =
-  ssl2:listen(9999, [{certfile, "cert.pem"}, {keyfile, "key.pem"},
+  etls:listen(9999, [{certfile, "cert.pem"}, {keyfile, "key.pem"},
                      {reuseaddr, true}]),
 
-{ok, Socket} = ssl2:accept(ListenSocket),
-ssl2:handshake(Socket),
-ssl2:setopts(Socket, [{active, once}]),
+{ok, Socket} = etls:accept(ListenSocket),
+etls:handshake(Socket),
+etls:setopts(Socket, [{active, once}]),
 
 receive AMessage -> io:format("~p~n", [AMessage]) end.
 ```
@@ -74,21 +74,21 @@ receive AMessage -> io:format("~p~n", [AMessage]) end.
 
 ```erlang
 % Client side
-application:start(ssl2),
+application:start(etls),
 
-{ok, Socket} = ssl2:connect("localhost", 9999,  [], infinity),
-ssl2:send(Socket, "foo").
+{ok, Socket} = etls:connect("localhost", 9999,  [], infinity),
+etls:send(Socket, "foo").
 ```
 
 ## Using with Ranch
 
-`ssl2` can be easily used with [Ranch] by [starting a
+`etls` can be easily used with [Ranch] by [starting a
 listener](http://ninenines.eu/docs/en/ranch/1.2/guide/listeners/) with
-`ranch_ssl2` as the transport module:
+`ranch_etls` as the transport module:
 
 ```erlang
 {ok, _} = ranch:start_listener(tcp_echo, 100,
-                               ranch_ssl2, [{port, 5555}, {certfile, CertPath}],
+                               ranch_etls, [{port, 5555}, {certfile, CertPath}],
                                echo_protocol, []).
 ```
 
@@ -141,5 +141,5 @@ The following `ssl`/`inet` options are currently supported:
 [Ranch]: https://github.com/ninenines/ranch
 [`ssl`]: http://erlang.org/doc/man/ssl.html
 [`inet`]: http://erlang.org/doc/man/inet.html
-[hex.pm package]: https://hex.pm/packages/erlang_tls/
-[hexdocs.pm]: https://hexdocs.pm/erlang_tls/
+[hex.pm package]: https://hex.pm/packages/etls/
+[hexdocs.pm]: https://hexdocs.pm/etls/

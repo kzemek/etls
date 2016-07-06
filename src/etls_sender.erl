@@ -10,7 +10,7 @@
 %%% A gen_fsm responsible for send-related actions on a socket.
 %%% @end
 %%%--------------------------------------------------------------------
--module(ssl2_sender).
+-module(etls_sender).
 -author("Konrad Zemek").
 
 -behaviour(gen_fsm).
@@ -31,7 +31,7 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-    socket :: ssl2_nif:socket(),
+    socket :: etls_nif:socket(),
     caller :: {pid(), term()},
     packet = 0 :: 0 | 1 | 2 | 4
 }).
@@ -114,7 +114,7 @@ idle({send, Data}, From, State) ->
                 <<DS:Packet/big-unsigned-integer-unit:8, Data/binary>>
         end,
 
-    case ssl2_nif:send(Sock, SendData) of
+    case etls_nif:send(Sock, SendData) of
         ok -> {next_state, sending, State#state{caller = From}};
         {error, Reason} when is_atom(Reason) ->
             {stop, Reason, {error, Reason}, State}
@@ -260,7 +260,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% A 'raw' value is converted to 0.
 %% @end
 %%--------------------------------------------------------------------
--spec get_packet(Opts :: [ssl2:option() | ssl2:ssl_option()],
+-spec get_packet(Opts :: [etls:option() | etls:ssl_option()],
     State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->

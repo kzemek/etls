@@ -6,10 +6,10 @@
 %%% @end
 %%%--------------------------------------------------------------------
 %%% @doc
-%%% The SSL2 application module.
+%%% The etls application module.
 %%% @end
 %%%--------------------------------------------------------------------
--module(ssl2_app).
+-module(etls_app).
 -author("Konrad Zemek").
 
 -behaviour(application).
@@ -24,7 +24,7 @@
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Starts the main supervisor of ssl2 application.
+%% Starts the main supervisor of etls application.
 %% @end
 %%--------------------------------------------------------------------
 -spec start(StartType :: normal | {takeover, node()} | {failover, node()},
@@ -33,12 +33,12 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}.
 start(_StartType, _StartArgs) ->
-    ssl2_sup:start_link().
+    etls_sup:start_link().
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Stops the ssl2 application.
+%% Stops the etls application.
 %% @end
 %%--------------------------------------------------------------------
 -spec stop(State :: term()) -> term().

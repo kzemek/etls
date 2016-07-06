@@ -11,7 +11,7 @@
 %%% including active notifications.
 %%% @end
 %%%--------------------------------------------------------------------
--module(ssl2_receiver).
+-module(etls_receiver).
 -author("Konrad Zemek").
 
 -behaviour(gen_fsm).
@@ -33,7 +33,7 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-    socket :: ssl2_nif:socket(),
+    socket :: etls_nif:socket(),
     buffer = <<>> :: binary(),
     caller :: {pid(), term()},
     needed :: integer(),
@@ -282,11 +282,11 @@ handle_event({setopts, Opts}, idle, State) ->
             recv_packet(UpdatedState#state{active = Active});
 
         {false, once, _} ->
-            gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
+            gen_fsm:send_all_state_event(self(), {notify, {etls, Ref, Buffer}}),
             {next_state, idle, UpdatedState#state{buffer = <<>>}};
 
         {false, true, _} ->
-            gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, Buffer}}),
+            gen_fsm:send_all_state_event(self(), {notify, {etls, Ref, Buffer}}),
             recv_packet(UpdatedState#state{buffer = <<>>, active = true});
 
         _ ->
@@ -376,11 +376,11 @@ handle_info({ok, Data}, receiving, #state{caller = undefined} = State) ->
 
     case Active of
         once ->
-            gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, AData}}),
+            gen_fsm:send_all_state_event(self(), {notify, {etls, Ref, AData}}),
             {next_state, idle, State#state{buffer = <<>>, active = false}};
 
         true ->
-            gen_fsm:send_all_state_event(self(), {notify, {ssl2, Ref, AData}}),
+            gen_fsm:send_all_state_event(self(), {notify, {etls, Ref, AData}}),
             recv_packet(State#state{buffer = <<>>});
 
         false ->
@@ -429,10 +429,10 @@ handle_info({error, Reason}, _StateName, State) ->
 %% @private
 %% @doc
 %% Cleans up the receiver's process.
-%% If active is set, the controlling process receives a ssl2_closed
-%% or ssl2_error message.
+%% If active is set, the controlling process receives a etls_closed
+%% or etls_error message.
 %% If the connection was closed by the remote end and exit_on_close
-%% option is set, a process that calls ssl2:close(Socket) is spawned.
+%% option is set, a process that calls etls:close(Socket) is spawned.
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()}
@@ -446,17 +446,17 @@ terminate(Reason, _StateName, State) ->
         _ ->
             Message =
                 case Reason of
-                    normal -> {ssl2_closed, SockRef};
-                    shutdown -> {ssl2_closed, SockRef};
-                    {shutdown, _} -> {ssl2_closed, SockRef};
-                    _ -> {ssl2_error, SockRef, Reason}
+                    normal -> {etls_closed, SockRef};
+                    shutdown -> {etls_closed, SockRef};
+                    {shutdown, _} -> {etls_closed, SockRef};
+                    _ -> {etls_error, SockRef, Reason}
                 end,
 
             Pid ! Message
     end,
 
     case {Reason, ExitOnClose} of
-        {{shutdown, closed}, true} -> spawn(ssl2, close, [SockRef]);
+        {{shutdown, closed}, true} -> spawn(etls, close, [SockRef]);
         _ -> ok
     end,
     ok.
@@ -504,7 +504,7 @@ recv_packet(#state{packet = Packet} = NextState) ->
     {stop, Reason :: atom(), State :: #state{}}.
 recv_header(State) ->
     #state{socket = Sock, packet = Packet, caller = Caller} = State,
-    case ssl2_nif:recv(Sock, Packet) of
+    case etls_nif:recv(Sock, Packet) of
         ok -> {next_state, receiving_header, State};
         {error, Reason} when is_atom(Reason) ->
             reply(Caller, {error, Reason}),
@@ -523,7 +523,7 @@ recv_header(State) ->
     {stop, Reason :: atom(), State :: #state{}}.
 recv_body(Size, State) ->
     #state{socket = Sock, caller = Caller} = State,
-    case ssl2_nif:recv(Sock, Size) of
+    case etls_nif:recv(Sock, Size) of
         ok -> {next_state, receiving, State};
         {error, Reason} when is_atom(Reason) ->
             reply(Caller, {error, Reason}),
@@ -551,7 +551,7 @@ create_timer(Timeout) ->
 %% A 'raw' value is converted to 0.
 %% @end
 %%--------------------------------------------------------------------
--spec get_packet(Opts :: [ssl2:option() | ssl2:ssl_option()],
+-spec get_packet(Opts :: [etls:option() | etls:ssl_option()],
     State :: #state{}) ->
     0 | 1 | 2 | 4.
 get_packet(Opts, #state{packet = OldPacket}) ->
