@@ -34,9 +34,11 @@ Dependencies:
 * `erlang` >= 17.0
 * `g++` >= 4.9.0 (or `clang`)
 * `git`
+* `perl`
 * `golang`
 * `make`
 * `ninja-build`
+* `openssl`
 
 To build the project, simply run `make` from its directory.
 

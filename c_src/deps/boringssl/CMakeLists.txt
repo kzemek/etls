@@ -114,6 +114,19 @@ if(FUZZ)
   link_directories(.)
 endif()
 
+exec_program(openssl
+  ARGS version -d
+  OUTPUT_VARIABLE OPENSSLDIR
+  RETURN_VALUE OPENSSL_RETURN)
+
+if (NOT OPENSSL_RETURN)
+  string(REPLACE "OPENSSLDIR: " "" OPENSSLDIR ${OPENSSLDIR})
+  message(STATUS "Setting OPENSSLDIR to ${OPENSSLDIR}")
+  add_definitions(-DOPENSSLDIR=${OPENSSLDIR})
+else()
+  message(FATAL_ERROR "`openssl version -d` failed - please check your OpenSSL installation")
+endif(NOT OPENSSL_RETURN)
+
 add_definitions(-DBORINGSSL_IMPLEMENTATION)
 
 if (BUILD_SHARED_LIBS)

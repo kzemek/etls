@@ -1,7 +1,6 @@
 # Created by .ignore support plugin (hsz.mobi)
 ### Elixir template
 /_build
-/deps
 erl_crash.dump
 *.ez
 
@@ -51,7 +50,6 @@ install_manifest.txt
 
 ### Erlang template
 .eunit
-deps
 *.o
 *.beam
 *.plt
