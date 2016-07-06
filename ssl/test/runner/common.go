@@ -23,6 +23,7 @@ const (
 	VersionTLS10 = 0x0301
 	VersionTLS11 = 0x0302
 	VersionTLS12 = 0x0303
+	VersionTLS13 = 0x0304
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 	maxHandshake        = 65536 // maximum handshake we support (protocol max is 16 MB)
 
 	minVersion = VersionSSL30
-	maxVersion = VersionTLS12
+	maxVersion = VersionTLS13
 )
 
 // TLS record types.
@@ -492,6 +493,11 @@ type ProtocolBugs struct {
 	// and 1.0.1 modes, respectively.
 	EarlyChangeCipherSpec int
 
+	// StrayChangeCipherSpec causes every pre-ChangeCipherSpec handshake
+	// message in DTLS to be prefaced by stray ChangeCipherSpec record. This
+	// may be used to test DTLS's handling of reordered ChangeCipherSpec.
+	StrayChangeCipherSpec bool
+
 	// FragmentAcrossChangeCipherSpec causes the implementation to fragment
 	// the Finished (or NextProto) message around the ChangeCipherSpec
 	// messages.
@@ -557,10 +563,6 @@ type ProtocolBugs struct {
 	// Start test to determine whether the peer processed the alert (and
 	// closed the connection) before or after sending app data.
 	AlertBeforeFalseStartTest alert
-
-	// SkipCipherVersionCheck causes the server to negotiate
-	// TLS 1.2 ciphers in earlier versions of TLS.
-	SkipCipherVersionCheck bool
 
 	// ExpectServerName, if not empty, is the hostname the client
 	// must specify in the server_name extension.
@@ -760,8 +762,9 @@ type ProtocolBugs struct {
 	// into individual packets, up to the specified packet size.
 	PackHandshakeRecords int
 
-	// EnableAllCiphersInDTLS, if true, causes RC4 to be enabled in DTLS.
-	EnableAllCiphersInDTLS bool
+	// EnableAllCiphers, if true, causes all configured ciphers to be
+	// enabled.
+	EnableAllCiphers bool
 
 	// EmptyCertificateList, if true, causes the server to send an empty
 	// certificate list in the Certificate message.
@@ -786,6 +789,10 @@ type ProtocolBugs struct {
 	// NoCloseNotify, if true, causes the close_notify alert to be skipped
 	// on connection shutdown.
 	NoCloseNotify bool
+
+	// SendAlertOnShutdown, if non-zero, is the alert to send instead of
+	// close_notify on shutdown.
+	SendAlertOnShutdown alert
 
 	// ExpectCloseNotify, if true, requires a close_notify from the peer on
 	// shutdown. Records from the peer received after close_notify is sent
@@ -838,6 +845,27 @@ type ProtocolBugs struct {
 	// SendSCTListOnResume, if not nil, causes the server to send the
 	// supplied SCT list in resumption handshakes.
 	SendSCTListOnResume []byte
+
+	// CECPQ1BadX25519Part corrupts the X25519 part of a CECPQ1 key exchange, as
+	// a trivial proof that it is actually used.
+	CECPQ1BadX25519Part bool
+
+	// CECPQ1BadNewhopePart corrupts the Newhope part of a CECPQ1 key exchange,
+	// as a trivial proof that it is actually used.
+	CECPQ1BadNewhopePart bool
+
+	// RecordPadding is the number of bytes of padding to add to each
+	// encrypted record in TLS 1.3.
+	RecordPadding int
+
+	// OmitRecordContents, if true, causes encrypted records in TLS 1.3 to
+	// be missing their body and content type. Padding, if configured, is
+	// still added.
+	OmitRecordContents bool
+
+	// OuterRecordType, if non-zero, is the outer record type to use instead
+	// of application data.
+	OuterRecordType recordType
 }
 
 func (c *Config) serverInit() {

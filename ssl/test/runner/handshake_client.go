@@ -111,14 +111,16 @@ NextCipherSuite:
 			if suite.id != suiteId {
 				continue
 			}
-			// Don't advertise TLS 1.2-only cipher suites unless
-			// we're attempting TLS 1.2.
-			if hello.vers < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
-				continue
-			}
-			// Don't advertise non-DTLS cipher suites on DTLS.
-			if c.isDTLS && suite.flags&suiteNoDTLS != 0 && !c.config.Bugs.EnableAllCiphersInDTLS {
-				continue
+			if !c.config.Bugs.EnableAllCiphers {
+				// Don't advertise TLS 1.2-only cipher suites unless
+				// we're attempting TLS 1.2.
+				if hello.vers < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
+					continue
+				}
+				// Don't advertise non-DTLS cipher suites in DTLS.
+				if c.isDTLS && suite.flags&suiteNoDTLS != 0 {
+					continue
+				}
 			}
 			hello.cipherSuites = append(hello.cipherSuites, suiteId)
 			continue NextCipherSuite
@@ -668,7 +670,7 @@ func (hs *clientHandshakeState) establishKeys() error {
 	c := hs.c
 
 	clientMAC, serverMAC, clientKey, serverKey, clientIV, serverIV :=
-		keysFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.hello.random, hs.serverHello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen)
+		keysFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.hello.random, hs.serverHello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen(c.vers))
 	var clientCipher, serverCipher interface{}
 	var clientHash, serverHash macFunction
 	if hs.suite.cipher != nil {
@@ -677,8 +679,8 @@ func (hs *clientHandshakeState) establishKeys() error {
 		serverCipher = hs.suite.cipher(serverKey, serverIV, true /* for reading */)
 		serverHash = hs.suite.mac(c.vers, serverMAC)
 	} else {
-		clientCipher = hs.suite.aead(clientKey, clientIV)
-		serverCipher = hs.suite.aead(serverKey, serverIV)
+		clientCipher = hs.suite.aead(c.vers, clientKey, clientIV)
+		serverCipher = hs.suite.aead(c.vers, serverKey, serverIV)
 	}
 
 	c.in.prepareCipherSpec(c.vers, serverCipher, serverHash)

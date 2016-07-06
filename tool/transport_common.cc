@@ -33,10 +33,10 @@
 #include <unistd.h>
 #else
 #include <io.h>
-#pragma warning(push, 3)
+OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#pragma warning(pop)
+OPENSSL_MSVC_PRAGMA(warning(pop))
 
 typedef int ssize_t;
 #pragma comment(lib, "Ws2_32.lib")
@@ -72,8 +72,15 @@ bool InitSocketLibrary() {
 // in |hostname_and_port|, which should be of the form "www.example.com:123".
 // It returns true on success and false otherwise.
 bool Connect(int *out_sock, const std::string &hostname_and_port) {
-  const size_t colon_offset = hostname_and_port.find_last_of(':');
+  size_t colon_offset = hostname_and_port.find_last_of(':');
+  const size_t bracket_offset = hostname_and_port.find_last_of(']');
   std::string hostname, port;
+
+  // An IPv6 literal may have colons internally, guarded by square brackets.
+  if (bracket_offset != std::string::npos &&
+      colon_offset != std::string::npos && bracket_offset > colon_offset) {
+    colon_offset = std::string::npos;
+  }
 
   if (colon_offset == std::string::npos) {
     hostname = hostname_and_port;
@@ -81,6 +88,12 @@ bool Connect(int *out_sock, const std::string &hostname_and_port) {
   } else {
     hostname = hostname_and_port.substr(0, colon_offset);
     port = hostname_and_port.substr(colon_offset + 1);
+  }
+
+  // Handle IPv6 literals.
+  if (hostname.size() >= 2 && hostname[0] == '[' &&
+      hostname[hostname.size() - 1] == ']') {
+    hostname = hostname.substr(1, hostname.size() - 2);
   }
 
   struct addrinfo hint, *result;
@@ -181,6 +194,8 @@ void PrintConnectionInfo(const SSL *ssl) {
   }
   fprintf(stderr, "  Secure renegotiation: %s\n",
           SSL_get_secure_renegotiation_support(ssl) ? "yes" : "no");
+  fprintf(stderr, "  Extended master secret: %s\n",
+          SSL_get_extms_support(ssl) ? "yes" : "no");
 
   const uint8_t *next_proto;
   unsigned next_proto_len;
@@ -265,7 +280,7 @@ bool TransferData(SSL *ssl, int sock) {
       ssize_t n;
 
       do {
-        n = read(0, buffer, sizeof(buffer));
+        n = BORINGSSL_READ(0, buffer, sizeof(buffer));
       } while (n == -1 && errno == EINTR);
 
       if (n == 0) {
@@ -319,7 +334,7 @@ bool TransferData(SSL *ssl, int sock) {
 
       ssize_t n;
       do {
-        n = write(1, buffer, ssl_ret);
+        n = BORINGSSL_WRITE(1, buffer, ssl_ret);
       } while (n == -1 && errno == EINTR);
 
       if (n != ssl_ret) {

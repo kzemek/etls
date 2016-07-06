@@ -12,10 +12,9 @@
 # OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-"""Enumerates the BoringSSL source in src/ and either generates two gypi files
-  (boringssl.gypi and boringssl_tests.gypi) for Chromium, or generates
-  source-list files for Android."""
+"""Enumerates source files for consumption by various build systems."""
 
+import optparse
 import os
 import subprocess
 import sys
@@ -45,7 +44,16 @@ NON_PERL_FILES = {
     ('linux', 'x86_64'): [
         'src/crypto/curve25519/asm/x25519-asm-x86_64.S',
     ],
+    ('mac', 'x86_64'): [
+        'src/crypto/curve25519/asm/x25519-asm-x86_64.S',
+    ],
 }
+
+PREFIX = None
+
+
+def PathOf(x):
+  return x if not PREFIX else os.path.join(PREFIX, x)
 
 
 class Android(object):
@@ -118,7 +126,7 @@ class Bazel(object):
 
     out.write('%s = [\n' % name)
     for f in sorted(files):
-      out.write('    "%s",\n' % f)
+      out.write('    "%s",\n' % PathOf(f))
     out.write(']\n')
 
   def WriteFiles(self, files, asm_outputs):
@@ -134,6 +142,7 @@ class Bazel(object):
           out, 'crypto_internal_headers', files['crypto_internal_headers'])
       self.PrintVariableSection(out, 'crypto_sources', files['crypto'])
       self.PrintVariableSection(out, 'tool_sources', files['tool'])
+      self.PrintVariableSection(out, 'tool_headers', files['tool_headers'])
 
       for ((osname, arch), asm_files) in asm_outputs:
         self.PrintVariableSection(
@@ -143,16 +152,16 @@ class Bazel(object):
       out.write(self.header)
 
       out.write('test_support_sources = [\n')
-      for filename in files['test_support']:
+      for filename in (files['test_support'] +
+                       files['crypto_internal_headers'] +
+                       files['ssl_internal_headers']):
         if os.path.basename(filename) == 'malloc.cc':
           continue
-        out.write('    "%s",\n' % filename)
+        out.write('    "%s",\n' % PathOf(filename))
 
       out.write(']\n\n')
 
-      out.write('def create_tests(copts):\n')
-      out.write('  test_support_sources_complete = test_support_sources + \\\n')
-      out.write('      native.glob(["src/crypto/test/*.h"])\n')
+      out.write('def create_tests(copts, crypto, ssl):\n')
       name_counts = {}
       for test in files['tests']:
         name = os.path.basename(test[0])
@@ -182,7 +191,8 @@ class Bazel(object):
         out.write('  native.cc_test(\n')
         out.write('      name = "%s",\n' % name)
         out.write('      size = "small",\n')
-        out.write('      srcs = ["%s"] + test_support_sources_complete,\n' % src)
+        out.write('      srcs = ["%s"] + test_support_sources,\n' %
+            PathOf(src))
 
         data_files = []
         if len(test) > 1:
@@ -190,7 +200,8 @@ class Bazel(object):
           out.write('      args = [\n')
           for arg in test[1:]:
             if '/' in arg:
-              out.write('          "$(location src/%s)",\n' % arg)
+              out.write('          "$(location %s)",\n' %
+                  PathOf(os.path.join('src', arg)))
               data_files.append('src/%s' % arg)
             else:
               out.write('          "%s",\n' % arg)
@@ -201,16 +212,16 @@ class Bazel(object):
         if len(data_files) > 0:
           out.write('      data = [\n')
           for filename in data_files:
-            out.write('          "%s",\n' % filename)
+            out.write('          "%s",\n' % PathOf(filename))
           out.write('      ],\n')
 
         if 'ssl/' in test[0]:
           out.write('      deps = [\n')
-          out.write('          ":crypto",\n')
-          out.write('          ":ssl",\n')
+          out.write('          crypto,\n')
+          out.write('          ssl,\n')
           out.write('      ],\n')
         else:
-          out.write('      deps = [":crypto"],\n')
+          out.write('      deps = [crypto],\n')
         out.write('  )\n')
 
 
@@ -429,6 +440,10 @@ def FindHeaderFiles(directory, filter_func):
         continue
       hfiles.append(os.path.join(path, filename))
 
+      for (i, dirname) in enumerate(dirnames):
+        if not filter_func(dirname, True):
+          del dirnames[i]
+
   return hfiles
 
 
@@ -473,10 +488,8 @@ def PerlAsm(output_filename, input_filename, perlasm_style, extra_args):
   base_dir = os.path.dirname(output_filename)
   if not os.path.isdir(base_dir):
     os.makedirs(base_dir)
-  output = subprocess.check_output(
-      ['perl', input_filename, perlasm_style] + extra_args)
-  with open(output_filename, 'w+') as out_file:
-    out_file.write(output)
+  subprocess.check_call(
+      ['perl', input_filename, perlasm_style] + extra_args + [output_filename])
 
 
 def ArchForAsmFilename(filename):
@@ -533,6 +546,7 @@ def main(platforms):
   crypto_c_files = FindCFiles(os.path.join('src', 'crypto'), NoTests)
   ssl_c_files = FindCFiles(os.path.join('src', 'ssl'), NoTests)
   tool_c_files = FindCFiles(os.path.join('src', 'tool'), NoTests)
+  tool_h_files = FindHeaderFiles(os.path.join('src', 'tool'), AllFiles)
 
   # Generate err_data.c
   with open('err_data.c', 'w+') as err_data:
@@ -543,6 +557,9 @@ def main(platforms):
 
   test_support_c_files = FindCFiles(os.path.join('src', 'crypto', 'test'),
                                     AllFiles)
+  test_support_h_files = (
+      FindHeaderFiles(os.path.join('src', 'crypto', 'test'), AllFiles) +
+      FindHeaderFiles(os.path.join('src', 'ssl', 'test'), AllFiles))
 
   test_c_files = FindCFiles(os.path.join('src', 'crypto'), OnlyTests)
   test_c_files += FindCFiles(os.path.join('src', 'ssl'), OnlyTests)
@@ -593,8 +610,9 @@ def main(platforms):
       'ssl_headers': ssl_h_files,
       'ssl_internal_headers': ssl_internal_h_files,
       'tool': tool_c_files,
+      'tool_headers': tool_h_files,
       'test': test_c_files,
-      'test_support': test_support_c_files,
+      'test_support': test_support_h_files + test_support_c_files,
       'tests': tests,
   }
 
@@ -606,17 +624,20 @@ def main(platforms):
   return 0
 
 
-def Usage():
-  print 'Usage: python %s [android|android-standalone|bazel|gn|gyp]' % sys.argv[0]
-  sys.exit(1)
-
-
 if __name__ == '__main__':
-  if len(sys.argv) < 2:
-    Usage()
+  parser = optparse.OptionParser(usage='Usage: %prog [--prefix=<path>]'
+      ' [android|android-standalone|bazel|gn|gyp]')
+  parser.add_option('--prefix', dest='prefix',
+      help='For Bazel, prepend argument to all source files')
+  options, args = parser.parse_args(sys.argv[1:])
+  PREFIX = options.prefix
+
+  if not args:
+    parser.print_help()
+    sys.exit(1)
 
   platforms = []
-  for s in sys.argv[1:]:
+  for s in args:
     if s == 'android':
       platforms.append(Android())
     elif s == 'android-standalone':
@@ -628,6 +649,7 @@ if __name__ == '__main__':
     elif s == 'gyp':
       platforms.append(GYP())
     else:
-      Usage()
+      parser.print_help()
+      sys.exit(1)
 
   sys.exit(main(platforms))

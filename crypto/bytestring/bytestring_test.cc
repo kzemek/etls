@@ -43,7 +43,7 @@ static bool TestSkip() {
 }
 
 static bool TestGetUint() {
-  static const uint8_t kData[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  static const uint8_t kData[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
   uint8_t u8;
   uint16_t u16;
   uint32_t u32;
@@ -58,7 +58,10 @@ static bool TestGetUint() {
     u32 == 0x40506 &&
     CBS_get_u32(&data, &u32) &&
     u32 == 0x708090a &&
-    !CBS_get_u8(&data, &u8);
+    CBS_get_last_u8(&data, &u8) &&
+    u8 == 0xb &&
+    !CBS_get_u8(&data, &u8) &&
+    !CBS_get_last_u8(&data, &u8);
 }
 
 static bool TestGetPrefixed() {
@@ -266,7 +269,7 @@ static bool TestGetOptionalASN1Bool() {
 }
 
 static bool TestCBBBasic() {
-  static const uint8_t kExpected[] = {1, 2, 3, 4, 5, 6, 7, 8};
+  static const uint8_t kExpected[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc};
   uint8_t *buf;
   size_t buf_len;
   CBB cbb;
@@ -282,7 +285,8 @@ static bool TestCBBBasic() {
   if (!CBB_add_u8(&cbb, 1) ||
       !CBB_add_u16(&cbb, 0x203) ||
       !CBB_add_u24(&cbb, 0x40506) ||
-      !CBB_add_bytes(&cbb, (const uint8_t*) "\x07\x08", 2) ||
+      !CBB_add_u32(&cbb, 0x708090a) ||
+      !CBB_add_bytes(&cbb, (const uint8_t*) "\x0b\x0c", 2) ||
       !CBB_finish(&cbb, &buf, &buf_len)) {
     CBB_cleanup(&cbb);
     return false;

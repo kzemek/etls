@@ -56,6 +56,7 @@ const Flag<bool> kBoolFlags[] = {
     &TestConfig::write_different_record_sizes },
   { "-cbc-record-splitting", &TestConfig::cbc_record_splitting },
   { "-partial-write", &TestConfig::partial_write },
+  { "-no-tls13", &TestConfig::no_tls13 },
   { "-no-tls12", &TestConfig::no_tls12 },
   { "-no-tls11", &TestConfig::no_tls11 },
   { "-no-tls1", &TestConfig::no_tls1 },
@@ -146,8 +147,8 @@ const Flag<int> kIntFlags[] = {
   { "-expect-total-renegotiations", &TestConfig::expect_total_renegotiations },
   { "-expect-server-key-exchange-hash",
     &TestConfig::expect_server_key_exchange_hash },
-  { "-expect-key-exchange-info",
-    &TestConfig::expect_key_exchange_info },
+  { "-expect-curve-id", &TestConfig::expect_curve_id },
+  { "-expect-dhe-group-size", &TestConfig::expect_dhe_group_size },
   { "-initial-timeout-duration-ms", &TestConfig::initial_timeout_duration_ms },
 };
 
