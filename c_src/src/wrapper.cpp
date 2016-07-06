@@ -19,8 +19,8 @@
 #include <string>
 #include <system_error>
 #include <tuple>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 using namespace std::literals;
 
@@ -528,6 +528,8 @@ static ErlNifFunc nif_funcs[] = {{"connect", 12, connect_nif},
     {"certificate_chain", 1, certificate_chain_nif},
     {"shutdown", 3, shutdown_nif}};
 
+#pragma GCC visibility push(default)
 ERL_NIF_INIT(ssl2_nif, nif_funcs, load, NULL, NULL, NULL)
+#pragma GCC visibility pop
 
 } // extern C

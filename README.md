@@ -30,9 +30,9 @@ and the last message received.
 
 Dependencies:
 
-* `cmake` >= 3.0.0
+* `cmake` >= 3.1.0
 * `erlang` >= 17.0
-* `g++` >= 4.9.0
+* `g++` >= 4.9.0 (or `clang`)
 * `git`
 * `golang`
 * `make`
