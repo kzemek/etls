@@ -52,7 +52,7 @@ Add `etls` as a `rebar` dependency to your project:
 
 ```erlang
 {deps, [
-  {etls, "1.1.0", {git, "https://github.com/kzemek/etls.git", {tag, "1.1.0"}}}
+  {etls, "1.1.1", {git, "https://github.com/kzemek/etls.git", {tag, "1.1.1"}}}
 }.
 ```
 
