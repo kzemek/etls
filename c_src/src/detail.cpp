@@ -11,6 +11,7 @@
 #include <asio/ssl/context.hpp>
 #include <asio/ssl/rfc2818_verification.hpp>
 
+#include <cassert>
 #include <memory>
 
 namespace {
@@ -32,15 +33,15 @@ namespace detail {
 WithSSLContext::WithSSLContext(const asio::ssl::context_base::method method,
     const std::string &certPath, const std::string &keyPath,
     std::string rfc2818Hostname)
-    : m_context{method}
+    : m_context{std::make_shared<asio::ssl::context>(method)}
 {
-    m_context.set_options(asio::ssl::context::default_workarounds);
-    m_context.set_default_verify_paths();
-    m_context.set_verify_depth(100);
+    m_context->set_options(asio::ssl::context::default_workarounds);
+    m_context->set_default_verify_paths();
+    m_context->set_verify_depth(100);
 
     if (!certPath.empty()) {
-        m_context.use_certificate_chain_file(certPath);
-        m_context.use_private_key_file(keyPath, asio::ssl::context::pem);
+        m_context->use_certificate_chain_file(certPath);
+        m_context->use_private_key_file(keyPath, asio::ssl::context::pem);
     }
 
     std::unique_ptr<X509_VERIFY_PARAM, decltype(&X509_VERIFY_PARAM_free)> param{
@@ -50,12 +51,12 @@ WithSSLContext::WithSSLContext(const asio::ssl::context_base::method method,
 
     X509_VERIFY_PARAM_set_flags(
         param.get(), X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
-    SSL_CTX_set1_param(m_context.native_handle(), param.get());
+    SSL_CTX_set1_param(m_context->native_handle(), param.get());
 
     X509_STORE_set_flags(
-        m_context.native_handle()->cert_store, X509_V_FLAG_ALLOW_PROXY_CERTS);
+        m_context->native_handle()->cert_store, X509_V_FLAG_ALLOW_PROXY_CERTS);
 
-    m_context.set_verify_callback([
+    m_context->set_verify_callback([
         this, rfc2818Hostname = std::move(rfc2818Hostname)
     ](bool preverify, asio::ssl::verify_context &ctx) mutable {
 
@@ -71,9 +72,17 @@ WithSSLContext::WithSSLContext(const asio::ssl::context_base::method method,
     });
 }
 
+WithSSLContext::WithSSLContext(WithSSLContext &other)
+    : m_shared{true}
+    , m_context{other.m_context}
+{
+    other.m_shared = true;
+}
+
 void WithSSLContext::addCertificateRevocationList(
     const asio::const_buffer &data)
 {
+    assert(!m_shared);
     ERR_clear_error();
 
     auto bio = bufferToBIO(data);
@@ -84,7 +93,7 @@ void WithSSLContext::addCertificateRevocationList(
 
         if (crl) {
             if (X509_STORE *store =
-                    SSL_CTX_get_cert_store(m_context.native_handle())) {
+                    SSL_CTX_get_cert_store(m_context->native_handle())) {
                 if (X509_STORE_add_crl(store, crl.get()) == 1) {
                     return;
                 }
@@ -98,11 +107,13 @@ void WithSSLContext::addCertificateRevocationList(
 
 void WithSSLContext::addCertificateAuthority(const asio::const_buffer &data)
 {
-    m_context.add_certificate_authority(data);
+    assert(!m_shared);
+    m_context->add_certificate_authority(data);
 }
 
 void WithSSLContext::addChainCertificate(const asio::const_buffer &data)
 {
+    assert(!m_shared);
     ERR_clear_error();
 
     auto bio = bufferToBIO(data);
@@ -112,7 +123,7 @@ void WithSSLContext::addChainCertificate(const asio::const_buffer &data)
 
         if (cert) {
             if (SSL_CTX_add_extra_chain_cert(
-                    m_context.native_handle(), cert.get()) == 1) {
+                    m_context->native_handle(), cert.get()) == 1) {
                 cert.release();
                 return;
             }
@@ -125,7 +136,8 @@ void WithSSLContext::addChainCertificate(const asio::const_buffer &data)
 
 void WithSSLContext::setVerifyMode(const asio::ssl::verify_mode mode)
 {
-    m_context.set_verify_mode(mode);
+    assert(!m_shared);
+    m_context->set_verify_mode(mode);
 }
 
 } // namespace detail

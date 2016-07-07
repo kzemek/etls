@@ -52,12 +52,13 @@ public:
 
     /**
      * Constructor.
-     * Prepares a new @c asio socket with a given @c ssl::context.
-     * @param context a @c ssl::context to use for this socket's configuration.
+     * Prepares a new @c asio socket with a given SSL context.
      * @param app @c TLSApplication object to retrieve @c io_service for this
      * object's asynchronous operations.
+     * @param acceptor a @c context handler to use for this socket's
+     * configuration.
      */
-    TLSSocket(TLSApplication &app, asio::ssl::context &context);
+    TLSSocket(TLSApplication &app, WithSSLContext &acceptor);
 
     /**
      * Asynchronously connects the socket to a remote service.
@@ -177,9 +178,7 @@ void TLSSocket::sendAsync(
     Ptr self, const BufferSequence &buffers, Callback<> callback)
 {
     asio::post(m_ioService, [
-        =,
-        self = std::move(self),
-        callback = std::move(callback)
+        =, self = std::move(self), callback = std::move(callback)
     ]() mutable {
         asio::async_write(m_socket, buffers,
             [ =, self = std::move(self), callback = std::move(callback) ](

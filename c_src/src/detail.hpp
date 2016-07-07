@@ -12,6 +12,8 @@
 #include <asio/buffer.hpp>
 #include <asio/ssl/context.hpp>
 
+#include <memory>
+
 namespace one {
 namespace etls {
 namespace detail {
@@ -32,6 +34,15 @@ public:
     WithSSLContext(const asio::ssl::context_base::method method,
         const std::string &certPath = "", const std::string &keyPath = "",
         std::string rfc2818Hostname = "");
+
+    /**
+     * Constructor.
+     * Shares a context from an existing @c WithSSLContext instance.
+     * Both @c this and the other instance are marked as "shared" and can no
+     * longer be modified through the class' methods.
+     * @param other The object that shares its context.
+     */
+    WithSSLContext(WithSSLContext &other);
 
     /**
      * Adds a certificate revocation list to the context.
@@ -58,7 +69,8 @@ public:
     virtual void setVerifyMode(const asio::ssl::verify_mode mode);
 
 protected:
-    asio::ssl::context m_context;
+    bool m_shared = false;
+    std::shared_ptr<asio::ssl::context> m_context;
 };
 
 } // namespace detail
