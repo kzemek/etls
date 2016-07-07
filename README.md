@@ -1,5 +1,9 @@
 # etls
 
+[![Build Status](https://travis-ci.org/kzemek/etls.svg?branch=master)](https://travis-ci.org/kzemek/etls)
+[![Hex.pm](https://img.shields.io/hexpm/v/etls.svg?maxAge=2592000)](https://hex.pm/packages/etls)
+[![Hexdocs.pm](https://img.shields.io/badge/api-hexdocs-brightgreen.svg)](https://hexdocs.pm/etls)
+
 An alternative implementation of Erlang TCP/TLS layer.
 
 *etls* is a NIF-based implementation of the whole TLS stack, built on top of
