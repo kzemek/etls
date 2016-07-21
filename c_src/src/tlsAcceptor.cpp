@@ -30,19 +30,23 @@ void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
         =, self = std::move(self), callback = std::move(callback)
     ]() mutable {
         auto sock = std::make_shared<TLSSocket>(m_app, *this);
-        m_acceptor.async_accept(sock->m_socket.lowest_layer(),
-            [ =, self = std::move(self), callback = std::move(callback) ](
-                                    const auto ec) mutable {
-                if (ec) {
-                    callback(ec);
-                }
-                else {
-                    sock->m_socket.lowest_layer().set_option(
-                        asio::ip::tcp::no_delay{true});
+        m_acceptor.async_accept(sock->m_socket.lowest_layer(), [
+            =, s = std::weak_ptr<TLSAcceptor>{self},
+            callback = std::move(callback)
+        ](const auto ec) mutable {
+            if (ec) {
+                callback(ec);
+            }
+            else if (auto self2 = s.lock()) {
+                sock->m_socket.lowest_layer().set_option(
+                    asio::ip::tcp::no_delay{true});
 
-                    callback(sock);
-                }
-            });
+                callback(sock);
+            }
+            else {
+                callback(std::make_error_code(std::errc::operation_canceled));
+            }
+        });
     });
 }
 
