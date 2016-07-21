@@ -72,17 +72,14 @@ WithSSLContext::WithSSLContext(const asio::ssl::context_base::method method,
     });
 }
 
-WithSSLContext::WithSSLContext(WithSSLContext &other)
-    : m_shared{true}
-    , m_context{other.m_context}
+WithSSLContext::WithSSLContext(std::shared_ptr<asio::ssl::context> context)
+    : m_context{std::move(context)}
 {
-    other.m_shared = true;
 }
 
 void WithSSLContext::addCertificateRevocationList(
     const asio::const_buffer &data)
 {
-    assert(!m_shared);
     ERR_clear_error();
 
     auto bio = bufferToBIO(data);
@@ -107,13 +104,11 @@ void WithSSLContext::addCertificateRevocationList(
 
 void WithSSLContext::addCertificateAuthority(const asio::const_buffer &data)
 {
-    assert(!m_shared);
     m_context->add_certificate_authority(data);
 }
 
 void WithSSLContext::addChainCertificate(const asio::const_buffer &data)
 {
-    assert(!m_shared);
     ERR_clear_error();
 
     auto bio = bufferToBIO(data);
@@ -136,7 +131,6 @@ void WithSSLContext::addChainCertificate(const asio::const_buffer &data)
 
 void WithSSLContext::setVerifyMode(const asio::ssl::verify_mode mode)
 {
-    assert(!m_shared);
     m_context->set_verify_mode(mode);
 }
 

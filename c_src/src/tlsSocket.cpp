@@ -53,8 +53,9 @@ TLSSocket::TLSSocket(TLSApplication &app, const std::string &keyPath,
 {
 }
 
-TLSSocket::TLSSocket(TLSApplication &app, WithSSLContext &acceptor)
-    : detail::WithSSLContext{acceptor}
+TLSSocket::TLSSocket(
+    TLSApplication &app, std::shared_ptr<asio::ssl::context> context)
+    : detail::WithSSLContext{std::move(context)}
     , m_ioService{app.ioService()}
     , m_resolver{m_ioService}
     , m_socket{m_ioService, *m_context}

@@ -29,7 +29,7 @@ void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
     asio::post(m_ioService, [
         =, self = std::move(self), callback = std::move(callback)
     ]() mutable {
-        auto sock = std::make_shared<TLSSocket>(m_app, *this);
+        auto sock = std::make_shared<TLSSocket>(m_app, m_context);
         m_acceptor.async_accept(sock->m_socket.lowest_layer(), [
             =, s = std::weak_ptr<TLSAcceptor>{self},
             callback = std::move(callback)

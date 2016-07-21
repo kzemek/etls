@@ -58,7 +58,7 @@ public:
      * @param acceptor a @c context handler to use for this socket's
      * configuration.
      */
-    TLSSocket(TLSApplication &app, WithSSLContext &acceptor);
+    TLSSocket(TLSApplication &app, std::shared_ptr<asio::ssl::context> context);
 
     /**
      * Asynchronously connects the socket to a remote service.

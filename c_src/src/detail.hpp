@@ -37,12 +37,11 @@ public:
 
     /**
      * Constructor.
-     * Shares a context from an existing @c WithSSLContext instance.
-     * Both @c this and the other instance are marked as "shared" and can no
-     * longer be modified through the class' methods.
-     * @param other The object that shares its context.
+     * Shares an existing context with @c this . The context can no longer be
+     * modified or undefined behaviour will occur.
+     * @param other The shared context to use.
      */
-    WithSSLContext(WithSSLContext &other);
+    WithSSLContext(std::shared_ptr<asio::ssl::context> context);
 
     /**
      * Adds a certificate revocation list to the context.
@@ -69,7 +68,6 @@ public:
     virtual void setVerifyMode(const asio::ssl::verify_mode mode);
 
 protected:
-    bool m_shared = false;
     std::shared_ptr<asio::ssl::context> m_context;
 };
 
