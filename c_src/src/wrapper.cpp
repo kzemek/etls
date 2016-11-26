@@ -13,6 +13,7 @@
 #include "tlsSocket.hpp"
 
 #include <asio/error.hpp>
+#include <asio/socket_base.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -250,10 +251,11 @@ ERL_NIF_TERM listen(ErlNifEnv *env, Env /*localEnv*/, ErlNifPid /*pid*/,
     int port, std::string certPath, std::string keyPath, std::string verifyMode,
     bool failIfNoPeerCert, bool verifyClientOnce, std::string rfc2818Hostname,
     std::vector<std::string> CAs, std::vector<std::string> CRLs,
-    std::vector<std::string> chain)
+    std::vector<std::string> chain, int backlog)
 {
+    backlog = backlog == -1 ? asio::socket_base::max_connections : backlog;
     auto acceptor = std::make_shared<one::etls::TLSAcceptor>(
-        app, port, certPath, keyPath, std::move(rfc2818Hostname));
+        app, port, certPath, keyPath, std::move(rfc2818Hostname), backlog);
 
     setTLSOptions(*acceptor, verifyMode, failIfNoPeerCert, verifyClientOnce,
         std::move(CAs), std::move(CRLs), std::move(chain));
@@ -521,7 +523,7 @@ static ERL_NIF_TERM shutdown_nif(
 }
 
 static ErlNifFunc nif_funcs[] = {{"connect", 12, connect_nif},
-    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 10, listen_nif},
+    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 11, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
     {"peername", 2, peername_nif}, {"sockname", 2, sockname_nif},
     {"acceptor_sockname", 2, acceptor_sockname_nif}, {"close", 2, close_nif},

@@ -45,10 +45,13 @@ public:
      * @param certPath Path to a PEM certificate file to use for the TLS
      * connection.
      * @param keyPath Path to a PEM keyfile to use for the TLS connection.
+     * @param backlog The number of connections that may be pending on the
+     * socket.
      */
     TLSAcceptor(TLSApplication &m_app, const unsigned short port,
         const std::string &certPath, const std::string &keyPath,
-        std::string rfc2818Hostname = "");
+        std::string rfc2818Hostname = "",
+        const std::size_t backlog = asio::socket_base::max_connections);
 
     /**
      * Asynchronously accepts a single pending connection.

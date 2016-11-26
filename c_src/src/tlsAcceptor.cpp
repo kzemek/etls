@@ -15,13 +15,16 @@ namespace etls {
 
 TLSAcceptor::TLSAcceptor(TLSApplication &app, const unsigned short port,
     const std::string &certPath, const std::string &keyPath,
-    std::string rfc2818Hostname)
+    std::string rfc2818Hostname, const std::size_t backlog)
     : detail::WithSSLContext{asio::ssl::context::tlsv12_server, certPath,
           keyPath, std::move(rfc2818Hostname)}
     , m_app{app}
     , m_ioService{app.ioService()}
-    , m_acceptor{m_ioService, {asio::ip::tcp::v4(), port}}
+    , m_acceptor{m_ioService, asio::ip::tcp::v4()}
 {
+    m_acceptor.set_option(asio::socket_base::reuse_address{true});
+    m_acceptor.bind({asio::ip::tcp::v4(), port});
+    m_acceptor.listen(backlog);
 }
 
 void TLSAcceptor::acceptAsync(Ptr self, Callback<TLSSocket::Ptr> callback)
