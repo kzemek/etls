@@ -16,7 +16,7 @@
 -on_load(init/0).
 
 %% API
--export([connect/12, send/2, recv/2, listen/10, accept/2, handshake/2,
+-export([connect/12, send/2, recv/2, listen/11, accept/2, handshake/2,
     peername/2, sockname/2, acceptor_sockname/2, close/2,
     certificate_chain/1, shutdown/3]).
 
@@ -81,11 +81,12 @@ recv(_Sock, _Size) ->
 -spec listen(Port :: inet:port_number(), CertPath :: str(), KeyPath :: str(),
     VerifyType :: str(), FailIfNoPeerCert :: boolean(),
     VerifyClientOnce :: boolean(), RFC2818Hostname :: str(),
-    CAs :: [binary()], CRLs :: [binary()], Chain :: [binary()]) ->
+    CAs :: [binary()], CRLs :: [binary()], Chain :: [binary()],
+    Backlog :: non_neg_integer() | -1) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
 listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
-    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Backlog) ->
     erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------

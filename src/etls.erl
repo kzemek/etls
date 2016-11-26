@@ -50,10 +50,12 @@
 {keyfile, str()} |
 {chain, [pem_encoded()]}.
 
+-type listen_option() :: {backlog, non_neg_integer()}.
+
 -opaque socket() :: #sock_ref{}.
 -opaque acceptor() :: #acceptor_ref{}.
 
--export_type([option/0, ssl_option/0, socket/0, acceptor/0]).
+-export_type([option/0, ssl_option/0, listen_option/0, socket/0, acceptor/0]).
 
 %%%===================================================================
 %%% API
@@ -149,7 +151,8 @@ recv(#sock_ref{receiver = Receiver}, Size, Timeout) ->
 %% Creates an acceptor (listen socket).
 %% @end
 %%--------------------------------------------------------------------
--spec listen(Port :: inet:port_number(), Opts :: [ssl_option()]) ->
+-spec listen(Port :: inet:port_number(),
+    Opts :: [ssl_option() | listen_option()]) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
 listen(Port, Options) ->
@@ -158,8 +161,10 @@ listen(Port, Options) ->
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
         RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
 
+    Backlog = proplists:get_value(backlog, Options, -1),
+
     case etls_nif:listen(Port, CertPath, KeyPath, VerifyType, FailIfNoPeerCert,
-        VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain) of
+        VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain, Backlog) of
         {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
