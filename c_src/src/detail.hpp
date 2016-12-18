@@ -44,6 +44,13 @@ public:
     WithSSLContext(std::shared_ptr<asio::ssl::context> context);
 
     /**
+     * Sets ciphers to be used by the connection.
+     * @param spec As in OpenSSL ciphers (man 1).
+     * @return Whether any cipher could be selected.
+     */
+    bool setCipherList(const std::string &spec);
+
+    /**
      * Adds a certificate revocation list to the context.
      * @param data PEM-encoded CRL data.
      */

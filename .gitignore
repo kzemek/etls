@@ -142,3 +142,5 @@ crashlytics-build.properties
 
 ## Qt-Creator
 *.user
+
+doc/

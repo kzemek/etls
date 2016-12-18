@@ -53,7 +53,11 @@ server_test_() ->
     [{foreach, fun prepare_args/0, fun cleanup/1, [
         fun accept_should_accept_connections/1,
         fun sockets_should_communicate/1,
-        fun acceptor_should_hold_sockname/1
+        fun acceptor_should_hold_sockname/1,
+        fun connection_should_fail_when_ciphers_do_not_match_client/1,
+        fun connection_should_fail_when_ciphers_do_not_match_server/1,
+        fun client_cipher_settings_should_be_honored/1,
+        fun server_cipher_settings_should_be_honored/1
     ]}].
 
 %%%===================================================================
@@ -62,6 +66,13 @@ server_test_() ->
 
 listen_should_be_callable_test() ->
     etls:listen(12345, [{certfile, "server.pem"}]).
+
+cipher_suites_should_return_ciphers_test() ->
+    ?assert(lists:member("ECDHE-RSA-AES128-SHA", etls:cipher_suites())).
+
+cipher_suites_should_filter_ciphers_test() ->
+    ?assert(lists:member("ECDHE-RSA-AES256-GCM-SHA384", etls:cipher_suites("AES256"))),
+    ?assertNot(lists:member("ECDHE-RSA-AES128-SHA", etls:cipher_suites("AES256"))).
 
 connect_should_establish_a_secure_connection({Ref, _Server, Port}) ->
     etls:connect("localhost", Port, [], ?TIMEOUT),
@@ -443,6 +454,71 @@ socket_should_not_close_on_shutdown_when_no_exit_on_close({_Ref, Server, Sock}) 
         ?assertEqual({error, closed}, RecvResult)
     end}.
 
+connection_should_fail_when_ciphers_do_not_match_client({_Ref, Port}) ->
+    {ok, ListenSock} = etls:listen(Port, [
+        {certfile, "server.pem"}, {keyfile, "server.key"}, {ciphers, "ECDHE-RSA-AES128-SHA"}]),
+
+    spawn(
+        fun() ->
+            ssl:connect("localhost", Port, [{ciphers, [{rsa,aes_256_cbc,sha}]}], ?TIMEOUT)
+        end),
+
+    {ok, Sock} = etls:accept(ListenSock, ?TIMEOUT),
+
+    HandshakeResult = etls:handshake(Sock),
+
+    ?_assertEqual({error,'NO_SHARED_CIPHER'}, HandshakeResult).
+
+connection_should_fail_when_ciphers_do_not_match_server({_Ref, Port}) ->
+    {ok, ListenSock} = ssl:listen(Port, [
+        {certfile, "server.pem"}, {keyfile, "server.key"}, {ciphers, [{rsa,aes_256_cbc,sha}]}]),
+
+    ConnectResultRef = async(
+        fun() ->
+            etls:connect("localhost", Port, [{ciphers, ["ECDHE-RSA-AES128-SHA"]}], ?TIMEOUT)
+        end),
+
+    {ok, Sock} = ssl:transport_accept(ListenSock, ?TIMEOUT),
+    ssl:ssl_accept(Sock),
+
+    ConnectResult = get_result(ConnectResultRef),
+
+    ?_assertEqual({error,'TLSV1_ALERT_INSUFFICIENT_SECURITY'}, ConnectResult).
+
+client_cipher_settings_should_be_honored({_Ref, Port}) ->
+    ServerCiphers = [{rsa,aes_256_cbc,sha}, {ecdhe_rsa,aes_128_cbc,sha}],
+
+    {ok, ListenSock} = ssl:listen(Port, [
+        {certfile, "server.pem"}, {keyfile, "server.key"}, {ciphers, ServerCiphers}]),
+
+    spawn_link(
+        fun() ->
+            {ok, _} = etls:connect("localhost", Port, [{ciphers, ["ECDHE-RSA-AES128-SHA"]}], ?TIMEOUT)
+        end),
+
+    {ok, Sock} = ssl:transport_accept(ListenSock, ?TIMEOUT),
+    ok = ssl:ssl_accept(Sock),
+
+    {ok, {_, CipherSuite}} = ssl:connection_info(Sock),
+    ?_assertEqual({ecdhe_rsa,aes_128_cbc,sha}, CipherSuite).
+
+server_cipher_settings_should_be_honored({_Ref, Port}) ->
+    ClientCiphers = [{rsa,aes_256_cbc,sha}, {ecdhe_rsa,aes_128_cbc,sha}],
+
+    spawn_link(
+        fun() ->
+            {ok, ListenSock} = etls:listen(Port, [
+                {certfile, "server.pem"}, {keyfile, "server.key"}, {ciphers, "ECDHE-RSA-AES128-SHA"}]),
+
+            {ok, Sock} = etls:accept(ListenSock, ?TIMEOUT),
+            ok = etls:handshake(Sock)
+        end),
+
+    {ok, CSock} = ssl:connect("localhost", Port, [{ciphers, ClientCiphers}], ?TIMEOUT),
+    {ok, {_, CipherSuite}} = ssl:connection_info(CSock),
+
+    ?_assertEqual({ecdhe_rsa,aes_128_cbc,sha}, CipherSuite).
+
 %%%===================================================================
 %%% Test fixtures
 %%%===================================================================
@@ -539,4 +615,27 @@ clear_queue() ->
         _ -> clear_queue()
     after 0 ->
         ok
+    end.
+
+async(Fun) ->
+    Ref = make_ref(),
+    Self = self(),
+    spawn(fun() ->
+        case (catch Fun()) of
+            {ok, Pid} when is_pid(Pid) ->
+                catch ssl:controlling_process(Pid, Self),
+                catch etls:controlling_process(Pid, Self),
+                Self ! {Ref, {ok, Pid}};
+
+            Other ->
+                Self ! {Ref, Other}
+        end
+    end),
+    Ref.
+
+get_result(Ref) ->
+    receive
+        {Ref, Result} -> Result
+    after
+        ?TIMEOUT -> error(timeout)
     end.
