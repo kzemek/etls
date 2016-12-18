@@ -69,7 +69,7 @@ one::etls::TLSApplication app;
 void setTLSOptions(one::etls::detail::WithSSLContext &object,
     std::string verifyMode, bool failIfNoPeerCert, bool verifyClientOnce,
     const std::vector<std::string> &CAs, const std::vector<std::string> &CRLs,
-    const std::vector<std::string> &chain)
+    const std::vector<std::string> &chain, const std::string &cipherList)
 {
     if (verifyMode == "verify_none") {
         object.setVerifyMode(asio::ssl::verify_none);
@@ -86,6 +86,11 @@ void setTLSOptions(one::etls::detail::WithSSLContext &object,
     }
     else {
         throw nifpp::badarg{};
+    }
+
+    if (!cipherList.empty()) {
+        if (!object.setCipherList(cipherList))
+            throw nifpp::badarg();
     }
 
     for (auto &ca : CAs)
@@ -170,7 +175,8 @@ ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
     std::string host, int port, std::string certPath, std::string keyPath,
     std::string verifyMode, bool failIfNoPeerCert, bool verifyClientOnce,
     std::string rfc2818Hostname, std::vector<std::string> CAs,
-    std::vector<std::string> CRLs, std::vector<std::string> chain)
+    std::vector<std::string> CRLs, std::vector<std::string> chain,
+    std::string cipherList)
 {
     nifpp::TERM ref{enif_make_copy(localEnv, r)};
 
@@ -188,8 +194,8 @@ ERL_NIF_TERM connect(ErlNifEnv *env, Env localEnv, ErlNifPid pid, nifpp::TERM r,
     auto sock = std::make_shared<one::etls::TLSSocket>(
         app, certPath, keyPath, std::move(rfc2818Hostname));
 
-    setTLSOptions(*sock, verifyMode, failIfNoPeerCert, verifyClientOnce,
-        std::move(CAs), std::move(CRLs), std::move(chain));
+    setTLSOptions(*sock, verifyMode, failIfNoPeerCert, verifyClientOnce, CAs,
+        CRLs, chain, cipherList);
 
     auto callback = createCallback<one::etls::TLSSocket::Ptr>(
         localEnv, pid, ref, std::move(onSuccess));
@@ -251,14 +257,14 @@ ERL_NIF_TERM listen(ErlNifEnv *env, Env /*localEnv*/, ErlNifPid /*pid*/,
     int port, std::string certPath, std::string keyPath, std::string verifyMode,
     bool failIfNoPeerCert, bool verifyClientOnce, std::string rfc2818Hostname,
     std::vector<std::string> CAs, std::vector<std::string> CRLs,
-    std::vector<std::string> chain, int backlog)
+    std::vector<std::string> chain, std::string cipherList, int backlog)
 {
     backlog = backlog == -1 ? asio::socket_base::max_connections : backlog;
     auto acceptor = std::make_shared<one::etls::TLSAcceptor>(
         app, port, certPath, keyPath, std::move(rfc2818Hostname), backlog);
 
     setTLSOptions(*acceptor, verifyMode, failIfNoPeerCert, verifyClientOnce,
-        std::move(CAs), std::move(CRLs), std::move(chain));
+        CAs, CRLs, chain, cipherList);
 
     auto res = nifpp::construct_resource<one::etls::TLSAcceptor::Ptr>(acceptor);
 
@@ -432,6 +438,26 @@ ERL_NIF_TERM shutdown(ErlNifEnv *env, Env localEnv, ErlNifPid pid,
     return nifpp::make(env, ok);
 }
 
+ERL_NIF_TERM cipherlist(
+    ErlNifEnv *env, Env /*localEnv*/, ErlNifPid /*pid*/, std::string filter)
+{
+    std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> ctx{
+        SSL_CTX_new(TLSv1_2_method()), SSL_CTX_free};
+
+    std::vector<std::string> result;
+
+    if (!SSL_CTX_set_cipher_list(ctx.get(), filter.c_str()))
+        return nifpp::make(env, result);
+
+    auto ciphers = ctx->cipher_list->ciphers;
+    for (size_t i = 0; i < sk_SSL_CIPHER_num(ciphers); i++) {
+        const SSL_CIPHER *cipher = sk_SSL_CIPHER_value(ciphers, i);
+        result.emplace_back(SSL_CIPHER_get_name(cipher));
+    }
+
+    return nifpp::make(env, result);
+}
+
 } // namespace
 
 /**
@@ -522,13 +548,19 @@ static ERL_NIF_TERM shutdown_nif(
     return wrap(shutdown, env, argv);
 }
 
-static ErlNifFunc nif_funcs[] = {{"connect", 12, connect_nif},
-    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 11, listen_nif},
+static ERL_NIF_TERM cipher_suites_nif(
+    ErlNifEnv *env, int /*argc*/, const ERL_NIF_TERM argv[])
+{
+    return wrap(cipherlist, env, argv);
+}
+
+static ErlNifFunc nif_funcs[] = {{"connect", 13, connect_nif},
+    {"send", 2, send_nif}, {"recv", 2, recv_nif}, {"listen", 12, listen_nif},
     {"accept", 2, accept_nif}, {"handshake", 2, handshake_nif},
     {"peername", 2, peername_nif}, {"sockname", 2, sockname_nif},
     {"acceptor_sockname", 2, acceptor_sockname_nif}, {"close", 2, close_nif},
     {"certificate_chain", 1, certificate_chain_nif},
-    {"shutdown", 3, shutdown_nif}};
+    {"shutdown", 3, shutdown_nif}, {"cipher_suites", 1, cipher_suites_nif}};
 
 #pragma GCC visibility push(default)
 ERL_NIF_INIT(etls_nif, nif_funcs, load, NULL, NULL, NULL)

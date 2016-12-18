@@ -16,9 +16,9 @@
 -on_load(init/0).
 
 %% API
--export([connect/12, send/2, recv/2, listen/11, accept/2, handshake/2,
+-export([connect/13, send/2, recv/2, listen/12, accept/2, handshake/2,
     peername/2, sockname/2, acceptor_sockname/2, close/2,
-    certificate_chain/1, shutdown/3]).
+    certificate_chain/1, shutdown/3, cipher_suites/1]).
 
 -type str() :: binary() | string().
 -type socket() :: term().
@@ -42,10 +42,10 @@
     CertPath :: str(), KeyPath :: str(), VerifyType :: str(),
     FailIfNoPeerCert :: boolean(), VerifyClientOnce :: boolean(),
     RFC2818Hostname :: str(), CAs :: [binary()], CRLs :: [binary()],
-    Chain :: [binary()]) ->
+    Chain :: [binary()], Ciphers :: str()) ->
     ok | {error, Reason :: atom()}.
 connect(_Ref, _Host, _Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
-    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain) ->
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Ciphers) ->
     erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
@@ -82,11 +82,12 @@ recv(_Sock, _Size) ->
     VerifyType :: str(), FailIfNoPeerCert :: boolean(),
     VerifyClientOnce :: boolean(), RFC2818Hostname :: str(),
     CAs :: [binary()], CRLs :: [binary()], Chain :: [binary()],
-    Backlog :: non_neg_integer() | -1) ->
+    Backlog :: non_neg_integer() | -1, Ciphers :: str()) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
 listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
-    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Backlog) ->
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Backlog,
+    _Ciphers) ->
     erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
@@ -185,6 +186,16 @@ certificate_chain(_Sock) ->
     Type :: read | write | read_write) ->
     ok | {error, Reason :: atom()}.
 shutdown(_Ref, _Sock, _Type) ->
+    erlang:nif_error(etls_nif_not_loaded).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of supported cipher suites.
+%% The filter specification is as the OpenSSL cipherlist filter spec.
+%% @end
+%%--------------------------------------------------------------------
+-spec cipher_suites(Filter :: str()) -> [binary()].
+cipher_suites(_Filter) ->
     erlang:nif_error(etls_nif_not_loaded).
 
 %%%===================================================================

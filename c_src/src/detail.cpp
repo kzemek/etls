@@ -77,6 +77,11 @@ WithSSLContext::WithSSLContext(std::shared_ptr<asio::ssl::context> context)
 {
 }
 
+bool WithSSLContext::setCipherList(const std::string &spec)
+{
+    return SSL_CTX_set_cipher_list(m_context->native_handle(), spec.c_str());
+}
+
 void WithSSLContext::addCertificateRevocationList(
     const asio::const_buffer &data)
 {

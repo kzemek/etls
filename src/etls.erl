@@ -27,17 +27,23 @@
 -export([connect/3, connect/4, send/2, recv/2, recv/3, listen/2,
     accept/1, accept/2, handshake/1, handshake/2, setopts/2,
     controlling_process/2, peername/1, sockname/1, close/1, peercert/1,
-    certificate_chain/1, shutdown/2]).
+    certificate_chain/1, shutdown/2, cipher_suites/0, cipher_suites/1]).
 
 %% Types
 -type der_encoded() :: binary().
+%% DER-encoded binary.
+
 -type pem_encoded() :: binary().
+%% PEM-encoded binary.
+
 -type str() :: binary() | string().
 
 -type option() ::
 {packet, raw | 0 | 1 | 2 | 4} |
 {active, boolean() | once} |
 {exit_on_close, boolean()}.
+%% As in
+%% <a href="http://erlang.org/doc/man/inet.html#setopts-2">inet:setopts/2</a>.
 
 -type ssl_option() ::
 {verify_type, verify_none | verify_peer} |
@@ -48,12 +54,53 @@
 {crls, [pem_encoded()]} |
 {certfile, str()} |
 {keyfile, str()} |
-{chain, [pem_encoded()]}.
+{chain, [pem_encoded()]} |
+{ciphers, str() | [str()]}.
+%% <dl>
+%% <dt>{@type {verify_type, verify_none | verify_peer@}}</dt>
+%% <dd>If `verify_peer' is set, the server will request certificate from the
+%% client to verify. The client certificate is not sent when this option is
+%% `verify_none'. Default: `verify_none'</dd>
+%% <dt>{@type {fail_if_no_peer_cert, boolean()@}}</dt>
+%% <dd>If `true', the connection will fail if client does not present a
+%% certificate when `verify_type' is `verify_peer'. Default: `false'.</dd>
+%% <dt>{@type {verify_client_once, boolean()@}}</dt>
+%% <dd>If `true', client's certificate will not be requested on renegotiation.
+%% Default: `false'.</dd>
+%% <dt>{@type {rfc2818_verification_hostname, str()@}}</dt>
+%% <dd>If set, the server's certificate will be verified against a hostname as
+%% described in RFC 2818. Default: unset.</dd>
+%% <dt>{@type {cacerts, [pem_encoded()]@}}</dt>
+%% <dd>PEM-encoded trusted certificates. Default: `[]'.</dd>
+%% <dt>{@type {crls, [pem_encoded()]@}}</dt>
+%% <dd>PEM-encoded certificate revocation lists. Default: `[]'.</dd>
+%% <dt>{@type {certfile, str()@}}</dt>
+%% <dd>Path to a file containing the user's certificate.</dd>
+%% <dt>{@type {keyfile, str()@}}</dt>
+%% <dd>Path to a file containing the user's private key. Defaults to the
+%% certfile path.</dd>
+%% <dt>{@type {chain, [pem_encoded()]@}}</dt>
+%% <dd>PEM-encoded chain certificates. Default: `[]'.</dd>
+%% <dt>{@type {ciphers, str() | [str()]@}}</dt>
+%% <dd>A cipher specification as described in
+%% <a href="https://linux.die.net/man/1/ciphers">OpenSSL ciphers man</a>. The
+%% ciphers can optionally be given as a list, which will then be joined with
+%% ":". Default: `"DEFAULT"'.</dd>
+%% </dl>
 
 -type listen_option() :: {backlog, non_neg_integer()}.
+%% <dl>
+%% <dt>{@type {backlog, non_neg_integer()@}}</dt>
+%% <dd>The maximum length of the queue of connections pending acceptance.
+%% Default: system defined.</dd>
+%% </dl>
 
 -opaque socket() :: #sock_ref{}.
+%% A socket handle created by {@link connect/3}, {@link connect/4},
+%% {@link accept/1} or {@link accept/2}
+
 -opaque acceptor() :: #acceptor_ref{}.
+%% Am acceptor socket handle created by {@link listen/2}.
 
 -export_type([option/0, ssl_option/0, listen_option/0, socket/0, acceptor/0]).
 
@@ -85,11 +132,11 @@ connect(Host, Port, Options, Timeout) ->
     Ref = make_ref(),
 
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
-        RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
+        RFC2818Hostname, CAs, CRLs, Chain, Ciphers} = extract_tls_settings(Options),
 
     case etls_nif:connect(Ref, Host, Port, CertPath, KeyPath, VerifyType,
         FailIfNoPeerCert, VerifyClientOnce, RFC2818Hostname,
-        CAs, CRLs, Chain) of
+        CAs, CRLs, Chain, Ciphers) of
         ok ->
             receive
                 {Ref, {ok, Sock}} -> start_socket_processes(Sock, Options);
@@ -159,12 +206,12 @@ listen(Port, Options) ->
     true = proplists:is_defined(certfile, Options),
 
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
-        RFC2818Hostname, CAs, CRLs, Chain} = extract_tls_settings(Options),
+        RFC2818Hostname, CAs, CRLs, Chain, Ciphers} = extract_tls_settings(Options),
 
     Backlog = proplists:get_value(backlog, Options, -1),
 
     case etls_nif:listen(Port, CertPath, KeyPath, VerifyType, FailIfNoPeerCert,
-        VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain, Backlog) of
+        VerifyClientOnce, RFC2818Hostname, CAs, CRLs, Chain, Ciphers, Backlog) of
         {ok, Acceptor} -> {ok, #acceptor_ref{acceptor = Acceptor}};
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
@@ -361,6 +408,29 @@ shutdown(SockRef, Type) ->
         {error, Reason} when is_atom(Reason) -> {error, Reason}
     end.
 
+%%--------------------------------------------------------------------
+%% @equiv cipher_suites(<<"ALL">>)
+%% @end
+%%--------------------------------------------------------------------
+-spec cipher_suites() -> [binary()].
+cipher_suites() ->
+    cipher_suites(<<"ALL">>).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a list of supported cipher suites filtered by a given cipher
+%% specification. The specification is described in
+%% <a href="https://linux.die.net/man/1/ciphers">OpenSSL ciphers man</a>. The
+%% ciphers can optionally be given as a list, which will then be joined with
+%% ":".
+%% @end
+%%--------------------------------------------------------------------
+-spec cipher_suites(Filter :: str() | [str()]) -> [binary()].
+cipher_suites([C | _] = Filter) when is_list(C); is_binary(C) ->
+    etls_nif:cipher_suites(iolist_to_binary(join(<<":">>, Filter)));
+cipher_suites(Filter) when is_binary(Filter); is_list(Filter) ->
+    etls_nif:cipher_suites(Filter).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -414,7 +484,7 @@ parse_name_result(Result) ->
 %%--------------------------------------------------------------------
 -spec extract_tls_settings(Opts :: proplists:proplist()) ->
     {str(), str(), str(), boolean(), boolean(), str(),
-        [pem_encoded()], [pem_encoded()], [pem_encoded()]}.
+        [pem_encoded()], [pem_encoded()], [pem_encoded()], iodata()}.
 extract_tls_settings(Opts) ->
     CertPath = proplists:get_value(certfile, Opts, ""),
     KeyPath = proplists:get_value(keyfile, Opts, CertPath),
@@ -431,5 +501,29 @@ extract_tls_settings(Opts) ->
     CRLs = proplists:get_value(crls, Opts, []),
     Chain = proplists:get_value(chain, Opts, []),
 
+    Ciphers =
+        case proplists:get_value(ciphers, Opts, <<>>) of
+            [C | _] = CipherList when is_list(C); is_binary(C) ->
+                iolist_to_binary(join(<<":">>, CipherList));
+            Val when is_binary(Val); is_list(Val) ->
+                Val
+        end,
+
     {CertPath, KeyPath, VerifyType, FailIfNoPeerCert, VerifyClientOnce,
-        RFC2818Hostname, CAs, CRLs, Chain}.
+        RFC2818Hostname, CAs, CRLs, Chain, Ciphers}.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Inserts a separator between every two list elements.
+%% @end
+%%--------------------------------------------------------------------
+join(Sep, List) ->
+    join(Sep, List, []).
+
+join(Sep, [A, B | Rest], Acc) ->
+    join(Sep, [B | Rest], [Sep, A | Acc]);
+join(Sep, [A], Acc) ->
+    join(Sep, [], [A | Acc]);
+join(_Sep, [], Acc) ->
+    lists:reverse(Acc).
