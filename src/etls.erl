@@ -518,9 +518,11 @@ extract_tls_settings(Opts) ->
 %% Inserts a separator between every two list elements.
 %% @end
 %%--------------------------------------------------------------------
+-spec join(Sep :: term(), List :: list()) -> list().
 join(Sep, List) ->
     join(Sep, List, []).
 
+-spec join(Sep :: term(), List :: list(), Acc :: list()) -> list().
 join(Sep, [A, B | Rest], Acc) ->
     join(Sep, [B | Rest], [Sep, A | Acc]);
 join(Sep, [A], Acc) ->
