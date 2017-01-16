@@ -17,31 +17,38 @@ addons:
       - ninja-build
 cache:
   directories:
-    - $HOME/cmake
+    - $HOME/local
+    - $HOME/.cache/rebar3
 env:
   global:
-    - PATH=$HOME/cmake/bin:$PATH
+    - PATH=$HOME/local/bin:$PATH
 matrix:
   include:
-    - otp_release: 17.0
-      env: CXX=g++-6 CC=gcc-6
     - otp_release: 17.5
-      env: CXX=g++-6 CC=gcc-6
-    - otp_release: 18.0
       env: CXX=g++-6 CC=gcc-6
     - otp_release: 18.3
       env: CXX=g++-6 CC=gcc-6
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=g++-4.9 CC=gcc-4.9
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=g++-5 CC=gcc-5
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=g++-6 CC=gcc-6
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=clang++-3.6 CC=clang-3.6
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=clang++-3.7 CC=clang-3.7
-    - otp_release: 19.0
+    - otp_release: 19.2
       env: CXX=clang++-3.8 CC=clang-3.8
+    - otp_release: 19.2
+      env: DIALYZER CXX=g++-6 CC=gcc-6
+      script: rebar3 dialyzer
 before_install:
-  - if [ ! -d "$HOME/cmake/bin" ]; then wget --no-check-certificate https://cmake.org/files/v3.5/cmake-3.5.2-Linux-x86_64.sh && sh cmake-3.5.2-Linux-x86_64.sh --prefix=$HOME/cmake --exclude-subdir; fi
+  - >
+    if [ ! -d "$HOME/local/bin" ]; then
+      mkdir -p $HOME/local/bin
+      wget --no-check-certificate https://cmake.org/files/v3.5/cmake-3.5.2-Linux-x86_64.sh
+      sh cmake-3.5.2-Linux-x86_64.sh --prefix=$HOME/local --exclude-subdir
+      wget --no-check-certificate https://s3.amazonaws.com/rebar3/rebar3 -P $HOME/local/bin
+      chmod +x $HOME/local/bin/rebar3
+    fi
