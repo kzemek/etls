@@ -35,8 +35,8 @@
 -record(state, {
     socket :: etls_nif:socket(),
     buffer = <<>> :: binary(),
-    caller :: {pid(), term()},
-    needed :: integer(),
+    caller :: undefined | {pid(), term()},
+    needed = 0 :: integer(),
     timer = make_ref() :: reference(),
     active = false :: false | once | true,
     controlling_pid :: pid(),

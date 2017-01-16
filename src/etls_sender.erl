@@ -32,7 +32,7 @@
 
 -record(state, {
     socket :: etls_nif:socket(),
-    caller :: {pid(), term()},
+    caller :: undefined | {pid(), term()},
     packet = 0 :: 0 | 1 | 2 | 4
 }).
 

@@ -82,12 +82,12 @@ recv(_Sock, _Size) ->
     VerifyType :: str(), FailIfNoPeerCert :: boolean(),
     VerifyClientOnce :: boolean(), RFC2818Hostname :: str(),
     CAs :: [binary()], CRLs :: [binary()], Chain :: [binary()],
-    Backlog :: non_neg_integer() | -1, Ciphers :: str()) ->
+    Ciphers :: str(), Backlog :: non_neg_integer() | -1) ->
     {ok, Acceptor :: acceptor()} |
     {error, Reason :: atom()}.
 listen(_Port, _CertPath, _KeyPath, _VerifyType, _FailIfNoPeerCert,
-    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Backlog,
-    _Ciphers) ->
+    _VerifyClientOnce, _RFC2818Hostname, _CAs, _CRLs, _Chain, _Ciphers,
+    _Backlog) ->
     erlang:nif_error(etls_nif_not_loaded).
 
 %%--------------------------------------------------------------------
