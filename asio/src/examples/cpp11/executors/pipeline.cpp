@@ -1,9 +1,9 @@
 #include <asio/associated_executor.hpp>
+#include <asio/bind_executor.hpp>
 #include <asio/execution_context.hpp>
-#include <asio/package.hpp>
 #include <asio/post.hpp>
 #include <asio/system_executor.hpp>
-#include <asio/wrap.hpp>
+#include <asio/use_future.hpp>
 #include <condition_variable>
 #include <future>
 #include <memory>
@@ -13,11 +13,11 @@
 #include <vector>
 
 using asio::execution_context;
-using asio::executor_wrapper;
+using asio::executor_binder;
 using asio::get_associated_executor;
-using asio::package;
 using asio::post;
 using asio::system_executor;
+using asio::use_future;
 using asio::use_service;
 
 // An executor that launches a new thread for each function submitted to it.
@@ -29,7 +29,7 @@ private:
   class thread_bag : public execution_context::service
   {
   public:
-    static execution_context::id id;
+    typedef thread_bag key_type;
 
     explicit thread_bag(execution_context& ctx)
       : execution_context::service(ctx)
@@ -43,7 +43,7 @@ private:
     }
 
   private:
-    virtual void shutdown_service()
+    virtual void shutdown()
     {
       for (auto& t : threads_)
         t.join();
@@ -54,56 +54,52 @@ private:
   };
 
 public:
-  execution_context& context() noexcept
+  execution_context& context() const noexcept
   {
     return system_executor().context();
   }
 
-  void on_work_started() noexcept
+  void on_work_started() const noexcept
   {
     // This executor doesn't count work.
   }
 
-  void on_work_finished() noexcept
+  void on_work_finished() const noexcept
   {
     // This executor doesn't count work.
   }
 
   template <class Func, class Alloc>
-  void dispatch(Func&& f, const Alloc& a)
+  void dispatch(Func&& f, const Alloc& a) const
   {
     post(std::forward<Func>(f), a);
   }
 
   template <class Func, class Alloc>
-  void post(Func f, const Alloc&)
+  void post(Func f, const Alloc&) const
   {
     thread_bag& bag = use_service<thread_bag>(context());
     bag.add_thread(std::thread(std::move(f)));
   }
 
   template <class Func, class Alloc>
-  void defer(Func&& f, const Alloc& a)
+  void defer(Func&& f, const Alloc& a) const
   {
     post(std::forward<Func>(f), a);
   }
 
-  friend bool operator==(const thread_executor&, const thread_executor&)
+  friend bool operator==(const thread_executor&,
+      const thread_executor&) noexcept
   {
     return true;
   }
 
-  friend bool operator!=(const thread_executor&, const thread_executor&)
+  friend bool operator!=(const thread_executor&,
+      const thread_executor&) noexcept
   {
     return false;
   }
 };
-
-execution_context::id thread_executor::thread_bag::id;
-
-namespace asio {
-  template <> struct is_executor<thread_executor> : std::true_type {};
-}
 
 // Base class for all thread-safe queue implementations.
 class queue_impl_base
@@ -194,7 +190,7 @@ std::future<void> pipeline(queue_back<T> in, F f)
 
   // Run the function, and as we're the last stage return a future so that the
   // caller can wait for the pipeline to finish.
-  return post(ex, package([in, f]() mutable { f(in); }));
+  return post(ex, use_future([in, f]() mutable { f(in); }));
 }
 
 // Launch an intermediate stage in a pipeline.
@@ -202,7 +198,7 @@ template <class T, class F, class... Tail>
 std::future<void> pipeline(queue_back<T> in, F f, Tail... t)
 {
   // Determine the output queue type.
-  typedef typename executor_wrapper<F, thread_executor>::second_argument_type::value_type output_value_type;
+  typedef typename executor_binder<F, thread_executor>::second_argument_type::value_type output_value_type;
 
   // Create the output queue and its implementation.
   auto out_impl = std::make_shared<queue_impl<output_value_type>>();
@@ -228,7 +224,7 @@ template <class F, class... Tail>
 std::future<void> pipeline(F f, Tail... t)
 {
   // Determine the output queue type.
-  typedef typename executor_wrapper<F, thread_executor>::argument_type::value_type output_value_type;
+  typedef typename executor_binder<F, thread_executor>::argument_type::value_type output_value_type;
 
   // Create the output queue and its implementation.
   auto out_impl = std::make_shared<queue_impl<output_value_type>>();
@@ -255,8 +251,8 @@ std::future<void> pipeline(F f, Tail... t)
 #include <iostream>
 #include <string>
 
+using asio::bind_executor;
 using asio::thread_pool;
-using asio::wrap;
 
 void reader(queue_front<std::string> out)
 {
@@ -297,6 +293,6 @@ int main()
 {
   thread_pool pool;
 
-  auto f = pipeline(reader, filter, wrap(pool, upper), writer);
+  auto f = pipeline(reader, filter, bind_executor(pool, upper), writer);
   f.wait();
 }

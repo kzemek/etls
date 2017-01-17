@@ -2,7 +2,7 @@
 // server.cpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -29,10 +29,10 @@ class server
 {
 public:
   // Construct the server to wait for incoming control connections.
-  server(asio::io_service& io_service, unsigned short port)
-    : acceptor_(io_service, tcp::endpoint(tcp::v4(), port)),
-      timer_(io_service),
-      udp_socket_(io_service, udp::endpoint(udp::v4(), 0)),
+  server(asio::io_context& io_context, unsigned short port)
+    : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
+      timer_(io_context),
+      udp_socket_(io_context, udp::endpoint(udp::v4(), 0)),
       next_frame_number_(1)
   {
     // Start waiting for a new control connection.
@@ -173,12 +173,12 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    asio::io_service io_service;
+    asio::io_context io_context;
 
     using namespace std; // For atoi.
-    server s(io_service, atoi(argv[1]));
+    server s(io_context, atoi(argv[1]));
 
-    io_service.run();
+    io_context.run();
   }
   catch (std::exception& e)
   {

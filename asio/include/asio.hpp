@@ -2,7 +2,7 @@
 // asio.hpp
 // ~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -31,6 +31,7 @@
 #include "asio/basic_stream_socket.hpp"
 #include "asio/basic_streambuf.hpp"
 #include "asio/basic_waitable_timer.hpp"
+#include "asio/bind_executor.hpp"
 #include "asio/buffer.hpp"
 #include "asio/buffered_read_stream_fwd.hpp"
 #include "asio/buffered_read_stream.hpp"
@@ -51,7 +52,7 @@
 #include "asio/error_code.hpp"
 #include "asio/execution_context.hpp"
 #include "asio/executor.hpp"
-#include "asio/executor_work.hpp"
+#include "asio/executor_work_guard.hpp"
 #include "asio/generic/basic_endpoint.hpp"
 #include "asio/generic/datagram_protocol.hpp"
 #include "asio/generic/raw_protocol.hpp"
@@ -61,13 +62,17 @@
 #include "asio/handler_continuation_hook.hpp"
 #include "asio/handler_invoke_hook.hpp"
 #include "asio/handler_type.hpp"
+#include "asio/io_context.hpp"
+#include "asio/io_context_strand.hpp"
 #include "asio/io_service.hpp"
 #include "asio/io_service_strand.hpp"
 #include "asio/ip/address.hpp"
-#include "asio/ip/address_iterator_v4.hpp"
-#include "asio/ip/address_range_v4.hpp"
 #include "asio/ip/address_v4.hpp"
+#include "asio/ip/address_v4_iterator.hpp"
+#include "asio/ip/address_v4_range.hpp"
 #include "asio/ip/address_v6.hpp"
+#include "asio/ip/address_v6_iterator.hpp"
+#include "asio/ip/address_v6_range.hpp"
 #include "asio/ip/bad_address_cast.hpp"
 #include "asio/ip/basic_endpoint.hpp"
 #include "asio/ip/basic_resolver.hpp"
@@ -77,6 +82,7 @@
 #include "asio/ip/host_name.hpp"
 #include "asio/ip/icmp.hpp"
 #include "asio/ip/multicast.hpp"
+#include "asio/ip/resolver_base.hpp"
 #include "asio/ip/resolver_query_base.hpp"
 #include "asio/ip/resolver_service.hpp"
 #include "asio/ip/tcp.hpp"
@@ -90,9 +96,11 @@
 #include "asio/local/connect_pair.hpp"
 #include "asio/local/datagram_protocol.hpp"
 #include "asio/local/stream_protocol.hpp"
+#include "asio/packaged_task.hpp"
 #include "asio/placeholders.hpp"
 #include "asio/posix/basic_descriptor.hpp"
 #include "asio/posix/basic_stream_descriptor.hpp"
+#include "asio/posix/descriptor.hpp"
 #include "asio/posix/descriptor_base.hpp"
 #include "asio/posix/stream_descriptor.hpp"
 #include "asio/posix/stream_descriptor_service.hpp"
@@ -117,6 +125,7 @@
 #include "asio/thread.hpp"
 #include "asio/thread_pool.hpp"
 #include "asio/time_traits.hpp"
+#include "asio/use_future.hpp"
 #include "asio/uses_executor.hpp"
 #include "asio/version.hpp"
 #include "asio/wait_traits.hpp"
@@ -127,12 +136,12 @@
 #include "asio/windows/basic_stream_handle.hpp"
 #include "asio/windows/object_handle.hpp"
 #include "asio/windows/object_handle_service.hpp"
+#include "asio/windows/overlapped_handle.hpp"
 #include "asio/windows/overlapped_ptr.hpp"
 #include "asio/windows/random_access_handle.hpp"
 #include "asio/windows/random_access_handle_service.hpp"
 #include "asio/windows/stream_handle.hpp"
 #include "asio/windows/stream_handle_service.hpp"
-#include "asio/wrap.hpp"
 #include "asio/write.hpp"
 #include "asio/write_at.hpp"
 

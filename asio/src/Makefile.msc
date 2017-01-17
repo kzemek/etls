@@ -31,7 +31,11 @@ TRACKING_CXXFLAGS = -DASIO_ENABLE_HANDLER_TRACKING
 !endif
 
 !ifndef _WIN32_WINNT
+! ifdef STORE
+_WIN32_WINNT=0x0603
+! else
 _WIN32_WINNT=0x0501
+! endif
 !endif
 
 !ifdef WIN9X
@@ -40,14 +44,21 @@ DEFINES = \
 	-D_WIN32_WINNT=$(_WIN32_WINNT) \
 	-DBOOST_ALL_NO_LIB
 !else
-! ifdef WINRT
+! ifdef STORE
+DEFINES = \
+	-DWINAPI_FAMILY=WINAPI_FAMILY_PC_APP \
+	-DBOOST_ALL_NO_LIB -D_WIN32_WINNT=$(_WIN32_WINNT) \
+  -DUNICODE -D_UNICODE
+! else
+!  ifdef WINRT
 DEFINES = \
 	-ZW -FI SDKDDKVer.h -FI winapifamily.h -DWINAPI_FAMILY=WINAPI_PARTITION_APP \
 	-DBOOST_ALL_NO_LIB
-! else
+!  else
 DEFINES = \
 	-D_WIN32_WINNT=$(_WIN32_WINNT) \
 	-DBOOST_ALL_NO_LIB
+!  endif
 ! endif
 !endif
 
@@ -94,8 +105,6 @@ PERFORMANCE_TEST_EXES = \
 	tests\performance\client.exe \
 	tests\performance\server.exe
 
-UNIT_TEST_OBJ = tests\unit\unit_test.obj
-
 UNIT_TEST_EXES = \
 	tests\unit\basic_datagram_socket.exe \
 	tests\unit\basic_deadline_timer.exe \
@@ -125,7 +134,7 @@ UNIT_TEST_EXES = \
 	tests\unit\generic\seq_packet_protocol.exe \
 	tests\unit\generic\stream_protocol.exe \
 	tests\unit\high_resolution_timer.exe \
-	tests\unit\io_service.exe \
+	tests\unit\io_context.exe \
 	tests\unit\ip\address.exe \
 	tests\unit\ip\address_v4.exe \
 	tests\unit\ip\address_v6.exe \
@@ -265,10 +274,6 @@ ssl: \
 	$(SSL_UNIT_TEST_EXES) \
 	$(SSL_EXAMPLE_EXES)
 
-$(UNIT_TEST_EXES): $(UNIT_TEST_OBJ)
-
-$(SSL_UNIT_TEST_EXES): $(UNIT_TEST_OBJ)
-
 check: $(UNIT_TEST_EXES)
 	!@echo === Running $** === && $** && echo.
 
@@ -282,19 +287,19 @@ tests\unit\unit_test.obj: tests\unit\unit_test.cpp
 	cl -Fe$@ -Fotests\unit\unit_test.obj $(CXXFLAGS) $(DEFINES) -c tests\unit\unit_test.cpp
 
 {tests\unit}.cpp{tests\unit}.exe:
-	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(UNIT_TEST_OBJ) $(LIBS) -link -opt:ref
+	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(LIBS) -link -opt:ref
 
 {tests\unit\generic}.cpp{tests\unit\generic}.exe:
-	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(UNIT_TEST_OBJ) $(LIBS) -link -opt:ref
+	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(LIBS) -link -opt:ref
 
 {tests\unit\ip}.cpp{tests\unit\ip}.exe:
-	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(UNIT_TEST_OBJ) $(LIBS) -link -opt:ref
+	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(LIBS) -link -opt:ref
 
 {tests\unit\ssl}.cpp{tests\unit\ssl}.exe:
-	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(SSL_CXXFLAGS) $(DEFINES) $< $(UNIT_TEST_OBJ) $(SSL_LIBS) $(LIBS) -link -opt:ref
+	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(SSL_CXXFLAGS) $(DEFINES) $< $(SSL_LIBS) $(LIBS) -link -opt:ref
 
 {tests\unit\windows}.cpp{tests\unit\windows}.exe:
-	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(UNIT_TEST_OBJ) $(LIBS) -link -opt:ref
+	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(LIBS) -link -opt:ref
 
 {examples\cpp03\allocation}.cpp{examples\cpp03\allocation}.exe:
 	cl -Fe$@ -Fo$(<:.cpp=.obj) $(CXXFLAGS) $(DEFINES) $< $(LIBS) -link -opt:ref
@@ -396,7 +401,7 @@ examples\cpp03\http\server\http_server.exe: \
 
 examples\cpp03\http\server2\http_server.exe: \
 		examples\cpp03\http\server2\connection.cpp \
-		examples\cpp03\http\server2\io_service_pool.cpp \
+		examples\cpp03\http\server2\io_context_pool.cpp \
 		examples\cpp03\http\server2\main.cpp \
 		examples\cpp03\http\server2\mime_types.cpp \
 		examples\cpp03\http\server2\reply.cpp \

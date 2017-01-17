@@ -2,7 +2,7 @@
 // strand.hpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,7 +18,6 @@
 #include "asio/detail/config.hpp"
 #include "asio/detail/strand_executor_service.hpp"
 #include "asio/detail/type_traits.hpp"
-#include "asio/is_executor.hpp"
 
 #include "asio/detail/push_options.hpp"
 
@@ -272,19 +271,16 @@ private:
   implementation_type impl_;
 };
 
-#if !defined(GENERATING_DOCUMENTATION)
-template <typename Executor>
-struct is_executor<strand<Executor> > : true_type {};
-#endif // !defined(GENERATING_DOCUMENTATION)
-
 } // namespace asio
 
 #include "asio/detail/pop_options.hpp"
 
-// If both io_service.hpp and strand.hpp have been included, automatically
-// include the header file needed for the io_service::strand class.
-#if defined(ASIO_IO_SERVICE_HPP)
-# include "asio/io_service_strand.hpp"
-#endif // defined(ASIO_IO_SERVICE_HPP)
+// If both io_context.hpp and strand.hpp have been included, automatically
+// include the header file needed for the io_context::strand class.
+#if !defined(ASIO_NO_EXTENSIONS)
+# if defined(ASIO_IO_CONTEXT_HPP)
+#  include "asio/io_context_strand.hpp"
+# endif // defined(ASIO_IO_CONTEXT_HPP)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 #endif // ASIO_STRAND_HPP

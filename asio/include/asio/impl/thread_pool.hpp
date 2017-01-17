@@ -2,7 +2,7 @@
 // impl/thread_pool.hpp
 // ~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -32,24 +32,26 @@ thread_pool::get_executor() ASIO_NOEXCEPT
 }
 
 inline thread_pool&
-thread_pool::executor_type::context() ASIO_NOEXCEPT
+thread_pool::executor_type::context() const ASIO_NOEXCEPT
 {
   return pool_;
 }
 
-inline void thread_pool::executor_type::on_work_started() ASIO_NOEXCEPT
+inline void
+thread_pool::executor_type::on_work_started() const ASIO_NOEXCEPT
 {
   pool_.scheduler_.work_started();
 }
 
-inline void thread_pool::executor_type::on_work_finished() ASIO_NOEXCEPT
+inline void thread_pool::executor_type::on_work_finished()
+const ASIO_NOEXCEPT
 {
   pool_.scheduler_.work_finished();
 }
 
 template <typename Function, typename Allocator>
 void thread_pool::executor_type::dispatch(
-    ASIO_MOVE_ARG(Function) f, const Allocator& a)
+    ASIO_MOVE_ARG(Function) f, const Allocator& a) const
 {
   // Make a local, non-const copy of the function.
   typedef typename decay<Function>::type function_type;
@@ -73,7 +75,8 @@ void thread_pool::executor_type::dispatch(
   p.v = p.a.allocate(1);
   p.p = new (p.v) op(tmp, allocator);
 
-  ASIO_HANDLER_CREATION((p.p, "thread_pool", this, "post"));
+  ASIO_HANDLER_CREATION((pool_, *p.p,
+        "thread_pool", &this->context(), 0, "dispatch"));
 
   pool_.scheduler_.post_immediate_completion(p.p, false);
   p.v = p.p = 0;
@@ -81,7 +84,7 @@ void thread_pool::executor_type::dispatch(
 
 template <typename Function, typename Allocator>
 void thread_pool::executor_type::post(
-    ASIO_MOVE_ARG(Function) f, const Allocator& a)
+    ASIO_MOVE_ARG(Function) f, const Allocator& a) const
 {
   // Make a local, non-const copy of the function.
   typedef typename decay<Function>::type function_type;
@@ -97,7 +100,8 @@ void thread_pool::executor_type::post(
   p.v = p.a.allocate(1);
   p.p = new (p.v) op(tmp, allocator);
 
-  ASIO_HANDLER_CREATION((p.p, "thread_pool", this, "post"));
+  ASIO_HANDLER_CREATION((pool_, *p.p,
+        "thread_pool", &this->context(), 0, "post"));
 
   pool_.scheduler_.post_immediate_completion(p.p, false);
   p.v = p.p = 0;
@@ -105,7 +109,7 @@ void thread_pool::executor_type::post(
 
 template <typename Function, typename Allocator>
 void thread_pool::executor_type::defer(
-    ASIO_MOVE_ARG(Function) f, const Allocator& a)
+    ASIO_MOVE_ARG(Function) f, const Allocator& a) const
 {
   // Make a local, non-const copy of the function.
   typedef typename decay<Function>::type function_type;
@@ -121,7 +125,8 @@ void thread_pool::executor_type::defer(
   p.v = p.a.allocate(1);
   p.p = new (p.v) op(tmp, allocator);
 
-  ASIO_HANDLER_CREATION((p.p, "thread_pool", this, "defer"));
+  ASIO_HANDLER_CREATION((pool_, *p.p,
+        "thread_pool", &this->context(), 0, "defer"));
 
   pool_.scheduler_.post_immediate_completion(p.p, true);
   p.v = p.p = 0;

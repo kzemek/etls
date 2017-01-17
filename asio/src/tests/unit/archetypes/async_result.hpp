@@ -2,7 +2,7 @@
 // async_result.hpp
 // ~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -12,7 +12,6 @@
 #define ARCHETYPES_ASYNC_RESULT_HPP
 
 #include <asio/async_result.hpp>
-#include <asio/handler_type.hpp>
 
 namespace archetypes {
 
@@ -48,28 +47,30 @@ private:
 namespace asio {
 
 template <typename Signature>
-struct handler_type<archetypes::lazy_handler, Signature>
-{
-  typedef archetypes::concrete_handler type;
-};
-
-template <>
-class async_result<archetypes::concrete_handler>
+class async_result<archetypes::lazy_handler, Signature>
 {
 public:
+  // The concrete completion handler type.
+  typedef archetypes::concrete_handler completion_handler_type;
+
   // The return type of the initiating function.
-  typedef int type;
+  typedef int return_type;
 
   // Construct an async_result from a given handler.
-  explicit async_result(archetypes::concrete_handler&)
+  explicit async_result(completion_handler_type&)
   {
   }
 
   // Obtain the value to be returned from the initiating function.
-  type get()
+  return_type get()
   {
     return 42;
   }
+
+private:
+  // Disallow copying and assignment.
+  async_result(const async_result&) ASIO_DELETED;
+  async_result& operator=(const async_result&) ASIO_DELETED;
 };
 
 } // namespace asio

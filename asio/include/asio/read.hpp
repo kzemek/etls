@@ -2,7 +2,7 @@
 // read.hpp
 // ~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,9 +18,12 @@
 #include "asio/detail/config.hpp"
 #include <cstddef>
 #include "asio/async_result.hpp"
-#include "asio/basic_streambuf_fwd.hpp"
 #include "asio/buffer.hpp"
 #include "asio/error.hpp"
+
+#if !defined(ASIO_NO_EXTENSIONS)
+# include "asio/basic_streambuf_fwd.hpp"
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 #include "asio/detail/push_options.hpp"
 
@@ -247,11 +250,11 @@ std::size_t read(SyncReadStream& s, const MutableBufferSequence& buffers,
  *     s, buffers,
  *     asio::transfer_all()); @endcode
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
 /// Attempt to read a certain amount of data from a stream before returning.
@@ -280,12 +283,12 @@ std::size_t read(SyncReadStream& s,
  *     s, buffers,
  *     asio::transfer_all(), ec); @endcode
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     asio::error_code& ec,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
 /// Attempt to read a certain amount of data from a stream before returning.
@@ -324,13 +327,13 @@ std::size_t read(SyncReadStream& s,
  *
  * @throws asio::system_error Thrown on failure.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence,
+template <typename SyncReadStream, typename DynamicBuffer,
     typename CompletionCondition>
 std::size_t read(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     CompletionCondition completion_condition,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
 /// Attempt to read a certain amount of data from a stream before returning.
@@ -370,15 +373,16 @@ std::size_t read(SyncReadStream& s,
  * @returns The number of bytes read. If an error occurs, returns the total
  * number of bytes successfully transferred prior to the error.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence,
+template <typename SyncReadStream, typename DynamicBuffer,
     typename CompletionCondition>
 std::size_t read(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     CompletionCondition completion_condition, asio::error_code& ec,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if !defined(ASIO_NO_IOSTREAM)
 
 /// Attempt to read a certain amount of data from a stream before returning.
@@ -522,6 +526,7 @@ std::size_t read(SyncReadStream& s, basic_streambuf<Allocator>& b,
     CompletionCondition completion_condition, asio::error_code& ec);
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 /*@}*/
 /**
@@ -575,7 +580,7 @@ std::size_t read(SyncReadStream& s, basic_streambuf<Allocator>& b,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @par Example
  * To read into a single data buffer use the @ref buffer function as follows:
@@ -653,7 +658,7 @@ async_read(AsyncReadStream& s, const MutableBufferSequence& buffers,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @par Example
  * To read into a single data buffer use the @ref buffer function as follows:
@@ -718,7 +723,7 @@ async_read(AsyncReadStream& s, const MutableBufferSequence& buffers,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note This overload is equivalent to calling:
  * @code asio::async_read(
@@ -727,14 +732,14 @@ async_read(AsyncReadStream& s, const MutableBufferSequence& buffers,
  *     handler); @endcode
  */
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     ASIO_MOVE_ARG(ReadHandler) handler,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
 /// Start an asynchronous operation to read a certain amount of data from a
@@ -793,20 +798,21 @@ async_read(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  */
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename CompletionCondition, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     CompletionCondition completion_condition,
     ASIO_MOVE_ARG(ReadHandler) handler,
     typename enable_if<
-      is_dynamic_buffer_sequence<DynamicBufferSequence>::value
+      is_dynamic_buffer<DynamicBuffer>::value
     >::type* = 0);
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if !defined(ASIO_NO_IOSTREAM)
 
 /// Start an asynchronous operation to read a certain amount of data from a
@@ -849,7 +855,7 @@ async_read(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note This overload is equivalent to calling:
  * @code asio::async_read(
@@ -917,7 +923,7 @@ async_read(AsyncReadStream& s, basic_streambuf<Allocator>& b,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  */
 template <typename AsyncReadStream, typename Allocator,
     typename CompletionCondition, typename ReadHandler>
@@ -928,6 +934,7 @@ async_read(AsyncReadStream& s, basic_streambuf<Allocator>& b,
     ASIO_MOVE_ARG(ReadHandler) handler);
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 /*@}*/
 

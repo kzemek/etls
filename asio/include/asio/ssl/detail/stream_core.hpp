@@ -2,7 +2,7 @@
 // ssl/detail/stream_core.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -37,10 +37,10 @@ struct stream_core
   // sufficient to hold the largest possible TLS record.
   enum { max_tls_record_size = 17 * 1024 };
 
-  stream_core(SSL_CTX* context, asio::io_service& io_service)
+  stream_core(SSL_CTX* context, asio::io_context& io_context)
     : engine_(context),
-      pending_read_(io_service),
-      pending_write_(io_service),
+      pending_read_(io_context),
+      pending_write_(io_context),
       output_buffer_space_(max_tls_record_size),
       output_buffer_(asio::buffer(output_buffer_space_)),
       input_buffer_space_(max_tls_record_size),
@@ -113,13 +113,13 @@ struct stream_core
   std::vector<unsigned char> output_buffer_space_;
 
   // A buffer that may be used to prepare output intended for the transport.
-  const asio::mutable_buffers_1 output_buffer_;
+  const asio::mutable_buffer output_buffer_;
 
   // Buffer space used to read input intended for the engine.
   std::vector<unsigned char> input_buffer_space_;
 
   // A buffer that may be used to read input intended for the engine.
-  const asio::mutable_buffers_1 input_buffer_;
+  const asio::mutable_buffer input_buffer_;
 
   // The buffer pointing to the engine's unconsumed input.
   asio::const_buffer input_;

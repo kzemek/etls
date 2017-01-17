@@ -2,14 +2,14 @@
 // async_tcp_client.cpp
 // ~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
 #include "asio/deadline_timer.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/read_until.hpp"
 #include "asio/streambuf.hpp"
@@ -83,20 +83,21 @@ using asio::ip::tcp;
 class client
 {
 public:
-  client(asio::io_service& io_service)
+  client(asio::io_context& io_context)
     : stopped_(false),
-      socket_(io_service),
-      deadline_(io_service),
-      heartbeat_timer_(io_service)
+      socket_(io_context),
+      deadline_(io_context),
+      heartbeat_timer_(io_context)
   {
   }
 
   // Called by the user of the client class to initiate the connection process.
-  // The endpoint iterator will have been obtained using a tcp::resolver.
-  void start(tcp::resolver::iterator endpoint_iter)
+  // The endpoints will have been obtained using a tcp::resolver.
+  void start(tcp::resolver::results_type endpoints)
   {
     // Start the connect actor.
-    start_connect(endpoint_iter);
+    endpoints_ = endpoints;
+    start_connect(endpoints_.begin());
 
     // Start the deadline actor. You will note that we're not setting any
     // particular deadline here. Instead, the connect and input actors will
@@ -117,9 +118,9 @@ public:
   }
 
 private:
-  void start_connect(tcp::resolver::iterator endpoint_iter)
+  void start_connect(tcp::resolver::results_type::iterator endpoint_iter)
   {
-    if (endpoint_iter != tcp::resolver::iterator())
+    if (endpoint_iter != endpoints_.end())
     {
       std::cout << "Trying " << endpoint_iter->endpoint() << "...\n";
 
@@ -139,7 +140,7 @@ private:
   }
 
   void handle_connect(const asio::error_code& ec,
-      tcp::resolver::iterator endpoint_iter)
+      tcp::resolver::results_type::iterator endpoint_iter)
   {
     if (stopped_)
       return;
@@ -273,6 +274,7 @@ private:
 
 private:
   bool stopped_;
+  tcp::resolver::results_type endpoints_;
   tcp::socket socket_;
   asio::streambuf input_buffer_;
   deadline_timer deadline_;
@@ -289,13 +291,13 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    asio::io_service io_service;
-    tcp::resolver r(io_service);
-    client c(io_service);
+    asio::io_context io_context;
+    tcp::resolver r(io_context);
+    client c(io_context);
 
-    c.start(r.resolve(tcp::resolver::query(argv[1], argv[2])));
+    c.start(r.resolve(argv[1], argv[2]));
 
-    io_service.run();
+    io_context.run();
   }
   catch (std::exception& e)
   {

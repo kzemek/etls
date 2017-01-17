@@ -2,7 +2,7 @@
 // waitable_timer_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,11 +16,14 @@
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
 #include "asio/detail/config.hpp"
+
+#if defined(ASIO_ENABLE_OLD_SERVICES)
+
 #include <cstddef>
 #include "asio/async_result.hpp"
 #include "asio/detail/chrono_time_traits.hpp"
 #include "asio/detail/deadline_timer_service.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/wait_traits.hpp"
 
 #include "asio/detail/push_options.hpp"
@@ -32,7 +35,7 @@ template <typename Clock,
     typename WaitTraits = asio::wait_traits<Clock> >
 class waitable_timer_service
 #if defined(GENERATING_DOCUMENTATION)
-  : public asio::io_service::service
+  : public asio::io_context::service
 #else
   : public asio::detail::service_base<
       waitable_timer_service<Clock, WaitTraits> >
@@ -41,7 +44,7 @@ class waitable_timer_service
 public:
 #if defined(GENERATING_DOCUMENTATION)
   /// The unique service identifier.
-  static asio::io_service::id id;
+  static asio::io_context::id id;
 #endif
 
   /// The clock type.
@@ -69,11 +72,11 @@ public:
   typedef typename service_impl_type::implementation_type implementation_type;
 #endif
 
-  /// Construct a new timer service for the specified io_service.
-  explicit waitable_timer_service(asio::io_service& io_service)
+  /// Construct a new timer service for the specified io_context.
+  explicit waitable_timer_service(asio::io_context& io_context)
     : asio::detail::service_base<
-        waitable_timer_service<Clock, WaitTraits> >(io_service),
-      service_impl_(io_service)
+        waitable_timer_service<Clock, WaitTraits> >(io_context),
+      service_impl_(io_context)
   {
   }
 
@@ -182,16 +185,16 @@ public:
     async_completion<WaitHandler,
       void (asio::error_code)> init(handler);
 
-    service_impl_.async_wait(impl, init.handler);
+    service_impl_.async_wait(impl, init.completion_handler);
 
     return init.result.get();
   }
 
 private:
   // Destroy all user-defined handler objects owned by the service.
-  void shutdown_service()
+  void shutdown()
   {
-    service_impl_.shutdown_service();
+    service_impl_.shutdown();
   }
 
   // The platform-specific implementation.
@@ -201,5 +204,7 @@ private:
 } // namespace asio
 
 #include "asio/detail/pop_options.hpp"
+
+#endif // defined(ASIO_ENABLE_OLD_SERVICES)
 
 #endif // ASIO_WAITABLE_TIMER_SERVICE_HPP

@@ -88,8 +88,7 @@ noinst_HEADERS = \
 	chat/chat_message.hpp \
 	services/basic_logger.hpp \
 	services/logger.hpp \
-	services/logger_service.hpp \
-	services/stream_socket_service.hpp
+	services/logger_service.hpp
 
 AM_CXXFLAGS = -I$(srcdir)/../../../include
 
@@ -116,7 +115,7 @@ http_server_http_server_SOURCES = \
 	http/server/server.cpp
 http_server2_http_server_SOURCES = \
 	http/server2/connection.cpp \
-	http/server2/io_service_pool.cpp \
+	http/server2/io_context_pool.cpp \
 	http/server2/main.cpp \
 	http/server2/mime_types.cpp \
 	http/server2/reply.cpp \
@@ -191,9 +190,9 @@ endif
 
 if HAVE_BOOST_COROUTINE
 spawn_echo_server_SOURCES = spawn/echo_server.cpp
-spawn_echo_server_LDADD = $(LDADD) -lboost_coroutine -lboost_context -lboost_system
+spawn_echo_server_LDADD = $(LDADD) -lboost_coroutine -lboost_context -lboost_thread -lboost_chrono -lboost_system
 spawn_parallel_grep_SOURCES = spawn/parallel_grep.cpp
-spawn_parallel_grep_LDADD = $(LDADD) -lboost_coroutine -lboost_context -lboost_system
+spawn_parallel_grep_LDADD = $(LDADD) -lboost_coroutine -lboost_context -lboost_thread -lboost_chrono -lboost_system
 endif
 
 EXTRA_DIST = \
@@ -207,7 +206,7 @@ EXTRA_DIST = \
 	http/server/request_parser.hpp \
 	http/server/server.hpp \
 	http/server2/connection.hpp \
-	http/server2/io_service_pool.hpp \
+	http/server2/io_context_pool.hpp \
 	http/server2/header.hpp \
 	http/server2/mime_types.hpp \
 	http/server2/reply.hpp \
@@ -240,12 +239,11 @@ EXTRA_DIST = \
 	services/basic_logger.hpp \
 	services/logger.hpp \
 	services/logger_service.hpp \
-	services/stream_socket_service.hpp \
 	socks4/socks4.hpp \
 	ssl/README \
 	ssl/ca.pem \
 	ssl/server.pem \
-	ssl/dh512.pem \
+	ssl/dh2048.pem \
 	timers/tick_count_timer.cpp
 
 MAINTAINERCLEANFILES = \

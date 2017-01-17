@@ -2,7 +2,7 @@
 // posix/stream_descriptor_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -17,13 +17,15 @@
 
 #include "asio/detail/config.hpp"
 
+#if defined(ASIO_ENABLE_OLD_SERVICES)
+
 #if defined(ASIO_HAS_POSIX_STREAM_DESCRIPTOR) \
   || defined(GENERATING_DOCUMENTATION)
 
 #include <cstddef>
 #include "asio/async_result.hpp"
 #include "asio/error.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/detail/reactive_descriptor_service.hpp"
 
 #include "asio/detail/push_options.hpp"
@@ -34,7 +36,7 @@ namespace posix {
 /// Default service implementation for a stream descriptor.
 class stream_descriptor_service
 #if defined(GENERATING_DOCUMENTATION)
-  : public asio::io_service::service
+  : public asio::io_context::service
 #else
   : public asio::detail::service_base<stream_descriptor_service>
 #endif
@@ -42,7 +44,7 @@ class stream_descriptor_service
 public:
 #if defined(GENERATING_DOCUMENTATION)
   /// The unique service identifier.
-  static asio::io_service::id id;
+  static asio::io_context::id id;
 #endif
 
 private:
@@ -64,10 +66,10 @@ public:
   typedef service_impl_type::native_handle_type native_handle_type;
 #endif
 
-  /// Construct a new stream descriptor service for the specified io_service.
-  explicit stream_descriptor_service(asio::io_service& io_service)
-    : asio::detail::service_base<stream_descriptor_service>(io_service),
-      service_impl_(io_service)
+  /// Construct a new stream descriptor service for the specified io_context.
+  explicit stream_descriptor_service(asio::io_context& io_context)
+    : asio::detail::service_base<stream_descriptor_service>(io_context),
+      service_impl_(io_context)
   {
   }
 
@@ -101,11 +103,12 @@ public:
   }
 
   /// Assign an existing native descriptor to a stream descriptor.
-  asio::error_code assign(implementation_type& impl,
+  ASIO_SYNC_OP_VOID assign(implementation_type& impl,
       const native_handle_type& native_descriptor,
       asio::error_code& ec)
   {
-    return service_impl_.assign(impl, native_descriptor, ec);
+    service_impl_.assign(impl, native_descriptor, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Determine whether the descriptor is open.
@@ -115,10 +118,11 @@ public:
   }
 
   /// Close a stream descriptor implementation.
-  asio::error_code close(implementation_type& impl,
+  ASIO_SYNC_OP_VOID close(implementation_type& impl,
       asio::error_code& ec)
   {
-    return service_impl_.close(impl, ec);
+    service_impl_.close(impl, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Get the native descriptor implementation.
@@ -134,18 +138,20 @@ public:
   }
 
   /// Cancel all asynchronous operations associated with the descriptor.
-  asio::error_code cancel(implementation_type& impl,
+  ASIO_SYNC_OP_VOID cancel(implementation_type& impl,
       asio::error_code& ec)
   {
-    return service_impl_.cancel(impl, ec);
+    service_impl_.cancel(impl, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Perform an IO control command on the descriptor.
   template <typename IoControlCommand>
-  asio::error_code io_control(implementation_type& impl,
+  ASIO_SYNC_OP_VOID io_control(implementation_type& impl,
       IoControlCommand& command, asio::error_code& ec)
   {
-    return service_impl_.io_control(impl, command, ec);
+    service_impl_.io_control(impl, command, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Gets the non-blocking mode of the descriptor.
@@ -155,10 +161,11 @@ public:
   }
 
   /// Sets the non-blocking mode of the descriptor.
-  asio::error_code non_blocking(implementation_type& impl,
+  ASIO_SYNC_OP_VOID non_blocking(implementation_type& impl,
       bool mode, asio::error_code& ec)
   {
-    return service_impl_.non_blocking(impl, mode, ec);
+    service_impl_.non_blocking(impl, mode, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Gets the non-blocking mode of the native descriptor implementation.
@@ -168,18 +175,20 @@ public:
   }
 
   /// Sets the non-blocking mode of the native descriptor implementation.
-  asio::error_code native_non_blocking(implementation_type& impl,
+  ASIO_SYNC_OP_VOID native_non_blocking(implementation_type& impl,
       bool mode, asio::error_code& ec)
   {
-    return service_impl_.native_non_blocking(impl, mode, ec);
+    service_impl_.native_non_blocking(impl, mode, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Wait for the descriptor to become ready to read, ready to write, or to
   /// have pending error conditions.
-  asio::error_code wait(implementation_type& impl,
+  ASIO_SYNC_OP_VOID wait(implementation_type& impl,
       descriptor_base::wait_type w, asio::error_code& ec)
   {
-    return service_impl_.wait(impl, w, ec);
+    service_impl_.wait(impl, w, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Asynchronously wait for the descriptor to become ready to read, ready to
@@ -193,7 +202,7 @@ public:
     async_completion<WaitHandler,
       void (asio::error_code)> init(handler);
 
-    service_impl_.async_wait(impl, w, init.handler);
+    service_impl_.async_wait(impl, w, init.completion_handler);
 
     return init.result.get();
   }
@@ -217,7 +226,7 @@ public:
     asio::async_completion<WriteHandler,
       void (asio::error_code, std::size_t)> init(handler);
 
-    service_impl_.async_write_some(impl, buffers, init.handler);
+    service_impl_.async_write_some(impl, buffers, init.completion_handler);
 
     return init.result.get();
   }
@@ -241,16 +250,16 @@ public:
     asio::async_completion<ReadHandler,
       void (asio::error_code, std::size_t)> init(handler);
 
-    service_impl_.async_read_some(impl, buffers, init.handler);
+    service_impl_.async_read_some(impl, buffers, init.completion_handler);
 
     return init.result.get();
   }
 
 private:
   // Destroy all user-defined handler objects owned by the service.
-  void shutdown_service()
+  void shutdown()
   {
-    service_impl_.shutdown_service();
+    service_impl_.shutdown();
   }
 
   // The platform-specific implementation.
@@ -264,5 +273,7 @@ private:
 
 #endif // defined(ASIO_HAS_POSIX_STREAM_DESCRIPTOR)
        //   || defined(GENERATING_DOCUMENTATION)
+
+#endif // defined(ASIO_ENABLE_OLD_SERVICES)
 
 #endif // ASIO_POSIX_STREAM_DESCRIPTOR_SERVICE_HPP

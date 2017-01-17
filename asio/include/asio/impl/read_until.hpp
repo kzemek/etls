@@ -2,7 +2,7 @@
 // impl/read_until.hpp
 // ~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -35,30 +35,30 @@
 
 namespace asio {
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 inline std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers, char delim)
+    ASIO_MOVE_ARG(DynamicBuffer) buffers, char delim)
 {
   asio::error_code ec;
   std::size_t bytes_transferred = read_until(s,
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers), delim, ec);
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers), delim, ec);
   asio::detail::throw_error(ec, "read_until");
   return bytes_transferred;
 }
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     char delim, asio::error_code& ec)
 {
-  typename decay<DynamicBufferSequence>::type b(
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers));
+  typename decay<DynamicBuffer>::type b(
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers));
 
   std::size_t search_position = 0;
   for (;;)
   {
     // Determine the range of the data to be searched.
-    typedef typename DynamicBufferSequence::const_buffers_type buffers_type;
+    typedef typename DynamicBuffer::const_buffers_type buffers_type;
     typedef buffers_iterator<buffers_type> iterator;
     buffers_type data_buffers = b.data();
     iterator begin = iterator::begin(data_buffers);
@@ -96,14 +96,14 @@ std::size_t read_until(SyncReadStream& s,
   }
 }
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 inline std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::string& delim)
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim)
 {
   asio::error_code ec;
   std::size_t bytes_transferred = read_until(s,
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers), delim, ec);
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers), delim, ec);
   asio::detail::throw_error(ec, "read_until");
   return bytes_transferred;
 }
@@ -143,19 +143,19 @@ namespace detail
   }
 } // namespace detail
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::string& delim, asio::error_code& ec)
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim, asio::error_code& ec)
 {
-  typename decay<DynamicBufferSequence>::type b(
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers));
+  typename decay<DynamicBuffer>::type b(
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers));
 
   std::size_t search_position = 0;
   for (;;)
   {
     // Determine the range of the data to be searched.
-    typedef typename DynamicBufferSequence::const_buffers_type buffers_type;
+    typedef typename DynamicBuffer::const_buffers_type buffers_type;
     typedef buffers_iterator<buffers_type> iterator;
     buffers_type data_buffers = b.data();
     iterator begin = iterator::begin(data_buffers);
@@ -202,33 +202,34 @@ std::size_t read_until(SyncReadStream& s,
   }
 }
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if defined(ASIO_HAS_BOOST_REGEX)
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 inline std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr)
 {
   asio::error_code ec;
   std::size_t bytes_transferred = read_until(s,
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers), expr, ec);
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers), expr, ec);
   asio::detail::throw_error(ec, "read_until");
   return bytes_transferred;
 }
 
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr, asio::error_code& ec)
 {
-  typename decay<DynamicBufferSequence>::type b(
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers));
+  typename decay<DynamicBuffer>::type b(
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers));
 
   std::size_t search_position = 0;
   for (;;)
   {
     // Determine the range of the data to be searched.
-    typedef typename DynamicBufferSequence::const_buffers_type buffers_type;
+    typedef typename DynamicBuffer::const_buffers_type buffers_type;
     typedef buffers_iterator<buffers_type> iterator;
     buffers_type data_buffers = b.data();
     iterator begin = iterator::begin(data_buffers);
@@ -278,35 +279,35 @@ std::size_t read_until(SyncReadStream& s,
 #endif // defined(ASIO_HAS_BOOST_REGEX)
 
 template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename MatchCondition>
+    typename DynamicBuffer, typename MatchCondition>
 inline std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition,
     typename enable_if<is_match_condition<MatchCondition>::value>::type*)
 {
   asio::error_code ec;
   std::size_t bytes_transferred = read_until(s,
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers),
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers),
       match_condition, ec);
   asio::detail::throw_error(ec, "read_until");
   return bytes_transferred;
 }
 
 template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename MatchCondition>
+    typename DynamicBuffer, typename MatchCondition>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition, asio::error_code& ec,
     typename enable_if<is_match_condition<MatchCondition>::value>::type*)
 {
-  typename decay<DynamicBufferSequence>::type b(
-      ASIO_MOVE_CAST(DynamicBufferSequence)(buffers));
+  typename decay<DynamicBuffer>::type b(
+      ASIO_MOVE_CAST(DynamicBuffer)(buffers));
 
   std::size_t search_position = 0;
   for (;;)
   {
     // Determine the range of the data to be searched.
-    typedef typename DynamicBufferSequence::const_buffers_type buffers_type;
+    typedef typename DynamicBuffer::const_buffers_type buffers_type;
     typedef buffers_iterator<buffers_type> iterator;
     buffers_type data_buffers = b.data();
     iterator begin = iterator::begin(data_buffers);
@@ -368,15 +369,16 @@ inline std::size_t read_until(SyncReadStream& s,
 
 template <typename SyncReadStream, typename Allocator>
 inline std::size_t read_until(SyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim)
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim)
 {
   return read_until(s, basic_streambuf_ref<Allocator>(b), delim);
 }
 
 template <typename SyncReadStream, typename Allocator>
 inline std::size_t read_until(SyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim,
-    asio::error_code& ec)
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim, asio::error_code& ec)
 {
   return read_until(s, basic_streambuf_ref<Allocator>(b), delim, ec);
 }
@@ -418,11 +420,12 @@ inline std::size_t read_until(SyncReadStream& s,
 }
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 namespace detail
 {
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   class read_until_delim_op
   {
   public:
@@ -452,7 +455,7 @@ namespace detail
 
     read_until_delim_op(read_until_delim_op&& other)
       : stream_(other.stream_),
-        buffers_(ASIO_MOVE_CAST(DynamicBufferSequence)(other.buffers_)),
+        buffers_(ASIO_MOVE_CAST(DynamicBuffer)(other.buffers_)),
         delim_(other.delim_),
         start_(other.start_),
         search_position_(other.search_position_),
@@ -473,7 +476,7 @@ namespace detail
         {
           {
             // Determine the range of the data to be searched.
-            typedef typename DynamicBufferSequence::const_buffers_type
+            typedef typename DynamicBuffer::const_buffers_type
               buffers_type;
             typedef buffers_iterator<buffers_type> iterator;
             buffers_type data_buffers = buffers_.data();
@@ -537,7 +540,7 @@ namespace detail
 
   //private:
     AsyncReadStream& stream_;
-    DynamicBufferSequence buffers_;
+    DynamicBuffer buffers_;
     char delim_;
     int start_;
     std::size_t search_position_;
@@ -545,30 +548,30 @@ namespace detail
   };
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void* asio_handler_allocate(std::size_t size,
       read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     return asio_handler_alloc_helpers::allocate(
         size, this_handler->handler_);
   }
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_deallocate(void* pointer, std::size_t size,
       read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_alloc_helpers::deallocate(
         pointer, size, this_handler->handler_);
   }
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline bool asio_handler_is_continuation(
       read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     return this_handler->start_ == 0 ? true
       : asio_handler_cont_helpers::is_continuation(
@@ -576,20 +579,20 @@ namespace detail
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_invoke(Function& function,
       read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_invoke(const Function& function,
       read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
@@ -598,36 +601,36 @@ namespace detail
 
 #if !defined(GENERATING_DOCUMENTATION)
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename ReadHandler, typename Allocator>
 struct associated_allocator<
     detail::read_until_delim_op<AsyncReadStream,
-      DynamicBufferSequence, ReadHandler>,
+      DynamicBuffer, ReadHandler>,
     Allocator>
 {
   typedef typename associated_allocator<ReadHandler, Allocator>::type type;
 
   static type get(
       const detail::read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>& h,
+        DynamicBuffer, ReadHandler>& h,
       const Allocator& a = Allocator()) ASIO_NOEXCEPT
   {
     return associated_allocator<ReadHandler, Allocator>::get(h.handler_, a);
   }
 };
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename ReadHandler, typename Executor>
 struct associated_executor<
     detail::read_until_delim_op<AsyncReadStream,
-      DynamicBufferSequence, ReadHandler>,
+      DynamicBuffer, ReadHandler>,
     Executor>
 {
   typedef typename associated_executor<ReadHandler, Executor>::type type;
 
   static type get(
       const detail::read_until_delim_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>& h,
+        DynamicBuffer, ReadHandler>& h,
       const Executor& ex = Executor()) ASIO_NOEXCEPT
   {
     return associated_executor<ReadHandler, Executor>::get(h.handler_, ex);
@@ -637,11 +640,11 @@ struct associated_executor<
 #endif // !defined(GENERATING_DOCUMENTATION)
 
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     char delim, ASIO_MOVE_ARG(ReadHandler) handler)
 {
   // If you get an error on the following line it means that your handler does
@@ -652,11 +655,11 @@ async_read_until(AsyncReadStream& s,
     void (asio::error_code, std::size_t)> init(handler);
 
   detail::read_until_delim_op<AsyncReadStream,
-    typename decay<DynamicBufferSequence>::type,
+    typename decay<DynamicBuffer>::type,
       ASIO_HANDLER_TYPE(ReadHandler,
         void (asio::error_code, std::size_t))>(
-          s, ASIO_MOVE_CAST(DynamicBufferSequence)(buffers),
-            delim, init.handler)(asio::error_code(), 0, 1);
+          s, ASIO_MOVE_CAST(DynamicBuffer)(buffers),
+            delim, init.completion_handler)(asio::error_code(), 0, 1);
 
   return init.result.get();
 }
@@ -664,7 +667,7 @@ async_read_until(AsyncReadStream& s,
 namespace detail
 {
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   class read_until_delim_string_op
   {
   public:
@@ -694,7 +697,7 @@ namespace detail
 
     read_until_delim_string_op(read_until_delim_string_op&& other)
       : stream_(other.stream_),
-        buffers_(ASIO_MOVE_CAST(DynamicBufferSequence)(other.buffers_)),
+        buffers_(ASIO_MOVE_CAST(DynamicBuffer)(other.buffers_)),
         delim_(ASIO_MOVE_CAST(std::string)(other.delim_)),
         start_(other.start_),
         search_position_(other.search_position_),
@@ -715,7 +718,7 @@ namespace detail
         {
           {
             // Determine the range of the data to be searched.
-            typedef typename DynamicBufferSequence::const_buffers_type
+            typedef typename DynamicBuffer::const_buffers_type
               buffers_type;
             typedef buffers_iterator<buffers_type> iterator;
             buffers_type data_buffers = buffers_.data();
@@ -790,7 +793,7 @@ namespace detail
 
   //private:
     AsyncReadStream& stream_;
-    DynamicBufferSequence buffers_;
+    DynamicBuffer buffers_;
     std::string delim_;
     int start_;
     std::size_t search_position_;
@@ -798,30 +801,30 @@ namespace detail
   };
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void* asio_handler_allocate(std::size_t size,
       read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     return asio_handler_alloc_helpers::allocate(
         size, this_handler->handler_);
   }
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_deallocate(void* pointer, std::size_t size,
       read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_alloc_helpers::deallocate(
         pointer, size, this_handler->handler_);
   }
 
   template <typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline bool asio_handler_is_continuation(
       read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     return this_handler->start_ == 0 ? true
       : asio_handler_cont_helpers::is_continuation(
@@ -829,20 +832,20 @@ namespace detail
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_invoke(Function& function,
       read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename ReadHandler>
+      typename DynamicBuffer, typename ReadHandler>
   inline void asio_handler_invoke(const Function& function,
       read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>* this_handler)
+        DynamicBuffer, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
@@ -851,36 +854,36 @@ namespace detail
 
 #if !defined(GENERATING_DOCUMENTATION)
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename ReadHandler, typename Allocator>
 struct associated_allocator<
     detail::read_until_delim_string_op<AsyncReadStream,
-      DynamicBufferSequence, ReadHandler>,
+      DynamicBuffer, ReadHandler>,
     Allocator>
 {
   typedef typename associated_allocator<ReadHandler, Allocator>::type type;
 
   static type get(
       const detail::read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>& h,
+        DynamicBuffer, ReadHandler>& h,
       const Allocator& a = Allocator()) ASIO_NOEXCEPT
   {
     return associated_allocator<ReadHandler, Allocator>::get(h.handler_, a);
   }
 };
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename ReadHandler, typename Executor>
 struct associated_executor<
     detail::read_until_delim_string_op<AsyncReadStream,
-      DynamicBufferSequence, ReadHandler>,
+      DynamicBuffer, ReadHandler>,
     Executor>
 {
   typedef typename associated_executor<ReadHandler, Executor>::type type;
 
   static type get(
       const detail::read_until_delim_string_op<AsyncReadStream,
-        DynamicBufferSequence, ReadHandler>& h,
+        DynamicBuffer, ReadHandler>& h,
       const Executor& ex = Executor()) ASIO_NOEXCEPT
   {
     return associated_executor<ReadHandler, Executor>::get(h.handler_, ex);
@@ -890,12 +893,13 @@ struct associated_executor<
 #endif // !defined(GENERATING_DOCUMENTATION)
 
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::string& delim, ASIO_MOVE_ARG(ReadHandler) handler)
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim,
+    ASIO_MOVE_ARG(ReadHandler) handler)
 {
   // If you get an error on the following line it means that your handler does
   // not meet the documented type requirements for a ReadHandler.
@@ -905,20 +909,22 @@ async_read_until(AsyncReadStream& s,
     void (asio::error_code, std::size_t)> init(handler);
 
   detail::read_until_delim_string_op<AsyncReadStream,
-    typename decay<DynamicBufferSequence>::type,
+    typename decay<DynamicBuffer>::type,
       ASIO_HANDLER_TYPE(ReadHandler,
         void (asio::error_code, std::size_t))>(
-          s, ASIO_MOVE_CAST(DynamicBufferSequence)(buffers),
-            delim, init.handler)(asio::error_code(), 0, 1);
+          s, ASIO_MOVE_CAST(DynamicBuffer)(buffers),
+            static_cast<std::string>(delim),
+              init.completion_handler)(asio::error_code(), 0, 1);
 
   return init.result.get();
 }
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if defined(ASIO_HAS_BOOST_REGEX)
 
 namespace detail
 {
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename RegEx, typename ReadHandler>
   class read_until_expr_op
   {
@@ -949,7 +955,7 @@ namespace detail
 
     read_until_expr_op(read_until_expr_op&& other)
       : stream_(other.stream_),
-        buffers_(ASIO_MOVE_CAST(DynamicBufferSequence)(other.buffers)),
+        buffers_(ASIO_MOVE_CAST(DynamicBuffer)(other.buffers_)),
         expr_(other.expr_),
         start_(other.start_),
         search_position_(other.search_position_),
@@ -970,7 +976,7 @@ namespace detail
         {
           {
             // Determine the range of the data to be searched.
-            typedef typename DynamicBufferSequence::const_buffers_type
+            typedef typename DynamicBuffer::const_buffers_type
               buffers_type;
             typedef buffers_iterator<buffers_type> iterator;
             buffers_type data_buffers = buffers_.data();
@@ -1048,38 +1054,38 @@ namespace detail
 
   //private:
     AsyncReadStream& stream_;
-    DynamicBufferSequence buffers_;
+    DynamicBuffer buffers_;
     RegEx expr_;
     int start_;
     std::size_t search_position_;
     ReadHandler handler_;
   };
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename RegEx, typename ReadHandler>
   inline void* asio_handler_allocate(std::size_t size,
       read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>* this_handler)
+        DynamicBuffer, RegEx, ReadHandler>* this_handler)
   {
     return asio_handler_alloc_helpers::allocate(
         size, this_handler->handler_);
   }
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename RegEx, typename ReadHandler>
   inline void asio_handler_deallocate(void* pointer, std::size_t size,
       read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>* this_handler)
+        DynamicBuffer, RegEx, ReadHandler>* this_handler)
   {
     asio_handler_alloc_helpers::deallocate(
         pointer, size, this_handler->handler_);
   }
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename RegEx, typename ReadHandler>
   inline bool asio_handler_is_continuation(
       read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>* this_handler)
+        DynamicBuffer, RegEx, ReadHandler>* this_handler)
   {
     return this_handler->start_ == 0 ? true
       : asio_handler_cont_helpers::is_continuation(
@@ -1087,20 +1093,20 @@ namespace detail
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename RegEx, typename ReadHandler>
+      typename DynamicBuffer, typename RegEx, typename ReadHandler>
   inline void asio_handler_invoke(Function& function,
       read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>* this_handler)
+        DynamicBuffer, RegEx, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename RegEx, typename ReadHandler>
+      typename DynamicBuffer, typename RegEx, typename ReadHandler>
   inline void asio_handler_invoke(const Function& function,
       read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>* this_handler)
+        DynamicBuffer, RegEx, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
         function, this_handler->handler_);
@@ -1109,36 +1115,36 @@ namespace detail
 
 #if !defined(GENERATING_DOCUMENTATION)
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename RegEx, typename ReadHandler, typename Allocator>
 struct associated_allocator<
     detail::read_until_expr_op<AsyncReadStream,
-      DynamicBufferSequence, RegEx, ReadHandler>,
+      DynamicBuffer, RegEx, ReadHandler>,
     Allocator>
 {
   typedef typename associated_allocator<ReadHandler, Allocator>::type type;
 
   static type get(
       const detail::read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>& h,
+        DynamicBuffer, RegEx, ReadHandler>& h,
       const Allocator& a = Allocator()) ASIO_NOEXCEPT
   {
     return associated_allocator<ReadHandler, Allocator>::get(h.handler_, a);
   }
 };
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename RegEx, typename ReadHandler, typename Executor>
 struct associated_executor<
     detail::read_until_expr_op<AsyncReadStream,
-      DynamicBufferSequence, RegEx, ReadHandler>,
+      DynamicBuffer, RegEx, ReadHandler>,
     Executor>
 {
   typedef typename associated_executor<ReadHandler, Executor>::type type;
 
   static type get(
       const detail::read_until_expr_op<AsyncReadStream,
-        DynamicBufferSequence, RegEx, ReadHandler>& h,
+        DynamicBuffer, RegEx, ReadHandler>& h,
       const Executor& ex = Executor()) ASIO_NOEXCEPT
   {
     return associated_executor<ReadHandler, Executor>::get(h.handler_, ex);
@@ -1148,11 +1154,11 @@ struct associated_executor<
 #endif // !defined(GENERATING_DOCUMENTATION)
 
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr,
     ASIO_MOVE_ARG(ReadHandler) handler)
 {
@@ -1164,11 +1170,11 @@ async_read_until(AsyncReadStream& s,
     void (asio::error_code, std::size_t)> init(handler);
 
   detail::read_until_expr_op<AsyncReadStream,
-    typename decay<DynamicBufferSequence>::type,
+    typename decay<DynamicBuffer>::type,
       boost::regex, ASIO_HANDLER_TYPE(ReadHandler,
         void (asio::error_code, std::size_t))>(
-          s, ASIO_MOVE_CAST(DynamicBufferSequence)(buffers),
-            expr, init.handler)(asio::error_code(), 0, 1);
+          s, ASIO_MOVE_CAST(DynamicBuffer)(buffers),
+            expr, init.completion_handler)(asio::error_code(), 0, 1);
 
   return init.result.get();
 }
@@ -1177,7 +1183,7 @@ async_read_until(AsyncReadStream& s,
 
 namespace detail
 {
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename MatchCondition, typename ReadHandler>
   class read_until_match_op
   {
@@ -1208,7 +1214,7 @@ namespace detail
 
     read_until_match_op(read_until_match_op&& other)
       : stream_(other.stream_),
-        buffers_(ASIO_MOVE_CAST(DynamicBufferSequence)(other.buffers_)),
+        buffers_(ASIO_MOVE_CAST(DynamicBuffer)(other.buffers_)),
         match_condition_(other.match_condition_),
         start_(other.start_),
         search_position_(other.search_position_),
@@ -1229,7 +1235,7 @@ namespace detail
         {
           {
             // Determine the range of the data to be searched.
-            typedef typename DynamicBufferSequence::const_buffers_type
+            typedef typename DynamicBuffer::const_buffers_type
               buffers_type;
             typedef buffers_iterator<buffers_type> iterator;
             buffers_type data_buffers = buffers_.data();
@@ -1303,37 +1309,37 @@ namespace detail
 
   //private:
     AsyncReadStream& stream_;
-    DynamicBufferSequence buffers_;
+    DynamicBuffer buffers_;
     MatchCondition match_condition_;
     int start_;
     std::size_t search_position_;
     ReadHandler handler_;
   };
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename MatchCondition, typename ReadHandler>
   inline void* asio_handler_allocate(std::size_t size,
-      read_until_match_op<AsyncReadStream, DynamicBufferSequence,
+      read_until_match_op<AsyncReadStream, DynamicBuffer,
         MatchCondition, ReadHandler>* this_handler)
   {
     return asio_handler_alloc_helpers::allocate(
         size, this_handler->handler_);
   }
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename MatchCondition, typename ReadHandler>
   inline void asio_handler_deallocate(void* pointer, std::size_t size,
-      read_until_match_op<AsyncReadStream, DynamicBufferSequence,
+      read_until_match_op<AsyncReadStream, DynamicBuffer,
         MatchCondition, ReadHandler>* this_handler)
   {
     asio_handler_alloc_helpers::deallocate(
         pointer, size, this_handler->handler_);
   }
 
-  template <typename AsyncReadStream, typename DynamicBufferSequence,
+  template <typename AsyncReadStream, typename DynamicBuffer,
       typename MatchCondition, typename ReadHandler>
   inline bool asio_handler_is_continuation(
-      read_until_match_op<AsyncReadStream, DynamicBufferSequence,
+      read_until_match_op<AsyncReadStream, DynamicBuffer,
         MatchCondition, ReadHandler>* this_handler)
   {
     return this_handler->start_ == 0 ? true
@@ -1342,10 +1348,10 @@ namespace detail
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename MatchCondition,
+      typename DynamicBuffer, typename MatchCondition,
       typename ReadHandler>
   inline void asio_handler_invoke(Function& function,
-      read_until_match_op<AsyncReadStream, DynamicBufferSequence,
+      read_until_match_op<AsyncReadStream, DynamicBuffer,
         MatchCondition, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
@@ -1353,10 +1359,10 @@ namespace detail
   }
 
   template <typename Function, typename AsyncReadStream,
-      typename DynamicBufferSequence, typename MatchCondition,
+      typename DynamicBuffer, typename MatchCondition,
       typename ReadHandler>
   inline void asio_handler_invoke(const Function& function,
-      read_until_match_op<AsyncReadStream, DynamicBufferSequence,
+      read_until_match_op<AsyncReadStream, DynamicBuffer,
       MatchCondition, ReadHandler>* this_handler)
   {
     asio_handler_invoke_helpers::invoke(
@@ -1366,36 +1372,36 @@ namespace detail
 
 #if !defined(GENERATING_DOCUMENTATION)
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename MatchCondition, typename ReadHandler, typename Allocator>
 struct associated_allocator<
     detail::read_until_match_op<AsyncReadStream,
-      DynamicBufferSequence, MatchCondition, ReadHandler>,
+      DynamicBuffer, MatchCondition, ReadHandler>,
     Allocator>
 {
   typedef typename associated_allocator<ReadHandler, Allocator>::type type;
 
   static type get(
       const detail::read_until_match_op<AsyncReadStream,
-        DynamicBufferSequence, MatchCondition, ReadHandler>& h,
+        DynamicBuffer, MatchCondition, ReadHandler>& h,
       const Allocator& a = Allocator()) ASIO_NOEXCEPT
   {
     return associated_allocator<ReadHandler, Allocator>::get(h.handler_, a);
   }
 };
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename MatchCondition, typename ReadHandler, typename Executor>
 struct associated_executor<
     detail::read_until_match_op<AsyncReadStream,
-      DynamicBufferSequence, MatchCondition, ReadHandler>,
+      DynamicBuffer, MatchCondition, ReadHandler>,
     Executor>
 {
   typedef typename associated_executor<ReadHandler, Executor>::type type;
 
   static type get(
       const detail::read_until_match_op<AsyncReadStream,
-        DynamicBufferSequence, MatchCondition, ReadHandler>& h,
+        DynamicBuffer, MatchCondition, ReadHandler>& h,
       const Executor& ex = Executor()) ASIO_NOEXCEPT
   {
     return associated_executor<ReadHandler, Executor>::get(h.handler_, ex);
@@ -1404,12 +1410,12 @@ struct associated_executor<
 
 #endif // !defined(GENERATING_DOCUMENTATION)
 
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename MatchCondition, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition, ASIO_MOVE_ARG(ReadHandler) handler,
     typename enable_if<is_match_condition<MatchCondition>::value>::type*)
 {
@@ -1421,11 +1427,12 @@ async_read_until(AsyncReadStream& s,
     void (asio::error_code, std::size_t)> init(handler);
 
   detail::read_until_match_op<AsyncReadStream,
-    typename decay<DynamicBufferSequence>::type,
+    typename decay<DynamicBuffer>::type,
       MatchCondition, ASIO_HANDLER_TYPE(ReadHandler,
         void (asio::error_code, std::size_t))>(
-          s, ASIO_MOVE_CAST(DynamicBufferSequence)(buffers),
-            match_condition, init.handler)(asio::error_code(), 0, 1);
+          s, ASIO_MOVE_CAST(DynamicBuffer)(buffers),
+            match_condition, init.completion_handler)(
+              asio::error_code(), 0, 1);
 
   return init.result.get();
 }
@@ -1447,7 +1454,8 @@ template <typename AsyncReadStream, typename Allocator, typename ReadHandler>
 inline ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim,
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim,
     ASIO_MOVE_ARG(ReadHandler) handler)
 {
   return async_read_until(s, basic_streambuf_ref<Allocator>(b),
@@ -1483,6 +1491,7 @@ async_read_until(AsyncReadStream& s,
 }
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 } // namespace asio
 

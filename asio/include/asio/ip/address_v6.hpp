@@ -2,7 +2,7 @@
 // ip/address_v6.hpp
 // ~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -19,6 +19,7 @@
 #include <string>
 #include "asio/detail/array.hpp"
 #include "asio/detail/socket_types.hpp"
+#include "asio/detail/string_view.hpp"
 #include "asio/detail/winsock_init.hpp"
 #include "asio/error_code.hpp"
 #include "asio/ip/address_v4.hpp"
@@ -31,6 +32,8 @@
 
 namespace asio {
 namespace ip {
+
+template <typename> class basic_address_iterator;
 
 /// Implements IP version 6 style addresses.
 /**
@@ -102,10 +105,10 @@ public:
   /// Get the address as a string.
   ASIO_DECL std::string to_string() const;
 
-  /// Get the address as a string.
+#if !defined(ASIO_NO_DEPRECATED)
+  /// (Deprecated: Use other overload.) Get the address as a string.
   ASIO_DECL std::string to_string(asio::error_code& ec) const;
 
-#if !defined(ASIO_NO_DEPRECATED)
   /// (Deprecated: Use make_address_v6().) Create an IPv6 address from an IP
   /// address string.
   static address_v6 from_string(const char* str);
@@ -218,7 +221,7 @@ public:
 #endif // !defined(ASIO_NO_DEPRECATED)
 
 private:
-  friend class address_iterator_v6;
+  friend class basic_address_iterator<address_v6>;
 
   // The underlying IPv6 address.
   asio::detail::in6_addr_type addr_;
@@ -262,6 +265,25 @@ ASIO_DECL address_v6 make_address_v6(const std::string& str);
  */
 ASIO_DECL address_v6 make_address_v6(
     const std::string& str, asio::error_code& ec);
+
+#if defined(ASIO_HAS_STD_STRING_VIEW) \
+  || defined(GENERATING_DOCUMENTATION)
+
+/// Create an IPv6 address from an IP address string.
+/**
+ * @relates address_v6
+ */
+ASIO_DECL address_v6 make_address_v6(string_view str);
+
+/// Create an IPv6 address from an IP address string.
+/**
+ * @relates address_v6
+ */
+ASIO_DECL address_v6 make_address_v6(
+    string_view str, asio::error_code& ec);
+
+#endif // defined(ASIO_HAS_STD_STRING_VIEW)
+       //  || defined(GENERATING_DOCUMENTATION)
 
 /// Tag type used for distinguishing overloads that deal in IPv4-mapped IPv6
 /// addresses.

@@ -2,7 +2,7 @@
 // system_executor.hpp
 // ~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -19,7 +19,6 @@
 #include "asio/detail/scheduler.hpp"
 #include "asio/detail/thread_group.hpp"
 #include "asio/execution_context.hpp"
-#include "asio/is_executor.hpp"
 
 #include "asio/detail/push_options.hpp"
 
@@ -36,13 +35,13 @@ class system_executor
 {
 public:
   /// Obtain the underlying execution context.
-  execution_context& context() ASIO_NOEXCEPT;
+  execution_context& context() const ASIO_NOEXCEPT;
 
   /// Inform the executor that it has some outstanding work to do.
   /**
    * For the system executor, this is a no-op.
    */
-  void on_work_started() ASIO_NOEXCEPT
+  void on_work_started() const ASIO_NOEXCEPT
   {
   }
 
@@ -50,7 +49,7 @@ public:
   /**
    * For the system executor, this is a no-op.
    */
-  void on_work_finished() ASIO_NOEXCEPT
+  void on_work_finished() const ASIO_NOEXCEPT
   {
   }
 
@@ -67,7 +66,7 @@ public:
    * internal storage needed for function invocation.
    */
   template <typename Function, typename Allocator>
-  void dispatch(ASIO_MOVE_ARG(Function) f, const Allocator& a);
+  void dispatch(ASIO_MOVE_ARG(Function) f, const Allocator& a) const;
 
   /// Request the system executor to invoke the given function object.
   /**
@@ -83,7 +82,7 @@ public:
    * internal storage needed for function invocation.
    */
   template <typename Function, typename Allocator>
-  void post(ASIO_MOVE_ARG(Function) f, const Allocator& a);
+  void post(ASIO_MOVE_ARG(Function) f, const Allocator& a) const;
 
   /// Request the system executor to invoke the given function object.
   /**
@@ -99,7 +98,7 @@ public:
    * internal storage needed for function invocation.
    */
   template <typename Function, typename Allocator>
-  void defer(ASIO_MOVE_ARG(Function) f, const Allocator& a);
+  void defer(ASIO_MOVE_ARG(Function) f, const Allocator& a) const;
 
   /// Compare two executors for equality.
   /**
@@ -141,10 +140,6 @@ private:
     detail::thread_group threads_;
   };
 };
-
-#if !defined(GENERATING_DOCUMENTATION)
-template <> struct is_executor<system_executor> : true_type {};
-#endif // !defined(GENERATING_DOCUMENTATION)
 
 } // namespace asio
 

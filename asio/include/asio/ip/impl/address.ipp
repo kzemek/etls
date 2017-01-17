@@ -2,7 +2,7 @@
 // ip/impl/address.ipp
 // ~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -30,7 +30,7 @@ namespace asio {
 namespace ip {
 
 address::address()
-  : type_(none),
+  : type_(ipv4),
     ipv4_address_(),
     ipv6_address_()
 {
@@ -134,7 +134,21 @@ address make_address(const std::string& str,
   return make_address(str.c_str(), ec);
 }
 
-#if !defined(ASIO_NO_DEPRECATED)
+#if defined(ASIO_HAS_STD_STRING_VIEW)
+
+address make_address(string_view str)
+{
+  return make_address(static_cast<std::string>(str));
+}
+
+address make_address(string_view str,
+    asio::error_code& ec)
+{
+  return make_address(static_cast<std::string>(str), ec);
+}
+
+#endif // defined(ASIO_HAS_STD_STRING_VIEW)
+
 asio::ip::address_v4 address::to_v4() const
 {
   if (type_ != ipv4)
@@ -154,85 +168,51 @@ asio::ip::address_v6 address::to_v6() const
   }
   return ipv6_address_;
 }
-#endif // !defined(ASIO_NO_DEPRECATED)
 
 std::string address::to_string() const
 {
-  switch (type_)
-  {
-  case ipv4:
-    return ipv4_address_.to_string();
-  case ipv6:
+  if (type_ == ipv6)
     return ipv6_address_.to_string();
-  default:
-    bad_address_cast ex;
-    asio::detail::throw_exception(ex);
-    return std::string();
-  }
+  return ipv4_address_.to_string();
 }
 
+#if !defined(ASIO_NO_DEPRECATED)
 std::string address::to_string(asio::error_code& ec) const
 {
-  switch (type_)
-  {
-  case ipv4:
-    return ipv4_address_.to_string(ec);
-  case ipv6:
+  if (type_ == ipv6)
     return ipv6_address_.to_string(ec);
-  default:
-    ec = asio::error::invalid_argument;
-    return std::string();
-  }
+  return ipv4_address_.to_string(ec);
 }
+#endif // !defined(ASIO_NO_DEPRECATED)
 
 bool address::is_loopback() const
 {
-  switch (type_)
-  {
-  case ipv4:
-    return ipv4_address_.is_loopback();
-  case ipv6:
-    return ipv6_address_.is_loopback();
-  default:
-    return false;
-  }
+  return (type_ == ipv4)
+    ? ipv4_address_.is_loopback()
+    : ipv6_address_.is_loopback();
 }
 
 bool address::is_unspecified() const
 {
-  switch (type_)
-  {
-  case ipv4:
-    return ipv4_address_.is_unspecified();
-  case ipv6:
-    return ipv6_address_.is_unspecified();
-  default:
-    return false;
-  }
+  return (type_ == ipv4)
+    ? ipv4_address_.is_unspecified()
+    : ipv6_address_.is_unspecified();
 }
 
 bool address::is_multicast() const
 {
-  switch (type_)
-  {
-  case ipv4:
-    return ipv4_address_.is_multicast();
-  case ipv6:
-    return ipv6_address_.is_multicast();
-  default:
-    return false;
-  }
+  return (type_ == ipv4)
+    ? ipv4_address_.is_multicast()
+    : ipv6_address_.is_multicast();
 }
 
 bool operator==(const address& a1, const address& a2)
 {
   if (a1.type_ != a2.type_)
     return false;
-  if (a1.type_ == address::ipv4)
-    return a1.ipv4_address_ == a2.ipv4_address_;
   if (a1.type_ == address::ipv6)
     return a1.ipv6_address_ == a2.ipv6_address_;
-  return true;
+  return a1.ipv4_address_ == a2.ipv4_address_;
 }
 
 bool operator<(const address& a1, const address& a2)
@@ -241,11 +221,9 @@ bool operator<(const address& a1, const address& a2)
     return true;
   if (a1.type_ > a2.type_)
     return false;
-  if (a1.type_ == address::ipv4)
-    return a1.ipv4_address_ < a2.ipv4_address_;
   if (a1.type_ == address::ipv6)
     return a1.ipv6_address_ < a2.ipv6_address_;
-  return false;
+  return a1.ipv4_address_ < a2.ipv4_address_;
 }
 
 } // namespace ip

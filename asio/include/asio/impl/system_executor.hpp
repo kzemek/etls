@@ -2,7 +2,7 @@
 // impl/system_executor.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -25,14 +25,14 @@
 
 namespace asio {
 
-inline execution_context& system_executor::context() ASIO_NOEXCEPT
+inline execution_context& system_executor::context() const ASIO_NOEXCEPT
 {
   return detail::global<context_impl>();
 }
 
 template <typename Function, typename Allocator>
 void system_executor::dispatch(
-    ASIO_MOVE_ARG(Function) f, const Allocator&)
+    ASIO_MOVE_ARG(Function) f, const Allocator&) const
 {
   typename decay<Function>::type tmp(ASIO_MOVE_CAST(Function)(f));
   asio_handler_invoke_helpers::invoke(tmp, tmp);
@@ -40,8 +40,10 @@ void system_executor::dispatch(
 
 template <typename Function, typename Allocator>
 void system_executor::post(
-    ASIO_MOVE_ARG(Function) f, const Allocator& a)
+    ASIO_MOVE_ARG(Function) f, const Allocator& a) const
 {
+  context_impl& ctx = detail::global<context_impl>();
+
   // Make a local, non-const copy of the function.
   typedef typename decay<Function>::type function_type;
   function_type tmp(ASIO_MOVE_CAST(Function)(f));
@@ -56,17 +58,19 @@ void system_executor::post(
   p.v = p.a.allocate(1);
   p.p = new (p.v) op(tmp, allocator);
 
-  ASIO_HANDLER_CREATION((p.p, "system_executor", this, "post"));
+  ASIO_HANDLER_CREATION((ctx, *p.p,
+        "system_executor", &this->context(), 0, "post"));
 
-  context_impl& ctx = detail::global<context_impl>();
   ctx.scheduler_.post_immediate_completion(p.p, false);
   p.v = p.p = 0;
 }
 
 template <typename Function, typename Allocator>
 void system_executor::defer(
-    ASIO_MOVE_ARG(Function) f, const Allocator& a)
+    ASIO_MOVE_ARG(Function) f, const Allocator& a) const
 {
+  context_impl& ctx = detail::global<context_impl>();
+
   // Make a local, non-const copy of the function.
   typedef typename decay<Function>::type function_type;
   function_type tmp(ASIO_MOVE_CAST(Function)(f));
@@ -81,9 +85,9 @@ void system_executor::defer(
   p.v = p.a.allocate(1);
   p.p = new (p.v) op(tmp, allocator);
 
-  ASIO_HANDLER_CREATION((p.p, "system_executor", this, "defer"));
+  ASIO_HANDLER_CREATION((ctx, *p.p,
+        "system_executor", &this->context(), 0, "defer"));
 
-  context_impl& ctx = detail::global<context_impl>();
   ctx.scheduler_.post_immediate_completion(p.p, true);
   p.v = p.p = 0;
 }

@@ -2,7 +2,7 @@
 // ip/impl/address_v6.ipp
 // ~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -101,11 +101,17 @@ address_v6::bytes_type address_v6::to_bytes() const
 std::string address_v6::to_string() const
 {
   asio::error_code ec;
-  std::string addr = to_string(ec);
-  asio::detail::throw_error(ec);
+  char addr_str[asio::detail::max_addr_v6_str_len];
+  const char* addr =
+    asio::detail::socket_ops::inet_ntop(
+        ASIO_OS_DEF(AF_INET6), &addr_, addr_str,
+        asio::detail::max_addr_v6_str_len, scope_id_, ec);
+  if (addr == 0)
+    asio::detail::throw_error(ec);
   return addr;
 }
 
+#if !defined(ASIO_NO_DEPRECATED)
 std::string address_v6::to_string(asio::error_code& ec) const
 {
   char addr_str[asio::detail::max_addr_v6_str_len];
@@ -118,7 +124,6 @@ std::string address_v6::to_string(asio::error_code& ec) const
   return addr;
 }
 
-#if !defined(ASIO_NO_DEPRECATED)
 address_v4 address_v6::to_v4() const
 {
   if (!is_v4_mapped() && !is_v4_compatible())
@@ -297,6 +302,21 @@ address_v6 make_address_v6(
 {
   return make_address_v6(str.c_str(), ec);
 }
+
+#if defined(ASIO_HAS_STD_STRING_VIEW)
+
+address_v6 make_address_v6(string_view str)
+{
+  return make_address_v6(static_cast<std::string>(str));
+}
+
+address_v6 make_address_v6(string_view str,
+    asio::error_code& ec)
+{
+  return make_address_v6(static_cast<std::string>(str), ec);
+}
+
+#endif // defined(ASIO_HAS_STD_STRING_VIEW)
 
 address_v4 make_address_v4(
     v4_mapped_t, const address_v6& v6_addr)

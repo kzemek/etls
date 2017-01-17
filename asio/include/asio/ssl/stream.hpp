@@ -2,7 +2,7 @@
 // ssl/stream.hpp
 // ~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -51,9 +51,9 @@ namespace ssl {
  * @par Example
  * To use the SSL stream template with an ip::tcp::socket, you would write:
  * @code
- * asio::io_service io_service;
+ * asio::io_context io_context;
  * asio::ssl::context ctx(asio::ssl::context::sslv23);
- * asio::ssl::stream<asio:ip::tcp::socket> sock(io_service, ctx);
+ * asio::ssl::stream<asio:ip::tcp::socket> sock(io_context, ctx);
  * @endcode
  *
  * @par Concepts:
@@ -79,6 +79,9 @@ public:
 
   /// The type of the lowest layer.
   typedef typename next_layer_type::lowest_layer_type lowest_layer_type;
+
+  /// The type of the executor associated with the object.
+  typedef typename lowest_layer_type::executor_type executor_type;
 
 #if defined(ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
   /// Construct a stream.
@@ -108,22 +111,41 @@ public:
 #endif // defined(ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
 
   /// Destructor.
+  /**
+   * @note A @c stream object must not be destroyed while there are pending
+   * asynchronous operations associated with it.
+   */
   ~stream()
   {
   }
 
-  /// Get the io_service associated with the object.
+  /// Get the executor associated with the object.
   /**
-   * This function may be used to obtain the io_service object that the stream
+   * This function may be used to obtain the executor object that the stream
    * uses to dispatch handlers for asynchronous operations.
    *
-   * @return A reference to the io_service object that stream will use to
-   * dispatch handlers. Ownership is not transferred to the caller.
+   * @return A copy of the executor that stream will use to dispatch handlers.
    */
-  asio::io_service& get_io_service()
+  executor_type get_executor() ASIO_NOEXCEPT
+  {
+    return next_layer_.lowest_layer().get_executor();
+  }
+
+#if !defined(ASIO_NO_DEPRECATED)
+  /// (Deprecated: Use get_executor().) Get the io_context associated with the
+  /// object.
+  asio::io_context& get_io_context()
+  {
+    return next_layer_.lowest_layer().get_io_context();
+  }
+
+  /// (Deprecated: Use get_executor().) Get the io_context associated with the
+  /// object.
+  asio::io_context& get_io_service()
   {
     return next_layer_.lowest_layer().get_io_service();
   }
+#endif // !defined(ASIO_NO_DEPRECATED)
 
   /// Get the underlying implementation in the native type.
   /**
@@ -136,7 +158,7 @@ public:
    * suitable for passing to functions such as @c SSL_get_verify_result and
    * @c SSL_get_peer_certificate:
    * @code
-   * asio::ssl::stream<asio:ip::tcp::socket> sock(io_service, ctx);
+   * asio::ssl::stream<asio:ip::tcp::socket> sock(io_context, ctx);
    *
    * // ... establish connection and perform handshake ...
    *
@@ -237,10 +259,11 @@ public:
    *
    * @note Calls @c SSL_set_verify.
    */
-  asio::error_code set_verify_mode(
+  ASIO_SYNC_OP_VOID set_verify_mode(
       verify_mode v, asio::error_code& ec)
   {
-    return core_.engine_.set_verify_mode(v, ec);
+    core_.engine_.set_verify_mode(v, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Set the peer verification depth.
@@ -274,10 +297,11 @@ public:
    *
    * @note Calls @c SSL_set_verify_depth.
    */
-  asio::error_code set_verify_depth(
+  ASIO_SYNC_OP_VOID set_verify_depth(
       int depth, asio::error_code& ec)
   {
-    return core_.engine_.set_verify_depth(depth, ec);
+    core_.engine_.set_verify_depth(depth, ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Set the callback used to verify peer certificates.
@@ -325,11 +349,12 @@ public:
    * @note Calls @c SSL_set_verify.
    */
   template <typename VerifyCallback>
-  asio::error_code set_verify_callback(VerifyCallback callback,
+  ASIO_SYNC_OP_VOID set_verify_callback(VerifyCallback callback,
       asio::error_code& ec)
   {
-    return core_.engine_.set_verify_callback(
+    core_.engine_.set_verify_callback(
         new detail::verify_callback<VerifyCallback>(callback), ec);
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Perform SSL handshaking.
@@ -359,11 +384,11 @@ public:
    *
    * @param ec Set to indicate what error occurred, if any.
    */
-  asio::error_code handshake(handshake_type type,
+  ASIO_SYNC_OP_VOID handshake(handshake_type type,
       asio::error_code& ec)
   {
     detail::io(next_layer_, core_, detail::handshake_op(type), ec);
-    return ec;
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Perform SSL handshaking.
@@ -399,12 +424,12 @@ public:
    * @param ec Set to indicate what error occurred, if any.
    */
   template <typename ConstBufferSequence>
-  asio::error_code handshake(handshake_type type,
+  ASIO_SYNC_OP_VOID handshake(handshake_type type,
       const ConstBufferSequence& buffers, asio::error_code& ec)
   {
     detail::io(next_layer_, core_,
         detail::buffered_handshake_op<ConstBufferSequence>(type, buffers), ec);
-    return ec;
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Start an asynchronous SSL handshake.
@@ -436,7 +461,7 @@ public:
       void (asio::error_code)> init(handler);
 
     detail::async_io(next_layer_, core_,
-        detail::handshake_op(type), init.handler);
+        detail::handshake_op(type), init.completion_handler);
 
     return init.result.get();
   }
@@ -478,7 +503,7 @@ public:
 
     detail::async_io(next_layer_, core_,
         detail::buffered_handshake_op<ConstBufferSequence>(type, buffers),
-        init.handler);
+        init.completion_handler);
 
     return init.result.get();
   }
@@ -504,10 +529,10 @@ public:
    *
    * @param ec Set to indicate what error occurred, if any.
    */
-  asio::error_code shutdown(asio::error_code& ec)
+  ASIO_SYNC_OP_VOID shutdown(asio::error_code& ec)
   {
     detail::io(next_layer_, core_, detail::shutdown_op(), ec);
-    return ec;
+    ASIO_SYNC_OP_VOID_RETURN(ec);
   }
 
   /// Asynchronously shut down SSL on the stream.
@@ -534,7 +559,8 @@ public:
     asio::async_completion<ShutdownHandler,
       void (asio::error_code)> init(handler);
 
-    detail::async_io(next_layer_, core_, detail::shutdown_op(), init.handler);
+    detail::async_io(next_layer_, core_, detail::shutdown_op(),
+        init.completion_handler);
 
     return init.result.get();
   }
@@ -624,7 +650,8 @@ public:
       void (asio::error_code, std::size_t)> init(handler);
 
     detail::async_io(next_layer_, core_,
-        detail::write_op<ConstBufferSequence>(buffers), init.handler);
+        detail::write_op<ConstBufferSequence>(buffers),
+        init.completion_handler);
 
     return init.result.get();
   }
@@ -715,7 +742,8 @@ public:
       void (asio::error_code, std::size_t)> init(handler);
 
     detail::async_io(next_layer_, core_,
-        detail::read_op<MutableBufferSequence>(buffers), init.handler);
+        detail::read_op<MutableBufferSequence>(buffers),
+        init.completion_handler);
 
     return init.result.get();
   }

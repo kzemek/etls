@@ -2,7 +2,7 @@
 // socket_base.cpp
 // ~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,7 +16,7 @@
 // Test that header file is self-contained.
 #include "asio/socket_base.hpp"
 
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/ip/tcp.hpp"
 #include "asio/ip/udp.hpp"
 #include "unit_test.hpp"
@@ -37,8 +37,8 @@ void test()
 
   try
   {
-    io_service ios;
-    ip::tcp::socket sock(ios);
+    io_context ioc;
+    ip::tcp::socket sock(ioc);
     char buf[1024];
 
     // shutdown_type enumeration.
@@ -194,10 +194,10 @@ void test()
   using namespace asio;
   namespace ip = asio::ip;
 
-  io_service ios;
-  ip::udp::socket udp_sock(ios, ip::udp::v4());
-  ip::tcp::socket tcp_sock(ios, ip::tcp::v4());
-  ip::tcp::acceptor tcp_acceptor(ios, ip::tcp::v4());
+  io_context ioc;
+  ip::udp::socket udp_sock(ioc, ip::udp::v4());
+  ip::tcp::socket tcp_sock(ioc, ip::tcp::v4());
+  ip::tcp::acceptor tcp_acceptor(ioc, ip::tcp::v4());
   asio::error_code ec;
 
   // broadcast class.
