@@ -62,45 +62,46 @@
 #include <openssl/buf.h>
 #include <openssl/err.h>
 
+#include "../crypto/internal.h"
 #include "internal.h"
 
 
-static uint16_t dtls1_version_from_wire(uint16_t wire_version) {
-  uint16_t tls_version = ~wire_version;
-  uint16_t version = tls_version + 0x0201;
-  /* If either component overflowed, clamp it so comparisons still work. */
-  if ((version >> 8) < (tls_version >> 8)) {
-    version = 0xff00 | (version & 0xff);
+static int dtls1_version_from_wire(uint16_t *out_version,
+                                   uint16_t wire_version) {
+  switch (wire_version) {
+    case DTLS1_VERSION:
+      /* DTLS 1.0 maps to TLS 1.1, not TLS 1.0. */
+      *out_version = TLS1_1_VERSION;
+      return 1;
+    case DTLS1_2_VERSION:
+      *out_version = TLS1_2_VERSION;
+      return 1;
   }
-  if ((version & 0xff) < (tls_version & 0xff)) {
-    version = (version & 0xff00) | 0xff;
-  }
-  /* DTLS 1.0 maps to TLS 1.1, not TLS 1.0. */
-  if (version == TLS1_VERSION) {
-    version = TLS1_1_VERSION;
-  }
-  return version;
+
+  return 0;
 }
 
 static uint16_t dtls1_version_to_wire(uint16_t version) {
-  assert(version >= TLS1_1_VERSION);
-
-  /* DTLS 1.0 maps to TLS 1.1, not TLS 1.0. */
-  if (version == TLS1_1_VERSION) {
-    return DTLS1_VERSION;
+  switch (version) {
+    case TLS1_1_VERSION:
+      /* DTLS 1.0 maps to TLS 1.1, not TLS 1.0. */
+      return DTLS1_VERSION;
+    case TLS1_2_VERSION:
+      return DTLS1_2_VERSION;
   }
-  return ~(version - 0x0201);
+
+  /* It is an error to use this function with an invalid version. */
+  assert(0);
+  return 0;
 }
 
-static int dtls1_begin_handshake(SSL *ssl) {
-  return 1;
+static int dtls1_supports_cipher(const SSL_CIPHER *cipher) {
+  return cipher->algorithm_enc != SSL_eNULL;
 }
 
-static void dtls1_finish_handshake(SSL *ssl) {
-  ssl->d1->handshake_read_seq = 0;
-  ssl->d1->handshake_write_seq = 0;
-  dtls_clear_incoming_messages(ssl);
-}
+static void dtls1_expect_flight(SSL *ssl) { dtls1_start_timer(ssl); }
+
+static void dtls1_received_flight(SSL *ssl) { dtls1_stop_timer(ssl); }
 
 static int dtls1_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
   /* Cipher changes are illegal when there are buffered incoming messages. */
@@ -112,8 +113,8 @@ static int dtls1_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
   }
 
   ssl->d1->r_epoch++;
-  memset(&ssl->d1->bitmap, 0, sizeof(ssl->d1->bitmap));
-  memset(ssl->s3->read_sequence, 0, sizeof(ssl->s3->read_sequence));
+  OPENSSL_memset(&ssl->d1->bitmap, 0, sizeof(ssl->d1->bitmap));
+  OPENSSL_memset(ssl->s3->read_sequence, 0, sizeof(ssl->s3->read_sequence));
 
   SSL_AEAD_CTX_free(ssl->s3->aead_read_ctx);
   ssl->s3->aead_read_ctx = aead_ctx;
@@ -122,9 +123,9 @@ static int dtls1_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
 
 static int dtls1_set_write_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
   ssl->d1->w_epoch++;
-  memcpy(ssl->d1->last_write_sequence, ssl->s3->write_sequence,
-         sizeof(ssl->s3->write_sequence));
-  memset(ssl->s3->write_sequence, 0, sizeof(ssl->s3->write_sequence));
+  OPENSSL_memcpy(ssl->d1->last_write_sequence, ssl->s3->write_sequence,
+                 sizeof(ssl->s3->write_sequence));
+  OPENSSL_memset(ssl->s3->write_sequence, 0, sizeof(ssl->s3->write_sequence));
 
   SSL_AEAD_CTX_free(ssl->s3->aead_write_ctx);
   ssl->s3->aead_write_ctx = aead_ctx;
@@ -139,10 +140,9 @@ static const SSL_PROTOCOL_METHOD kDTLSProtocolMethod = {
     dtls1_version_to_wire,
     dtls1_new,
     dtls1_free,
-    dtls1_begin_handshake,
-    dtls1_finish_handshake,
     dtls1_get_message,
-    dtls1_hash_current_message,
+    dtls1_get_current_message,
+    dtls1_release_current_message,
     dtls1_read_app_data,
     dtls1_read_change_cipher_spec,
     dtls1_read_close_notify,
@@ -151,6 +151,7 @@ static const SSL_PROTOCOL_METHOD kDTLSProtocolMethod = {
     dtls1_supports_cipher,
     dtls1_init_message,
     dtls1_finish_message,
+    dtls1_queue_message,
     dtls1_write_message,
     dtls1_send_change_cipher_spec,
     dtls1_expect_flight,

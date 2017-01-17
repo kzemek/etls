@@ -14,7 +14,7 @@
 
 #include "internal.h"
 
-#if !defined(OPENSSL_WINDOWS) && !defined(OPENSSL_NO_THREADS)
+#if defined(OPENSSL_PTHREADS)
 
 #include <pthread.h>
 #include <stdlib.h>
@@ -103,7 +103,7 @@ static void thread_local_destructor(void *arg) {
   if (pthread_mutex_lock(&g_destructors_lock) != 0) {
     return;
   }
-  memcpy(destructors, g_destructors, sizeof(destructors));
+  OPENSSL_memcpy(destructors, g_destructors, sizeof(destructors));
   pthread_mutex_unlock(&g_destructors_lock);
 
   unsigned i;
@@ -154,7 +154,7 @@ int CRYPTO_set_thread_local(thread_local_data_t index, void *value,
       destructor(value);
       return 0;
     }
-    memset(pointers, 0, sizeof(void *) * NUM_OPENSSL_THREAD_LOCALS);
+    OPENSSL_memset(pointers, 0, sizeof(void *) * NUM_OPENSSL_THREAD_LOCALS);
     if (pthread_setspecific(g_thread_local_key, pointers) != 0) {
       OPENSSL_free(pointers);
       destructor(value);
@@ -173,4 +173,4 @@ int CRYPTO_set_thread_local(thread_local_data_t index, void *value,
   return 1;
 }
 
-#endif  /* !OPENSSL_WINDOWS && !OPENSSL_NO_THREADS */
+#endif  /* OPENSSL_PTHREADS */

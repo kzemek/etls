@@ -14,13 +14,14 @@
 
 #include <openssl/rand.h>
 
-#if defined(BORINGSSL_UNSAFE_FUZZER_MODE)
+#if defined(BORINGSSL_UNSAFE_DETERMINISTIC_MODE)
 
 #include <string.h>
 
 #include <openssl/chacha.h>
 
 #include "internal.h"
+#include "../internal.h"
 
 
 /* g_num_calls is the number of calls to |CRYPTO_sysrand| that have occured.
@@ -36,12 +37,12 @@ void CRYPTO_sysrand(uint8_t *out, size_t requested) {
   static const uint8_t kZeroKey[32];
 
   uint8_t nonce[12];
-  memset(nonce, 0, sizeof(nonce));
-  memcpy(nonce, &g_num_calls, sizeof(g_num_calls));
+  OPENSSL_memset(nonce, 0, sizeof(nonce));
+  OPENSSL_memcpy(nonce, &g_num_calls, sizeof(g_num_calls));
 
-  memset(out, 0, requested);
+  OPENSSL_memset(out, 0, requested);
   CRYPTO_chacha_20(out, out, requested, kZeroKey, nonce, 0);
   g_num_calls++;
 }
 
-#endif  /* BORINGSSL_UNSAFE_FUZZER_MODE */
+#endif  /* BORINGSSL_UNSAFE_DETERMINISTIC_MODE */

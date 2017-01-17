@@ -17,7 +17,10 @@
 #include <errno.h>
 #include <string.h>
 
+#include <openssl/bio.h>
 #include <openssl/mem.h>
+
+#include "../../crypto/internal.h"
 
 
 namespace {
@@ -109,7 +112,7 @@ static int AsyncNew(BIO *bio) {
   if (a == NULL) {
     return 0;
   }
-  memset(a, 0, sizeof(*a));
+  OPENSSL_memset(a, 0, sizeof(*a));
   a->enforce_write_quota = true;
   bio->init = 1;
   bio->ptr = (char *)a;
@@ -150,12 +153,12 @@ const BIO_METHOD g_async_bio_method = {
 
 }  // namespace
 
-ScopedBIO AsyncBioCreate() {
-  return ScopedBIO(BIO_new(&g_async_bio_method));
+bssl::UniquePtr<BIO> AsyncBioCreate() {
+  return bssl::UniquePtr<BIO>(BIO_new(&g_async_bio_method));
 }
 
-ScopedBIO AsyncBioCreateDatagram() {
-  ScopedBIO ret(BIO_new(&g_async_bio_method));
+bssl::UniquePtr<BIO> AsyncBioCreateDatagram() {
+  bssl::UniquePtr<BIO> ret(BIO_new(&g_async_bio_method));
   if (!ret) {
     return nullptr;
   }

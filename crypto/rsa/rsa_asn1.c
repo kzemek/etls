@@ -66,6 +66,7 @@
 
 #include "internal.h"
 #include "../bytestring/internal.h"
+#include "../internal.h"
 
 
 static int parse_integer_buggy(CBS *cbs, BIGNUM **out, int buggy) {
@@ -183,7 +184,7 @@ static RSA_additional_prime *rsa_parse_additional_prime(CBS *cbs) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;
   }
-  memset(ret, 0, sizeof(RSA_additional_prime));
+  OPENSSL_memset(ret, 0, sizeof(RSA_additional_prime));
 
   CBS child;
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
@@ -280,6 +281,11 @@ RSA *RSA_parse_private_key(CBS *cbs) {
     goto err;
   }
 
+  if (!RSA_check_key(ret)) {
+    OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_RSA_PARAMETERS);
+    goto err;
+  }
+
   BN_CTX_free(ctx);
   BN_free(product_of_primes_so_far);
   return ret;
@@ -329,10 +335,10 @@ int RSA_marshal_private_key(CBB *cbb, const RSA *rsa) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_ENCODE_ERROR);
       return 0;
     }
-    size_t i;
-    for (i = 0; i < sk_RSA_additional_prime_num(rsa->additional_primes); i++) {
+    for (size_t i = 0; i < sk_RSA_additional_prime_num(rsa->additional_primes);
+         i++) {
       RSA_additional_prime *ap =
-              sk_RSA_additional_prime_value(rsa->additional_primes, i);
+          sk_RSA_additional_prime_value(rsa->additional_primes, i);
       CBB other_prime_info;
       if (!CBB_add_asn1(&other_prime_infos, &other_prime_info,
                         CBS_ASN1_SEQUENCE) ||

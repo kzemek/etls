@@ -21,6 +21,8 @@
 
 #include <openssl/mem.h>
 
+#include "../../crypto/internal.h"
+
 
 namespace {
 
@@ -31,11 +33,10 @@ const uint8_t kOpcodeTimeout = 'T';
 const uint8_t kOpcodeTimeoutAck = 't';
 
 struct PacketedBio {
-  explicit PacketedBio(bool advance_clock_arg)
-      : advance_clock(advance_clock_arg) {
-    memset(&timeout, 0, sizeof(timeout));
-    memset(&clock, 0, sizeof(clock));
-    memset(&read_deadline, 0, sizeof(read_deadline));
+  PacketedBio(timeval *clock_arg, bool advance_clock_arg)
+      : clock(clock_arg), advance_clock(advance_clock_arg) {
+    OPENSSL_memset(&timeout, 0, sizeof(timeout));
+    OPENSSL_memset(&read_deadline, 0, sizeof(read_deadline));
   }
 
   bool HasTimeout() const {
@@ -47,14 +48,14 @@ struct PacketedBio {
       return true;
     }
 
-    if (clock.tv_sec == read_deadline.tv_sec) {
-      return clock.tv_usec < read_deadline.tv_usec;
+    if (clock->tv_sec == read_deadline.tv_sec) {
+      return clock->tv_usec < read_deadline.tv_usec;
     }
-    return clock.tv_sec < read_deadline.tv_sec;
+    return clock->tv_sec < read_deadline.tv_sec;
   }
 
   timeval timeout;
-  timeval clock;
+  timeval *clock;
   timeval read_deadline;
   bool advance_clock;
 };
@@ -64,10 +65,6 @@ PacketedBio *GetData(BIO *bio) {
     return NULL;
   }
   return (PacketedBio *)bio->ptr;
-}
-
-const PacketedBio *GetData(const BIO *bio) {
-  return GetData(const_cast<BIO*>(bio));
 }
 
 // ReadAll reads |len| bytes from |bio| into |out|. It returns 1 on success and
@@ -214,7 +211,7 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
     if (outl > (int)len) {
       outl = len;
     }
-    memcpy(out, buf, outl);
+    OPENSSL_memcpy(out, buf, outl);
     OPENSSL_free(buf);
     return outl;
   }
@@ -222,7 +219,7 @@ static int PacketedRead(BIO *bio, char *out, int outl) {
 
 static long PacketedCtrl(BIO *bio, int cmd, long num, void *ptr) {
   if (cmd == BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT) {
-    memcpy(&GetData(bio)->read_deadline, ptr, sizeof(timeval));
+    OPENSSL_memcpy(&GetData(bio)->read_deadline, ptr, sizeof(timeval));
     return 1;
   }
 
@@ -272,17 +269,13 @@ const BIO_METHOD g_packeted_bio_method = {
 
 }  // namespace
 
-ScopedBIO PacketedBioCreate(bool advance_clock) {
-  ScopedBIO bio(BIO_new(&g_packeted_bio_method));
+bssl::UniquePtr<BIO> PacketedBioCreate(timeval *clock, bool advance_clock) {
+  bssl::UniquePtr<BIO> bio(BIO_new(&g_packeted_bio_method));
   if (!bio) {
     return nullptr;
   }
-  bio->ptr = new PacketedBio(advance_clock);
+  bio->ptr = new PacketedBio(clock, advance_clock);
   return bio;
-}
-
-timeval PacketedBioGetClock(const BIO *bio) {
-  return GetData(bio)->clock;
 }
 
 bool PacketedBioAdvanceClock(BIO *bio) {
@@ -295,10 +288,10 @@ bool PacketedBioAdvanceClock(BIO *bio) {
     return false;
   }
 
-  data->clock.tv_usec += data->timeout.tv_usec;
-  data->clock.tv_sec += data->clock.tv_usec / 1000000;
-  data->clock.tv_usec %= 1000000;
-  data->clock.tv_sec += data->timeout.tv_sec;
-  memset(&data->timeout, 0, sizeof(data->timeout));
+  data->clock->tv_usec += data->timeout.tv_usec;
+  data->clock->tv_sec += data->clock->tv_usec / 1000000;
+  data->clock->tv_usec %= 1000000;
+  data->clock->tv_sec += data->timeout.tv_sec;
+  OPENSSL_memset(&data->timeout, 0, sizeof(data->timeout));
   return true;
 }

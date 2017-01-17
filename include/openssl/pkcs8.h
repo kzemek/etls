@@ -88,7 +88,7 @@ OPENSSL_EXPORT X509_SIG *PKCS8_encrypt_pbe(int pbe_nid,
                                            const EVP_CIPHER *cipher,
                                            const uint8_t *pass_raw,
                                            size_t pass_raw_len,
-                                           uint8_t *salt, size_t salt_len,
+                                           const uint8_t *salt, size_t salt_len,
                                            int iterations,
                                            PKCS8_PRIV_KEY_INFO *p8inf);
 
@@ -123,7 +123,7 @@ OPENSSL_EXPORT int PKCS12_get_key_and_certs(EVP_PKEY **out_key,
  * unchanged.  */
 OPENSSL_EXPORT X509_SIG *PKCS8_encrypt(int pbe_nid, const EVP_CIPHER *cipher,
                                        const char *pass, int pass_len,
-                                       uint8_t *salt, size_t salt_len,
+                                       const uint8_t *salt, size_t salt_len,
                                        int iterations,
                                        PKCS8_PRIV_KEY_INFO *p8inf);
 
@@ -187,6 +187,18 @@ OPENSSL_EXPORT void PKCS12_free(PKCS12 *p12);
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(PKCS12, PKCS12_free)
+BORINGSSL_MAKE_DELETER(PKCS8_PRIV_KEY_INFO, PKCS8_PRIV_KEY_INFO_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define PKCS8_R_BAD_PKCS12_DATA 100

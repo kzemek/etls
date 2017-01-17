@@ -46,7 +46,6 @@ T *FindField(TestConfig *config, const Flag<T> (&flags)[N], const char *flag) {
 const Flag<bool> kBoolFlags[] = {
   { "-server", &TestConfig::is_server },
   { "-dtls", &TestConfig::is_dtls },
-  { "-resume", &TestConfig::resume },
   { "-fallback-scsv", &TestConfig::fallback_scsv },
   { "-require-any-client-certificate",
     &TestConfig::require_any_client_certificate },
@@ -76,13 +75,16 @@ const Flag<bool> kBoolFlags[] = {
   { "-install-ddos-callback", &TestConfig::install_ddos_callback },
   { "-fail-ddos-callback", &TestConfig::fail_ddos_callback },
   { "-fail-second-ddos-callback", &TestConfig::fail_second_ddos_callback },
+  { "-fail-cert-callback", &TestConfig::fail_cert_callback },
   { "-handshake-never-done", &TestConfig::handshake_never_done },
   { "-use-export-context", &TestConfig::use_export_context },
   { "-tls-unique", &TestConfig::tls_unique },
   { "-expect-ticket-renewal", &TestConfig::expect_ticket_renewal },
   { "-expect-no-session", &TestConfig::expect_no_session },
+  { "-expect-early-data-info", &TestConfig::expect_early_data_info },
   { "-use-ticket-callback", &TestConfig::use_ticket_callback },
   { "-renew-ticket", &TestConfig::renew_ticket },
+  { "-enable-early-data", &TestConfig::enable_early_data },
   { "-enable-client-custom-extension",
     &TestConfig::enable_client_custom_extension },
   { "-enable-server-custom-extension",
@@ -97,13 +99,30 @@ const Flag<bool> kBoolFlags[] = {
   { "-renegotiate-once", &TestConfig::renegotiate_once },
   { "-renegotiate-freely", &TestConfig::renegotiate_freely },
   { "-renegotiate-ignore", &TestConfig::renegotiate_ignore },
-  { "-disable-npn", &TestConfig::disable_npn },
   { "-p384-only", &TestConfig::p384_only },
   { "-enable-all-curves", &TestConfig::enable_all_curves },
   { "-use-sparse-dh-prime", &TestConfig::use_sparse_dh_prime },
   { "-use-old-client-cert-callback",
     &TestConfig::use_old_client_cert_callback },
   { "-use-null-client-ca-list", &TestConfig::use_null_client_ca_list },
+  { "-send-alert", &TestConfig::send_alert },
+  { "-peek-then-read", &TestConfig::peek_then_read },
+  { "-enable-grease", &TestConfig::enable_grease },
+  { "-use-exporter-between-reads", &TestConfig::use_exporter_between_reads },
+  { "-retain-only-sha256-client-cert-initial",
+    &TestConfig::retain_only_sha256_client_cert_initial },
+  { "-retain-only-sha256-client-cert-resume",
+    &TestConfig::retain_only_sha256_client_cert_resume },
+  { "-expect-sha256-client-cert-initial",
+    &TestConfig::expect_sha256_client_cert_initial },
+  { "-expect-sha256-client-cert-resume",
+    &TestConfig::expect_sha256_client_cert_resume },
+  { "-enable-short-header", &TestConfig::enable_short_header },
+  { "-read-with-unfinished-write", &TestConfig::read_with_unfinished_write },
+  { "-expect-secure-renegotiation",
+    &TestConfig::expect_secure_renegotiation },
+  { "-expect-no-secure-renegotiation",
+    &TestConfig::expect_no_secure_renegotiation },
 };
 
 const Flag<std::string> kStringFlags[] = {
@@ -124,10 +143,9 @@ const Flag<std::string> kStringFlags[] = {
   { "-psk-identity", &TestConfig::psk_identity },
   { "-srtp-profiles", &TestConfig::srtp_profiles },
   { "-cipher", &TestConfig::cipher },
-  { "-cipher-tls10", &TestConfig::cipher_tls10 },
-  { "-cipher-tls11", &TestConfig::cipher_tls11 },
   { "-export-label", &TestConfig::export_label },
   { "-export-context", &TestConfig::export_context },
+  { "-expect-peer-cert-file", &TestConfig::expect_peer_cert_file },
 };
 
 const Flag<std::string> kBase64Flags[] = {
@@ -138,10 +156,12 @@ const Flag<std::string> kBase64Flags[] = {
     &TestConfig::expected_signed_cert_timestamps },
   { "-ocsp-response", &TestConfig::ocsp_response },
   { "-signed-cert-timestamps", &TestConfig::signed_cert_timestamps },
+  { "-ticket-key", &TestConfig::ticket_key },
 };
 
 const Flag<int> kIntFlags[] = {
   { "-port", &TestConfig::port },
+  { "-resume-count", &TestConfig::resume_count },
   { "-min-version", &TestConfig::min_version },
   { "-max-version", &TestConfig::max_version },
   { "-mtu", &TestConfig::mtu },
@@ -150,8 +170,14 @@ const Flag<int> kIntFlags[] = {
   { "-expect-peer-signature-algorithm",
     &TestConfig::expect_peer_signature_algorithm },
   { "-expect-curve-id", &TestConfig::expect_curve_id },
-  { "-expect-dhe-group-size", &TestConfig::expect_dhe_group_size },
+  { "-expect-resume-curve-id", &TestConfig::expect_resume_curve_id },
   { "-initial-timeout-duration-ms", &TestConfig::initial_timeout_duration_ms },
+  { "-max-cert-list", &TestConfig::max_cert_list },
+  { "-expect-cipher-aes", &TestConfig::expect_cipher_aes },
+  { "-expect-cipher-no-aes", &TestConfig::expect_cipher_no_aes },
+  { "-resumption-delay", &TestConfig::resumption_delay },
+  { "-max-send-fragment", &TestConfig::max_send_fragment },
+  { "-read-size", &TestConfig::read_size },
 };
 
 const Flag<std::vector<int>> kIntVectorFlags[] = {

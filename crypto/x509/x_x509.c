@@ -62,6 +62,7 @@
 #include <openssl/evp.h>
 #include <openssl/mem.h>
 #include <openssl/obj.h>
+#include <openssl/pool.h>
 #include <openssl/thread.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -103,7 +104,14 @@ static int x509_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
         ret->akid = NULL;
         ret->aux = NULL;
         ret->crldp = NULL;
+        ret->buf = NULL;
         CRYPTO_new_ex_data(&ret->ex_data);
+        CRYPTO_MUTEX_init(&ret->lock);
+        break;
+
+    case ASN1_OP_D2I_PRE:
+        CRYPTO_BUFFER_free(ret->buf);
+        ret->buf = NULL;
         break;
 
     case ASN1_OP_D2I_POST:
@@ -113,6 +121,7 @@ static int x509_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
         break;
 
     case ASN1_OP_FREE_POST:
+        CRYPTO_MUTEX_cleanup(&ret->lock);
         CRYPTO_free_ex_data(&g_ex_data_class, ret, &ret->ex_data);
         X509_CERT_AUX_free(ret->aux);
         ASN1_OCTET_STRING_free(ret->skid);
@@ -121,9 +130,8 @@ static int x509_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
         policy_cache_free(ret->policy_cache);
         GENERAL_NAMES_free(ret->altname);
         NAME_CONSTRAINTS_free(ret->nc);
-
-        if (ret->name != NULL)
-            OPENSSL_free(ret->name);
+        CRYPTO_BUFFER_free(ret->buf);
+        OPENSSL_free(ret->name);
         break;
 
     }
@@ -142,10 +150,35 @@ IMPLEMENT_ASN1_FUNCTIONS(X509)
 
 IMPLEMENT_ASN1_DUP_FUNCTION(X509)
 
-X509 *X509_up_ref(X509 *x)
+X509 *X509_parse_from_buffer(CRYPTO_BUFFER *buf) {
+  X509 *x509 = X509_new();
+  if (x509 == NULL) {
+    return NULL;
+  }
+
+  x509->cert_info->enc.alias_only_on_next_parse = 1;
+
+  const uint8_t *inp = CRYPTO_BUFFER_data(buf);
+  X509 *x509p = x509;
+  X509 *ret = d2i_X509(&x509p, &inp, CRYPTO_BUFFER_len(buf));
+  if (ret == NULL ||
+      inp - CRYPTO_BUFFER_data(buf) != (ptrdiff_t)CRYPTO_BUFFER_len(buf)) {
+    X509_free(x509p);
+    return NULL;
+  }
+  assert(x509p == x509);
+  assert(ret == x509);
+
+  CRYPTO_BUFFER_up_ref(buf);
+  ret->buf = buf;
+
+  return ret;
+}
+
+int X509_up_ref(X509 *x)
 {
     CRYPTO_refcount_inc(&x->references);
-    return x;
+    return 1;
 }
 
 int X509_get_ex_new_index(long argl, void *argp, CRYPTO_EX_unused * unused,

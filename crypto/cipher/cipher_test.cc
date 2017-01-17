@@ -62,7 +62,6 @@
 #include <openssl/err.h>
 
 #include "../test/file_test.h"
-#include "../test/scoped_types.h"
 
 
 static const EVP_CIPHER *GetCipher(const std::string &name) {
@@ -127,7 +126,7 @@ static bool TestOperation(FileTest *t,
 
   bool is_aead = EVP_CIPHER_mode(cipher) == EVP_CIPH_GCM_MODE;
 
-  ScopedEVP_CIPHER_CTX ctx;
+  bssl::ScopedEVP_CIPHER_CTX ctx;
   if (!EVP_CipherInit_ex(ctx.get(), cipher, nullptr, nullptr, nullptr,
                          encrypt ? 1 : 0)) {
     return false;

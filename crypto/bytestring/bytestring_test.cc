@@ -22,11 +22,11 @@
 
 #include <vector>
 
-#include <openssl/crypto.h>
 #include <openssl/bytestring.h>
+#include <openssl/crypto.h>
 
 #include "internal.h"
-#include "../test/scoped_types.h"
+#include "../internal.h"
 
 
 static bool TestSkip() {
@@ -132,7 +132,7 @@ static bool TestGetASN1() {
   }
   if (!CBS_get_asn1(&data, &contents, 0x30) ||
       CBS_len(&contents) != 2 ||
-      memcmp(CBS_data(&contents), "\x01\x02", 2) != 0) {
+      OPENSSL_memcmp(CBS_data(&contents), "\x01\x02", 2) != 0) {
     return false;
   }
 
@@ -193,7 +193,7 @@ static bool TestGetASN1() {
       !CBS_get_optional_asn1(&data, &contents, &present, 0xa1) ||
       !present ||
       CBS_len(&contents) != 3 ||
-      memcmp(CBS_data(&contents), "\x04\x01\x01", 3) != 0) {
+      OPENSSL_memcmp(CBS_data(&contents), "\x04\x01\x01", 3) != 0) {
     return false;
   }
 
@@ -227,6 +227,25 @@ static bool TestGetASN1() {
   CBS_init(&data, kData9, sizeof(kData9));
   // invalid optional integer.
   if (CBS_get_optional_asn1_uint64(&data, &value, 0xa1, 42)) {
+    return false;
+  }
+
+  unsigned tag;
+  CBS_init(&data, kData1, sizeof(kData1));
+  if (!CBS_get_any_asn1(&data, &contents, &tag) ||
+      tag != CBS_ASN1_SEQUENCE ||
+      CBS_len(&contents) != 2 ||
+      OPENSSL_memcmp(CBS_data(&contents), "\x01\x02", 2) != 0) {
+    return false;
+  }
+
+  size_t header_len;
+  CBS_init(&data, kData1, sizeof(kData1));
+  if (!CBS_get_any_asn1_element(&data, &contents, &tag, &header_len) ||
+      tag != CBS_ASN1_SEQUENCE ||
+      header_len != 2 ||
+      CBS_len(&contents) != 4 ||
+      OPENSSL_memcmp(CBS_data(&contents), "\x30\x02\x01\x02", 2) != 0) {
     return false;
   }
 
@@ -292,12 +311,13 @@ static bool TestCBBBasic() {
     return false;
   }
 
-  ScopedOpenSSLBytes scoper(buf);
-  return buf_len == sizeof(kExpected) && memcmp(buf, kExpected, buf_len) == 0;
+  bssl::UniquePtr<uint8_t> scoper(buf);
+  return buf_len == sizeof(kExpected) &&
+         OPENSSL_memcmp(buf, kExpected, buf_len) == 0;
 }
 
 static bool TestCBBFixed() {
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   uint8_t buf[1];
   uint8_t *out_buf;
   size_t out_size;
@@ -343,7 +363,7 @@ static bool TestCBBFinishChild() {
     CBB_cleanup(&cbb);
     return false;
   }
-  ScopedOpenSSLBytes scoper(out_buf);
+  bssl::UniquePtr<uint8_t> scoper(out_buf);
   return out_size == 1 && out_buf[0] == 0;
 }
 
@@ -376,12 +396,13 @@ static bool TestCBBPrefixed() {
     return false;
   }
 
-  ScopedOpenSSLBytes scoper(buf);
-  return buf_len == sizeof(kExpected) && memcmp(buf, kExpected, buf_len) == 0;
+  bssl::UniquePtr<uint8_t> scoper(buf);
+  return buf_len == sizeof(kExpected) &&
+         OPENSSL_memcmp(buf, kExpected, buf_len) == 0;
 }
 
 static bool TestCBBDiscardChild() {
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   CBB contents, inner_contents, inner_inner_contents;
 
   if (!CBB_init(cbb.get(), 0) ||
@@ -416,7 +437,7 @@ static bool TestCBBDiscardChild() {
   if (!CBB_finish(cbb.get(), &buf, &buf_len)) {
     return false;
   }
-  ScopedOpenSSLBytes scoper(buf);
+  bssl::UniquePtr<uint8_t> scoper(buf);
 
   static const uint8_t kExpected[] = {
         0xaa,
@@ -426,7 +447,8 @@ static bool TestCBBDiscardChild() {
         0, 0, 3, 0xdd, 0xdd, 0xdd,
         1, 0xff,
   };
-  return buf_len == sizeof(kExpected) && memcmp(buf, kExpected, buf_len) == 0;
+  return buf_len == sizeof(kExpected) &&
+         OPENSSL_memcmp(buf, kExpected, buf_len) == 0;
 }
 
 static bool TestCBBMisuse() {
@@ -462,10 +484,10 @@ static bool TestCBBMisuse() {
     CBB_cleanup(&cbb);
     return false;
   }
-  ScopedOpenSSLBytes scoper(buf);
+  bssl::UniquePtr<uint8_t> scoper(buf);
 
   if (buf_len != 3 ||
-      memcmp(buf, "\x01\x01\x02", 3) != 0) {
+      OPENSSL_memcmp(buf, "\x01\x01\x02", 3) != 0) {
     return false;
   }
   return true;
@@ -486,9 +508,10 @@ static bool TestCBBASN1() {
     CBB_cleanup(&cbb);
     return false;
   }
-  ScopedOpenSSLBytes scoper(buf);
+  bssl::UniquePtr<uint8_t> scoper(buf);
 
-  if (buf_len != sizeof(kExpected) || memcmp(buf, kExpected, buf_len) != 0) {
+  if (buf_len != sizeof(kExpected) ||
+      OPENSSL_memcmp(buf, kExpected, buf_len) != 0) {
     return false;
   }
 
@@ -506,8 +529,8 @@ static bool TestCBBASN1() {
   scoper.reset(buf);
 
   if (buf_len != 3 + 130 ||
-      memcmp(buf, "\x30\x81\x82", 3) != 0 ||
-      memcmp(buf + 3, test_data.data(), 130) != 0) {
+      OPENSSL_memcmp(buf, "\x30\x81\x82", 3) != 0 ||
+      OPENSSL_memcmp(buf + 3, test_data.data(), 130) != 0) {
     return false;
   }
 
@@ -523,8 +546,8 @@ static bool TestCBBASN1() {
   scoper.reset(buf);
 
   if (buf_len != 4 + 1000 ||
-      memcmp(buf, "\x30\x82\x03\xe8", 4) != 0 ||
-      memcmp(buf + 4, test_data.data(), 1000)) {
+      OPENSSL_memcmp(buf, "\x30\x82\x03\xe8", 4) != 0 ||
+      OPENSSL_memcmp(buf + 4, test_data.data(), 1000)) {
     return false;
   }
 
@@ -541,8 +564,9 @@ static bool TestCBBASN1() {
   scoper.reset(buf);
 
   if (buf_len != 5 + 5 + 100000 ||
-      memcmp(buf, "\x30\x83\x01\x86\xa5\x30\x83\x01\x86\xa0", 10) != 0 ||
-      memcmp(buf + 10, test_data.data(), 100000)) {
+      OPENSSL_memcmp(buf, "\x30\x83\x01\x86\xa5\x30\x83\x01\x86\xa0", 10) !=
+          0 ||
+      OPENSSL_memcmp(buf + 10, test_data.data(), 100000)) {
     return false;
   }
 
@@ -561,11 +585,11 @@ static bool DoBerConvert(const char *name,
     fprintf(stderr, "%s: CBS_asn1_ber_to_der failed.\n", name);
     return false;
   }
-  ScopedOpenSSLBytes scoper(out);
+  bssl::UniquePtr<uint8_t> scoper(out);
 
   if (out == NULL) {
     if (ber_len != der_len ||
-        memcmp(der_expected, ber, ber_len) != 0) {
+        OPENSSL_memcmp(der_expected, ber, ber_len) != 0) {
       fprintf(stderr, "%s: incorrect unconverted result.\n", name);
       return false;
     }
@@ -574,7 +598,7 @@ static bool DoBerConvert(const char *name,
   }
 
   if (out_len != der_len ||
-      memcmp(out, der_expected, der_len) != 0) {
+      OPENSSL_memcmp(out, der_expected, der_len) != 0) {
     fprintf(stderr, "%s: incorrect converted result.\n", name);
     return false;
   }
@@ -674,7 +698,7 @@ static bool TestImplicitString() {
     int ok = CBS_get_asn1_implicit_string(&in, &out, &storage,
                                           CBS_ASN1_CONTEXT_SPECIFIC | 0,
                                           CBS_ASN1_OCTETSTRING);
-    ScopedOpenSSLBytes scoper(storage);
+    bssl::UniquePtr<uint8_t> scoper(storage);
 
     if (static_cast<bool>(ok) != test.ok) {
       fprintf(stderr, "CBS_get_asn1_implicit_string unexpectedly %s\n",
@@ -683,7 +707,7 @@ static bool TestImplicitString() {
     }
 
     if (ok && (CBS_len(&out) != test.out_len ||
-               memcmp(CBS_data(&out), test.out, test.out_len) != 0)) {
+               OPENSSL_memcmp(CBS_data(&out), test.out, test.out_len) != 0)) {
       fprintf(stderr, "CBS_get_asn1_implicit_string gave the wrong output\n");
       return false;
     }
@@ -729,8 +753,7 @@ static const ASN1InvalidUint64Test kASN1InvalidUint64Tests[] = {
 };
 
 static bool TestASN1Uint64() {
-  for (size_t i = 0; i < sizeof(kASN1Uint64Tests) / sizeof(kASN1Uint64Tests[0]);
-       i++) {
+  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kASN1Uint64Tests); i++) {
     const ASN1Uint64Test *test = &kASN1Uint64Tests[i];
     CBS cbs;
     uint64_t value;
@@ -753,15 +776,14 @@ static bool TestASN1Uint64() {
       CBB_cleanup(&cbb);
       return false;
     }
-    ScopedOpenSSLBytes scoper(out);
-    if (len != test->encoding_len || memcmp(out, test->encoding, len) != 0) {
+    bssl::UniquePtr<uint8_t> scoper(out);
+    if (len != test->encoding_len ||
+        OPENSSL_memcmp(out, test->encoding, len) != 0) {
       return false;
     }
   }
 
-  for (size_t i = 0;
-       i < sizeof(kASN1InvalidUint64Tests) / sizeof(kASN1InvalidUint64Tests[0]);
-       i++) {
+  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kASN1InvalidUint64Tests); i++) {
     const ASN1InvalidUint64Test *test = &kASN1InvalidUint64Tests[i];
     CBS cbs;
     uint64_t value;
@@ -787,7 +809,7 @@ static bool TestCBBReserve() {
   uint8_t buf[10];
   uint8_t *ptr;
   size_t len;
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   if (!CBB_init_fixed(cbb.get(), buf, sizeof(buf)) ||
       // Too large.
       CBB_reserve(cbb.get(), &ptr, 11)) {
@@ -810,7 +832,7 @@ static bool TestCBBReserve() {
 
 static bool TestStickyError() {
   // Write an input that exceeds the limit for its length prefix.
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   CBB child;
   static const uint8_t kZeros[256] = {0};
   if (!CBB_init(cbb.get(), 0) ||
@@ -852,10 +874,104 @@ static bool TestStickyError() {
     return false;
   }
 
+  // Write a u32 that cannot fit in a u24.
+  cbb.Reset();
+  if (!CBB_init(cbb.get(), 0)) {
+    return false;
+  }
+
+  if (CBB_add_u24(cbb.get(), 1u << 24)) {
+    fprintf(stderr, "CBB_add_u24 unexpectedly succeeded.\n");
+    return false;
+  }
+
+  // All future operations should fail.
+  if (CBB_add_u8(cbb.get(), 0) ||
+      CBB_finish(cbb.get(), &ptr, &len)) {
+    fprintf(stderr, "Future operations unexpectedly succeeded.\n");
+    return false;
+  }
+
   return true;
 }
 
-int main(void) {
+static bool TestBitString() {
+  static const std::vector<uint8_t> kValidBitStrings[] = {
+      {0x00},                                      // 0 bits
+      {0x07, 0x80},                                // 1 bit
+      {0x04, 0xf0},                                // 4 bits
+      {0x00, 0xff},                                // 8 bits
+      {0x06, 0xff, 0xff, 0xff, 0xff, 0xff, 0xc0},  // 42 bits
+  };
+  for (const auto& test : kValidBitStrings) {
+    CBS cbs;
+    CBS_init(&cbs, test.data(), test.size());
+    if (!CBS_is_valid_asn1_bitstring(&cbs)) {
+      return false;
+    }
+  }
+
+  static const std::vector<uint8_t> kInvalidBitStrings[] = {
+      // BIT STRINGs always have a leading byte.
+      std::vector<uint8_t>{},
+      // It's not possible to take an unused bit off the empty string.
+      {0x01},
+      // There can be at most 7 unused bits.
+      {0x08, 0xff},
+      {0xff, 0xff},
+      // All unused bits must be cleared.
+      {0x06, 0xff, 0xc1},
+  };
+  for (const auto& test : kInvalidBitStrings) {
+    CBS cbs;
+    CBS_init(&cbs, test.data(), test.size());
+    if (CBS_is_valid_asn1_bitstring(&cbs)) {
+      return false;
+    }
+
+    // CBS_asn1_bitstring_has_bit returns false on invalid inputs.
+    if (CBS_asn1_bitstring_has_bit(&cbs, 0)) {
+      return false;
+    }
+  }
+
+  static const struct {
+    std::vector<uint8_t> in;
+    unsigned bit;
+    bool bit_set;
+  } kBitTests[] = {
+      // Basic tests.
+      {{0x00}, 0, false},
+      {{0x07, 0x80}, 0, true},
+      {{0x06, 0x0f, 0x40}, 0, false},
+      {{0x06, 0x0f, 0x40}, 1, false},
+      {{0x06, 0x0f, 0x40}, 2, false},
+      {{0x06, 0x0f, 0x40}, 3, false},
+      {{0x06, 0x0f, 0x40}, 4, true},
+      {{0x06, 0x0f, 0x40}, 5, true},
+      {{0x06, 0x0f, 0x40}, 6, true},
+      {{0x06, 0x0f, 0x40}, 7, true},
+      {{0x06, 0x0f, 0x40}, 8, false},
+      {{0x06, 0x0f, 0x40}, 9, true},
+      // Out-of-bounds bits return 0.
+      {{0x06, 0x0f, 0x40}, 10, false},
+      {{0x06, 0x0f, 0x40}, 15, false},
+      {{0x06, 0x0f, 0x40}, 16, false},
+      {{0x06, 0x0f, 0x40}, 1000, false},
+  };
+  for (const auto& test : kBitTests) {
+    CBS cbs;
+    CBS_init(&cbs, test.in.data(), test.in.size());
+    if (CBS_asn1_bitstring_has_bit(&cbs, test.bit) !=
+        static_cast<int>(test.bit_set)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+int main() {
   CRYPTO_library_init();
 
   if (!TestSkip() ||
@@ -876,7 +992,8 @@ int main(void) {
       !TestGetOptionalASN1Bool() ||
       !TestZero() ||
       !TestCBBReserve() ||
-      !TestStickyError()) {
+      !TestStickyError() ||
+      !TestBitString()) {
     return 1;
   }
 

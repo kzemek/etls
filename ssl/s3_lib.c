@@ -159,25 +159,24 @@
 #include <openssl/mem.h>
 #include <openssl/nid.h>
 
+#include "../crypto/internal.h"
 #include "internal.h"
 
-
-int ssl3_supports_cipher(const SSL_CIPHER *cipher) {
-  return 1;
-}
-
-void ssl3_expect_flight(SSL *ssl) {}
-
-void ssl3_received_flight(SSL *ssl) {}
 
 int ssl3_new(SSL *ssl) {
   SSL3_STATE *s3;
 
   s3 = OPENSSL_malloc(sizeof *s3);
   if (s3 == NULL) {
-    goto err;
+    return 0;
   }
-  memset(s3, 0, sizeof *s3);
+  OPENSSL_memset(s3, 0, sizeof *s3);
+
+  s3->hs = ssl_handshake_new(ssl);
+  if (s3->hs == NULL) {
+    OPENSSL_free(s3);
+    return 0;
+  }
 
   EVP_MD_CTX_init(&s3->handshake_hash);
   EVP_MD_CTX_init(&s3->handshake_md5);
@@ -191,8 +190,6 @@ int ssl3_new(SSL *ssl) {
    * at the API boundary rather than in internal state. */
   ssl->version = TLS1_2_VERSION;
   return 1;
-err:
-  return 0;
 }
 
 void ssl3_free(SSL *ssl) {
@@ -200,17 +197,11 @@ void ssl3_free(SSL *ssl) {
     return;
   }
 
-  ssl3_cleanup_key_block(ssl);
   ssl_read_buffer_clear(ssl);
   ssl_write_buffer_clear(ssl);
-  SSL_ECDH_CTX_cleanup(&ssl->s3->tmp.ecdh_ctx);
-  OPENSSL_free(ssl->s3->tmp.peer_key);
-  OPENSSL_free(ssl->s3->tmp.server_params);
 
-  sk_X509_NAME_pop_free(ssl->s3->tmp.ca_names, X509_NAME_free);
-  OPENSSL_free(ssl->s3->tmp.certificate_types);
-  OPENSSL_free(ssl->s3->tmp.peer_supported_group_list);
-  OPENSSL_free(ssl->s3->tmp.peer_psk_identity_hint);
+  SSL_SESSION_free(ssl->s3->new_session);
+  SSL_SESSION_free(ssl->s3->established_session);
   ssl3_free_handshake_buffer(ssl);
   ssl3_free_handshake_hash(ssl);
   ssl_handshake_free(ssl->s3->hs);
@@ -225,97 +216,13 @@ void ssl3_free(SSL *ssl) {
   ssl->s3 = NULL;
 }
 
-struct ssl_cipher_preference_list_st *ssl_get_cipher_preferences(SSL *ssl) {
+const struct ssl_cipher_preference_list_st *ssl_get_cipher_preferences(
+    const SSL *ssl) {
   if (ssl->cipher_list != NULL) {
     return ssl->cipher_list;
   }
 
-  if (ssl->version >= TLS1_1_VERSION && ssl->ctx->cipher_list_tls11 != NULL) {
-    return ssl->ctx->cipher_list_tls11;
-  }
-
-  if (ssl->version >= TLS1_VERSION && ssl->ctx->cipher_list_tls10 != NULL) {
-    return ssl->ctx->cipher_list_tls10;
-  }
-
-  if (ssl->ctx->cipher_list != NULL) {
-    return ssl->ctx->cipher_list;
-  }
-
-  return NULL;
-}
-
-const SSL_CIPHER *ssl3_choose_cipher(
-    SSL *ssl, STACK_OF(SSL_CIPHER) *clnt,
-    struct ssl_cipher_preference_list_st *server_pref) {
-  const SSL_CIPHER *c, *ret = NULL;
-  STACK_OF(SSL_CIPHER) *srvr = server_pref->ciphers, *prio, *allow;
-  size_t i;
-  int ok;
-  size_t cipher_index;
-  uint32_t alg_k, alg_a, mask_k, mask_a;
-  /* in_group_flags will either be NULL, or will point to an array of bytes
-   * which indicate equal-preference groups in the |prio| stack. See the
-   * comment about |in_group_flags| in the |ssl_cipher_preference_list_st|
-   * struct. */
-  const uint8_t *in_group_flags;
-  /* group_min contains the minimal index so far found in a group, or -1 if no
-   * such value exists yet. */
-  int group_min = -1;
-
-  if (ssl->options & SSL_OP_CIPHER_SERVER_PREFERENCE) {
-    prio = srvr;
-    in_group_flags = server_pref->in_group_flags;
-    allow = clnt;
-  } else {
-    prio = clnt;
-    in_group_flags = NULL;
-    allow = srvr;
-  }
-
-  ssl_get_compatible_server_ciphers(ssl, &mask_k, &mask_a);
-
-  for (i = 0; i < sk_SSL_CIPHER_num(prio); i++) {
-    c = sk_SSL_CIPHER_value(prio, i);
-
-    ok = 1;
-
-    /* Check the TLS version. */
-    if (SSL_CIPHER_get_min_version(c) > ssl3_protocol_version(ssl) ||
-        SSL_CIPHER_get_max_version(c) < ssl3_protocol_version(ssl)) {
-      ok = 0;
-    }
-
-    alg_k = c->algorithm_mkey;
-    alg_a = c->algorithm_auth;
-
-    ok = ok && (alg_k & mask_k) && (alg_a & mask_a);
-
-    if (ok && sk_SSL_CIPHER_find(allow, &cipher_index, c)) {
-      if (in_group_flags != NULL && in_group_flags[i] == 1) {
-        /* This element of |prio| is in a group. Update the minimum index found
-         * so far and continue looking. */
-        if (group_min == -1 || (size_t)group_min > cipher_index) {
-          group_min = cipher_index;
-        }
-      } else {
-        if (group_min != -1 && (size_t)group_min < cipher_index) {
-          cipher_index = group_min;
-        }
-        ret = sk_SSL_CIPHER_value(allow, cipher_index);
-        break;
-      }
-    }
-
-    if (in_group_flags != NULL && in_group_flags[i] == 0 && group_min != -1) {
-      /* We are about to leave a group, but we found a match in it, so that's
-       * our answer. */
-      ret = sk_SSL_CIPHER_value(allow, group_min);
-      break;
-    }
-  }
-
-  return ret;
+  return ssl->ctx->cipher_list;
 }
 
 /* If we are using default SHA1+MD5 algorithms switch to new SHA256 PRF and

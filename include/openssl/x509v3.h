@@ -146,10 +146,10 @@ DECLARE_STACK_OF(X509V3_EXT_METHOD)
 
 typedef BIT_STRING_BITNAME ENUMERATED_NAMES;
 
-typedef struct BASIC_CONSTRAINTS_st {
+struct BASIC_CONSTRAINTS_st {
 int ca;
 ASN1_INTEGER *pathlen;
-} BASIC_CONSTRAINTS;
+};
 
 
 typedef struct PKEY_USAGE_PERIOD_st {
@@ -230,7 +230,7 @@ X509_NAME *dpname;
 /* All existing reasons */
 #define CRLDP_ALL_REASONS	0x807f
 
-#define CRL_REASON_NONE				-1
+#define CRL_REASON_NONE				(-1)
 #define CRL_REASON_UNSPECIFIED			0
 #define CRL_REASON_KEY_COMPROMISE		1
 #define CRL_REASON_CA_COMPROMISE		2
@@ -376,8 +376,8 @@ struct ISSUING_DIST_POINT_st
 /* onlysomereasons present */
 #define IDP_REASONS	0x40
 
-#define X509V3_conf_err(val) ERR_add_error_data(6, "section:", val->section, \
-",name:", val->name, ",value:", val->value);
+#define X509V3_conf_err(val) ERR_add_error_data(6, "section:", (val)->section, \
+",name:", (val)->name, ",value:", (val)->value);
 
 #define X509V3_set_ctx_test(ctx) \
 			X509V3_set_ctx(ctx, NULL, NULL, NULL, NULL, CTX_TEST)
@@ -389,7 +389,7 @@ struct ISSUING_DIST_POINT_st
 			(X509V3_EXT_I2V)i2v_ASN1_BIT_STRING, \
 			(X509V3_EXT_V2I)v2i_ASN1_BIT_STRING, \
 			NULL, NULL, \
-			(void *)table}
+			(void *)(table)}
 
 #define EXT_IA5STRING(nid) { nid, 0, ASN1_ITEM_ref(ASN1_IA5STRING), \
 			0,0,0,0, \
@@ -732,7 +732,26 @@ void ERR_load_X509V3_strings(void);
 
 #ifdef  __cplusplus
 }
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_STACK_DELETER(DIST_POINT, DIST_POINT_free)
+BORINGSSL_MAKE_STACK_DELETER(GENERAL_NAME, GENERAL_NAME_free)
+// A STACK_OF(POLICYINFO) is also known as a CERTIFICATEPOLICIES.
+BORINGSSL_MAKE_STACK_DELETER(POLICYINFO, POLICYINFO_free)
+
+BORINGSSL_MAKE_DELETER(AUTHORITY_KEYID, AUTHORITY_KEYID_free)
+BORINGSSL_MAKE_DELETER(BASIC_CONSTRAINTS, BASIC_CONSTRAINTS_free)
+BORINGSSL_MAKE_DELETER(DIST_POINT, DIST_POINT_free)
+BORINGSSL_MAKE_DELETER(GENERAL_NAME, GENERAL_NAME_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
 #endif
+
 #define X509V3_R_BAD_IP_ADDRESS 100
 #define X509V3_R_BAD_OBJECT 101
 #define X509V3_R_BN_DEC2BN_ERROR 102

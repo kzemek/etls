@@ -21,9 +21,18 @@
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 
+#include "../internal.h"
 #include "../test/file_test.h"
-#include "../test/scoped_types.h"
 
+
+#if defined(OPENSSL_SMALL)
+const EVP_AEAD* EVP_aead_aes_128_gcm_siv(void) {
+  return nullptr;
+}
+const EVP_AEAD* EVP_aead_aes_256_gcm_siv(void) {
+  return nullptr;
+}
+#endif
 
 // This program tests an AEAD against a series of test vectors from a file,
 // using the FileTest format. As an example, here's a valid test case:
@@ -48,7 +57,7 @@ static bool TestAEAD(FileTest *t, void *arg) {
     return false;
   }
 
-  ScopedEVP_AEAD_CTX ctx;
+  bssl::ScopedEVP_AEAD_CTX ctx;
   if (!EVP_AEAD_CTX_init_with_direction(ctx.get(), aead, key.data(), key.size(),
                                         tag.size(), evp_aead_seal)) {
     t->PrintLine("Failed to init AEAD.");
@@ -78,8 +87,8 @@ static bool TestAEAD(FileTest *t, void *arg) {
     }
   } else {
     out.resize(ct.size() + tag.size());
-    memcpy(out.data(), ct.data(), ct.size());
-    memcpy(out.data() + ct.size(), tag.data(), tag.size());
+    OPENSSL_memcpy(out.data(), ct.data(), ct.size());
+    OPENSSL_memcpy(out.data() + ct.size(), tag.data(), tag.size());
   }
 
   // The "stateful" AEADs for implementing pre-AEAD cipher suites need to be
@@ -162,7 +171,7 @@ static int TestCleanupAfterInitFailure(const EVP_AEAD *aead) {
   EVP_AEAD_CTX ctx;
   uint8_t key[128];
 
-  memset(key, 0, sizeof(key));
+  OPENSSL_memset(key, 0, sizeof(key));
   const size_t key_len = EVP_AEAD_key_length(aead);
   if (key_len > sizeof(key)) {
     fprintf(stderr, "Key length of AEAD too long.\n");
@@ -198,7 +207,7 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   const size_t max_overhead = EVP_AEAD_max_overhead(aead);
 
   std::vector<uint8_t> key(key_len, 'a');
-  ScopedEVP_AEAD_CTX ctx;
+  bssl::ScopedEVP_AEAD_CTX ctx;
   if (!EVP_AEAD_CTX_init(ctx.get(), aead, key.data(), key_len,
                          EVP_AEAD_DEFAULT_TAG_LENGTH, nullptr)) {
     return false;
@@ -231,7 +240,7 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   uint8_t *out1 = buffer.data();
   uint8_t *out2 = buffer.data() + 2;
 
-  memcpy(in, kPlaintext, sizeof(kPlaintext));
+  OPENSSL_memcpy(in, kPlaintext, sizeof(kPlaintext));
   size_t out_len;
   if (EVP_AEAD_CTX_seal(ctx.get(), out1, &out_len,
                         sizeof(kPlaintext) + max_overhead, nonce.data(),
@@ -244,7 +253,7 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   }
   ERR_clear_error();
 
-  memcpy(in, valid_encryption.data(), valid_encryption_len);
+  OPENSSL_memcpy(in, valid_encryption.data(), valid_encryption_len);
   if (EVP_AEAD_CTX_open(ctx.get(), out1, &out_len, valid_encryption_len,
                         nonce.data(), nonce_len, in, valid_encryption_len,
                         nullptr, 0) ||
@@ -257,7 +266,7 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   ERR_clear_error();
 
   // Test with out == in, which we expect to work.
-  memcpy(in, kPlaintext, sizeof(kPlaintext));
+  OPENSSL_memcpy(in, kPlaintext, sizeof(kPlaintext));
 
   if (!EVP_AEAD_CTX_seal(ctx.get(), in, &out_len,
                          sizeof(kPlaintext) + max_overhead, nonce.data(),
@@ -267,12 +276,12 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   }
 
   if (out_len != valid_encryption_len ||
-      memcmp(in, valid_encryption.data(), out_len) != 0) {
+      OPENSSL_memcmp(in, valid_encryption.data(), out_len) != 0) {
     fprintf(stderr, "EVP_AEAD_CTX_seal produced bad output in-place.\n");
     return false;
   }
 
-  memcpy(in, valid_encryption.data(), valid_encryption_len);
+  OPENSSL_memcpy(in, valid_encryption.data(), valid_encryption_len);
   if (!EVP_AEAD_CTX_open(ctx.get(), in, &out_len, valid_encryption_len,
                          nonce.data(), nonce_len, in, valid_encryption_len,
                          nullptr, 0)) {
@@ -281,7 +290,7 @@ static bool TestWithAliasedBuffers(const EVP_AEAD *aead) {
   }
 
   if (out_len != sizeof(kPlaintext) ||
-      memcmp(in, kPlaintext, out_len) != 0) {
+      OPENSSL_memcmp(in, kPlaintext, out_len) != 0) {
     fprintf(stderr, "EVP_AEAD_CTX_open produced bad output in-place.\n");
     return false;
   }
@@ -302,10 +311,10 @@ struct KnownAEAD {
 static const struct KnownAEAD kAEADs[] = {
   { "aes-128-gcm", EVP_aead_aes_128_gcm, false },
   { "aes-256-gcm", EVP_aead_aes_256_gcm, false },
+  { "aes-128-gcm-siv", EVP_aead_aes_128_gcm_siv, false },
+  { "aes-256-gcm-siv", EVP_aead_aes_256_gcm_siv, false },
   { "chacha20-poly1305", EVP_aead_chacha20_poly1305, false },
   { "chacha20-poly1305-old", EVP_aead_chacha20_poly1305_old, false },
-  { "rc4-md5-tls", EVP_aead_rc4_md5_tls, true },
-  { "rc4-sha1-tls", EVP_aead_rc4_sha1_tls, true },
   { "aes-128-cbc-sha1-tls", EVP_aead_aes_128_cbc_sha1_tls, true },
   { "aes-128-cbc-sha1-tls-implicit-iv", EVP_aead_aes_128_cbc_sha1_tls_implicit_iv, true },
   { "aes-128-cbc-sha256-tls", EVP_aead_aes_128_cbc_sha256_tls, true },
@@ -315,13 +324,9 @@ static const struct KnownAEAD kAEADs[] = {
   { "aes-256-cbc-sha384-tls", EVP_aead_aes_256_cbc_sha384_tls, true },
   { "des-ede3-cbc-sha1-tls", EVP_aead_des_ede3_cbc_sha1_tls, true },
   { "des-ede3-cbc-sha1-tls-implicit-iv", EVP_aead_des_ede3_cbc_sha1_tls_implicit_iv, true },
-  { "rc4-md5-ssl3", EVP_aead_rc4_md5_ssl3, true },
-  { "rc4-sha1-ssl3", EVP_aead_rc4_sha1_ssl3, true },
   { "aes-128-cbc-sha1-ssl3", EVP_aead_aes_128_cbc_sha1_ssl3, true },
   { "aes-256-cbc-sha1-ssl3", EVP_aead_aes_256_cbc_sha1_ssl3, true },
   { "des-ede3-cbc-sha1-ssl3", EVP_aead_des_ede3_cbc_sha1_ssl3, true },
-  { "aes-128-key-wrap", EVP_aead_aes_128_key_wrap, true },
-  { "aes-256-key-wrap", EVP_aead_aes_256_key_wrap, true },
   { "aes-128-ctr-hmac-sha256", EVP_aead_aes_128_ctr_hmac_sha256, false },
   { "aes-256-ctr-hmac-sha256", EVP_aead_aes_256_ctr_hmac_sha256, false },
   { "", NULL, false },
@@ -348,6 +353,11 @@ int main(int argc, char **argv) {
   }
 
   const EVP_AEAD *const aead = known_aead->func();
+  if (aead == NULL) {
+    // AEAD is not compiled in this configuration.
+    printf("PASS\n");
+    return 0;
+  }
 
   if (!TestCleanupAfterInitFailure(aead)) {
     return 1;

@@ -144,7 +144,9 @@
 #include <openssl/md5.h>
 #include <openssl/nid.h>
 
+#include "../crypto/internal.h"
 #include "internal.h"
+
 
 static int ssl3_prf(const SSL *ssl, uint8_t *out, size_t out_len,
                     const uint8_t *secret, size_t secret_len, const char *label,
@@ -194,7 +196,7 @@ static int ssl3_prf(const SSL *ssl, uint8_t *out, size_t out_len,
     EVP_DigestUpdate(&md5, smd, SHA_DIGEST_LENGTH);
     if (i + MD5_DIGEST_LENGTH > out_len) {
       EVP_DigestFinal_ex(&md5, smd, NULL);
-      memcpy(out, smd, out_len - i);
+      OPENSSL_memcpy(out, smd, out_len - i);
     } else {
       EVP_DigestFinal_ex(&md5, out, NULL);
     }
@@ -207,15 +209,6 @@ static int ssl3_prf(const SSL *ssl, uint8_t *out, size_t out_len,
   EVP_MD_CTX_cleanup(&sha1);
 
   return 1;
-}
-
-void ssl3_cleanup_key_block(SSL *ssl) {
-  if (ssl->s3->tmp.key_block != NULL) {
-    OPENSSL_cleanse(ssl->s3->tmp.key_block, ssl->s3->tmp.key_block_length);
-    OPENSSL_free(ssl->s3->tmp.key_block);
-    ssl->s3->tmp.key_block = NULL;
-  }
-  ssl->s3->tmp.key_block_length = 0;
 }
 
 int ssl3_init_handshake_buffer(SSL *ssl) {
@@ -278,7 +271,8 @@ int ssl3_update_handshake_hash(SSL *ssl, const uint8_t *in, size_t in_len) {
     if (!BUF_MEM_grow(ssl->s3->handshake_buffer, new_len)) {
       return 0;
     }
-    memcpy(ssl->s3->handshake_buffer->data + new_len - in_len, in, in_len);
+    OPENSSL_memcpy(ssl->s3->handshake_buffer->data + new_len - in_len, in,
+                   in_len);
   }
 
   if (EVP_MD_CTX_md(&ssl->s3->handshake_hash) != NULL) {
@@ -331,12 +325,16 @@ static int ssl3_handshake_mac(SSL *ssl, int md_nid, const char *sender,
 
   n = EVP_MD_CTX_size(&ctx);
 
+  SSL_SESSION *session = ssl->session;
+  if (ssl->s3->new_session != NULL) {
+    session = ssl->s3->new_session;
+  }
+
   npad = (48 / n) * n;
   if (sender != NULL) {
     EVP_DigestUpdate(&ctx, sender, sender_len);
   }
-  EVP_DigestUpdate(&ctx, ssl->session->master_key,
-                   ssl->session->master_key_length);
+  EVP_DigestUpdate(&ctx, session->master_key, session->master_key_length);
   EVP_DigestUpdate(&ctx, kPad1, npad);
   EVP_DigestFinal_ex(&ctx, md_buf, &i);
 
@@ -345,8 +343,7 @@ static int ssl3_handshake_mac(SSL *ssl, int md_nid, const char *sender,
     OPENSSL_PUT_ERROR(SSL, ERR_LIB_EVP);
     return 0;
   }
-  EVP_DigestUpdate(&ctx, ssl->session->master_key,
-                   ssl->session->master_key_length);
+  EVP_DigestUpdate(&ctx, session->master_key, session->master_key_length);
   EVP_DigestUpdate(&ctx, kPad2, npad);
   EVP_DigestUpdate(&ctx, md_buf, i);
   EVP_DigestFinal_ex(&ctx, p, &ret);

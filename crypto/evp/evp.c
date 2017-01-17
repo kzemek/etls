@@ -80,7 +80,7 @@ EVP_PKEY *EVP_PKEY_new(void) {
     return NULL;
   }
 
-  memset(ret, 0, sizeof(EVP_PKEY));
+  OPENSSL_memset(ret, 0, sizeof(EVP_PKEY));
   ret->type = EVP_PKEY_NONE;
   ret->references = 1;
 
@@ -301,6 +301,8 @@ EC_KEY *EVP_PKEY_get1_EC_KEY(EVP_PKEY *pkey) {
   }
   return ec_key;
 }
+
+DH *EVP_PKEY_get0_DH(EVP_PKEY *pkey) { return NULL; }
 
 int EVP_PKEY_assign(EVP_PKEY *pkey, int type, void *key) {
   if (!EVP_PKEY_set_type(pkey, type)) {

@@ -78,9 +78,6 @@ extern "C" {
 /* Low-level operations on elliptic curves. */
 
 
-typedef struct ec_group_st EC_GROUP;
-typedef struct ec_point_st EC_POINT;
-
 /* point_conversion_form_t enumerates forms, as defined in X9.62 (ECDSA), for
  * the encoding of a elliptic curve point (x,y) */
 typedef enum {
@@ -89,7 +86,7 @@ typedef enum {
    * is. */
   POINT_CONVERSION_COMPRESSED = 2,
 
-  /* POINT_CONVERSION_COMPRESSED indicates that the point is encoded as
+  /* POINT_CONVERSION_UNCOMPRESSED indicates that the point is encoded as
    * z||x||y, where z is the octet 0x04. */
   POINT_CONVERSION_UNCOMPRESSED = 4,
 
@@ -275,8 +272,8 @@ OPENSSL_EXPORT int EC_POINT_add(const EC_GROUP *group, EC_POINT *r,
 OPENSSL_EXPORT int EC_POINT_dbl(const EC_GROUP *group, EC_POINT *r,
                                 const EC_POINT *a, BN_CTX *ctx);
 
-/* EC_POINT_invert sets |a| equal to minus |a|. It returns one on success and zero
- * otherwise. If |ctx| is not NULL, it may be used. */
+/* EC_POINT_invert sets |a| equal to minus |a|. It returns one on success and
+ * zero otherwise. If |ctx| is not NULL, it may be used. */
 OPENSSL_EXPORT int EC_POINT_invert(const EC_GROUP *group, EC_POINT *a,
                                    BN_CTX *ctx);
 
@@ -359,6 +356,18 @@ OPENSSL_EXPORT size_t EC_get_builtin_curves(EC_builtin_curve *out_curves,
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(EC_POINT, EC_POINT_free)
+BORINGSSL_MAKE_DELETER(EC_GROUP, EC_GROUP_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define EC_R_BUFFER_TOO_SMALL 100

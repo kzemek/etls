@@ -119,6 +119,7 @@ var extendedMasterSecretLabel = []byte("extended master secret")
 var keyExpansionLabel = []byte("key expansion")
 var clientFinishedLabel = []byte("client finished")
 var serverFinishedLabel = []byte("server finished")
+var finishedLabel = []byte("finished")
 var channelIDLabel = []byte("TLS Channel ID signature\x00")
 var channelIDResumeLabel = []byte("Resumption\x00")
 
@@ -128,14 +129,8 @@ func prfForVersion(version uint16, suite *cipherSuite) func(result, secret, labe
 		return prf30
 	case VersionTLS10, VersionTLS11:
 		return prf10
-	// TODO(nharper): VersionTLS13 is in the case statement below only to
-	// support Fake TLS 1.3. Real TLS 1.3 should never call this function.
-	// Once we no longer support Fake TLS 1.3, the VersionTLS13 should be
-	// removed from this case statement.
-	case VersionTLS12, VersionTLS13:
-		if version == VersionTLS12 {
-			return prf12(suite.hash().New)
-		}
+	case VersionTLS12:
+		return prf12(suite.hash().New)
 	}
 	panic("unknown version")
 }
@@ -196,6 +191,8 @@ func newFinishedHash(version uint16, cipherSuite *cipherSuite) finishedHash {
 
 		if version == VersionTLS12 {
 			ret.prf = prf12(ret.hash.New)
+		} else {
+			ret.secret = make([]byte, ret.hash.Size())
 		}
 	} else {
 		ret.hash = crypto.MD5SHA1
@@ -229,12 +226,11 @@ type finishedHash struct {
 	// full buffer is required.
 	buffer []byte
 
-	// TLS 1.3 has a resumption context which is carried over on PSK
-	// resumption.
-	resumptionContextHash []byte
-
 	version uint16
 	prf     func(result, secret, label, seed []byte)
+
+	// secret, in TLS 1.3, is the running input secret.
+	secret []byte
 }
 
 func (h *finishedHash) Write(msg []byte) (n int, err error) {
@@ -311,7 +307,7 @@ func (h finishedHash) clientSum(baseKey []byte) []byte {
 		return out
 	}
 
-	clientFinishedKey := hkdfExpandLabel(h.hash, baseKey, clientFinishedLabel, nil, h.hash.Size())
+	clientFinishedKey := hkdfExpandLabel(h.hash, baseKey, finishedLabel, nil, h.hash.Size())
 	finishedHMAC := hmac.New(h.hash.New, clientFinishedKey)
 	finishedHMAC.Write(h.appendContextHashes(nil))
 	return finishedHMAC.Sum(nil)
@@ -330,7 +326,7 @@ func (h finishedHash) serverSum(baseKey []byte) []byte {
 		return out
 	}
 
-	serverFinishedKey := hkdfExpandLabel(h.hash, baseKey, serverFinishedLabel, nil, h.hash.Size())
+	serverFinishedKey := hkdfExpandLabel(h.hash, baseKey, finishedLabel, nil, h.hash.Size())
 	finishedHMAC := hmac.New(h.hash.New, serverFinishedKey)
 	finishedHMAC.Write(h.appendContextHashes(nil))
 	return finishedHMAC.Sum(nil)
@@ -356,7 +352,7 @@ func (h finishedHash) hashForChannelID(resumeHash []byte) []byte {
 		hash.Write(channelIDResumeLabel)
 		hash.Write(resumeHash)
 	}
-	hash.Write(h.server.Sum(nil))
+	hash.Write(h.Sum())
 	return hash.Sum(nil)
 }
 
@@ -367,27 +363,19 @@ func (h *finishedHash) discardHandshakeBuffer() {
 }
 
 // zeroSecretTLS13 returns the default all zeros secret for TLS 1.3, used when a
-// given secret is not available in the handshake. See draft-ietf-tls-tls13-13,
+// given secret is not available in the handshake. See draft-ietf-tls-tls13-16,
 // section 7.1.
 func (h *finishedHash) zeroSecret() []byte {
 	return make([]byte, h.hash.Size())
 }
 
-// setResumptionContext sets the TLS 1.3 resumption context.
-func (h *finishedHash) setResumptionContext(resumptionContext []byte) {
-	hash := h.hash.New()
-	hash.Write(resumptionContext)
-	h.resumptionContextHash = hash.Sum(nil)
-}
-
-// extractKey combines two secrets together with HKDF-Expand in the TLS 1.3 key
-// derivation schedule.
-func (h *finishedHash) extractKey(salt, ikm []byte) []byte {
-	return hkdfExtract(h.hash.New, salt, ikm)
+// addEntropy incorporates ikm into the running TLS 1.3 secret with HKDF-Expand.
+func (h *finishedHash) addEntropy(ikm []byte) {
+	h.secret = hkdfExtract(h.hash.New, h.secret, ikm)
 }
 
 // hkdfExpandLabel implements TLS 1.3's HKDF-Expand-Label function, as defined
-// in section 7.1 of draft-ietf-tls-tls13-13.
+// in section 7.1 of draft-ietf-tls-tls13-16.
 func hkdfExpandLabel(hash crypto.Hash, secret, label, hashValue []byte, length int) []byte {
 	if len(label) > 255 || len(hashValue) > 255 {
 		panic("hkdfExpandLabel: label or hashValue too long")
@@ -411,33 +399,34 @@ func hkdfExpandLabel(hash crypto.Hash, secret, label, hashValue []byte, length i
 // resumption context hash, as used in TLS 1.3.
 func (h *finishedHash) appendContextHashes(b []byte) []byte {
 	b = h.client.Sum(b)
-	b = append(b, h.resumptionContextHash...)
 	return b
 }
 
 // The following are labels for traffic secret derivation in TLS 1.3.
 var (
-	earlyTrafficLabel       = []byte("early traffic secret")
-	handshakeTrafficLabel   = []byte("handshake traffic secret")
-	applicationTrafficLabel = []byte("application traffic secret")
-	exporterLabel           = []byte("exporter master secret")
-	resumptionLabel         = []byte("resumption master secret")
+	externalPSKBinderLabel        = []byte("external psk binder key")
+	resumptionPSKBinderLabel      = []byte("resumption psk binder key")
+	earlyTrafficLabel             = []byte("client early traffic secret")
+	clientHandshakeTrafficLabel   = []byte("client handshake traffic secret")
+	serverHandshakeTrafficLabel   = []byte("server handshake traffic secret")
+	clientApplicationTrafficLabel = []byte("client application traffic secret")
+	serverApplicationTrafficLabel = []byte("server application traffic secret")
+	applicationTrafficLabel       = []byte("application traffic secret")
+	exporterLabel                 = []byte("exporter master secret")
+	resumptionLabel               = []byte("resumption master secret")
 )
 
 // deriveSecret implements TLS 1.3's Derive-Secret function, as defined in
-// section 7.1 of draft ietf-tls-tls13-13.
-func (h *finishedHash) deriveSecret(secret, label []byte) []byte {
-	if h.resumptionContextHash == nil {
-		panic("Resumption context not set.")
-	}
-
-	return hkdfExpandLabel(h.hash, secret, label, h.appendContextHashes(nil), h.hash.Size())
+// section 7.1 of draft ietf-tls-tls13-16.
+func (h *finishedHash) deriveSecret(label []byte) []byte {
+	return hkdfExpandLabel(h.hash, h.secret, label, h.appendContextHashes(nil), h.hash.Size())
 }
 
 // The following are context strings for CertificateVerify in TLS 1.3.
 var (
 	clientCertificateVerifyContextTLS13 = []byte("TLS 1.3, client CertificateVerify")
 	serverCertificateVerifyContextTLS13 = []byte("TLS 1.3, server CertificateVerify")
+	channelIDContextTLS13               = []byte("TLS 1.3, Channel ID")
 )
 
 // certificateVerifyMessage returns the input to be signed for CertificateVerify
@@ -454,14 +443,6 @@ func (h *finishedHash) certificateVerifyInput(context []byte) []byte {
 	return b
 }
 
-// The following are phase values for traffic key derivation in TLS 1.3.
-var (
-	earlyHandshakePhase   = []byte("early handshake key expansion")
-	earlyApplicationPhase = []byte("early application data key expansion")
-	handshakePhase        = []byte("handshake key expansion")
-	applicationPhase      = []byte("application data key expansion")
-)
-
 type trafficDirection int
 
 const (
@@ -469,27 +450,29 @@ const (
 	serverWrite
 )
 
+var (
+	keyTLS13 = []byte("key")
+	ivTLS13  = []byte("iv")
+)
+
 // deriveTrafficAEAD derives traffic keys and constructs an AEAD given a traffic
 // secret.
-func deriveTrafficAEAD(version uint16, suite *cipherSuite, secret, phase []byte, side trafficDirection) interface{} {
-	// We may have forcibly selected a non-AEAD cipher from the
-	// EnableAllCiphers bug. Use the NULL cipher to avoid crashing the test.
-	if suite.aead == nil {
-		return nil
-	}
-
-	label := make([]byte, 0, len(phase)+2+16)
-	label = append(label, phase...)
-	if side == clientWrite {
-		label = append(label, []byte(", client write key")...)
-	} else {
-		label = append(label, []byte(", server write key")...)
-	}
-	key := hkdfExpandLabel(suite.hash(), secret, label, nil, suite.keyLen)
-
-	label = label[:len(label)-3] // Remove "key" from the end.
-	label = append(label, []byte("iv")...)
-	iv := hkdfExpandLabel(suite.hash(), secret, label, nil, suite.ivLen(version))
+func deriveTrafficAEAD(version uint16, suite *cipherSuite, secret []byte, side trafficDirection) interface{} {
+	key := hkdfExpandLabel(suite.hash(), secret, keyTLS13, nil, suite.keyLen)
+	iv := hkdfExpandLabel(suite.hash(), secret, ivTLS13, nil, suite.ivLen(version))
 
 	return suite.aead(version, key, iv)
+}
+
+func updateTrafficSecret(hash crypto.Hash, secret []byte) []byte {
+	return hkdfExpandLabel(hash, secret, applicationTrafficLabel, nil, hash.Size())
+}
+
+func computePSKBinder(psk, label []byte, cipherSuite *cipherSuite, transcript, truncatedHello []byte) []byte {
+	finishedHash := newFinishedHash(VersionTLS13, cipherSuite)
+	finishedHash.addEntropy(psk)
+	binderKey := finishedHash.deriveSecret(label)
+	finishedHash.Write(transcript)
+	finishedHash.Write(truncatedHello)
+	return finishedHash.clientSum(binderKey)
 }

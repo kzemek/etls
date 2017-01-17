@@ -156,10 +156,11 @@ BIGNUM *bn_expand(BIGNUM *bn, size_t bits);
 #define BN_MASK2l	(0xffffffffUL)
 #define BN_MASK2h	(0xffffffff00000000UL)
 #define BN_MASK2h1	(0xffffffff80000000UL)
+#define BN_MONT_CTX_N0_LIMBS 1
 #define BN_TBIT		(0x8000000000000000UL)
 #define BN_DEC_CONV	(10000000000000000000UL)
 #define BN_DEC_NUM	19
-#define TOBN(hi, lo) ((BN_ULONG)hi << 32 | lo)
+#define TOBN(hi, lo) ((BN_ULONG)(hi) << 32 | (lo))
 
 #elif defined(OPENSSL_32_BIT)
 
@@ -171,27 +172,32 @@ BIGNUM *bn_expand(BIGNUM *bn, size_t bits);
 #define BN_MASK2l	(0xffffUL)
 #define BN_MASK2h1	(0xffff8000UL)
 #define BN_MASK2h	(0xffff0000UL)
+/* On some 32-bit platforms, Montgomery multiplication is done using 64-bit
+ * arithmetic with SIMD instructions. On such platforms, |BN_MONT_CTX::n0|
+ * needs to be two words long. Only certain 32-bit platforms actually make use
+ * of n0[1] and shorter R value would suffice for the others. However,
+ * currently only the assembly files know which is which. */
+#define BN_MONT_CTX_N0_LIMBS 2
 #define BN_TBIT		(0x80000000UL)
 #define BN_DEC_CONV	(1000000000UL)
 #define BN_DEC_NUM	9
-#define TOBN(hi, lo) lo, hi
+#define TOBN(hi, lo) (lo), (hi)
 
 #else
 #error "Must define either OPENSSL_32_BIT or OPENSSL_64_BIT"
 #endif
 
 
-#define STATIC_BIGNUM(x)                                \
-  {                                                     \
-    (BN_ULONG *)x, sizeof(x) / sizeof(BN_ULONG),        \
-    sizeof(x) / sizeof(BN_ULONG), 0, BN_FLG_STATIC_DATA \
+#define STATIC_BIGNUM(x)                                    \
+  {                                                         \
+    (BN_ULONG *)(x), sizeof(x) / sizeof(BN_ULONG),          \
+        sizeof(x) / sizeof(BN_ULONG), 0, BN_FLG_STATIC_DATA \
   }
 
 #if defined(BN_ULLONG)
 #define Lw(t) (((BN_ULONG)(t))&BN_MASK2)
 #define Hw(t) (((BN_ULONG)((t)>>BN_BITS2))&BN_MASK2)
 #endif
-
 
 /* bn_set_words sets |bn| to the value encoded in the |num| words in |words|,
  * least significant word first. */
@@ -221,6 +227,9 @@ int bn_cmp_part_words(const BN_ULONG *a, const BN_ULONG *b, int cl, int dl);
 int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
                 const BN_ULONG *np, const BN_ULONG *n0, int num);
 
+uint64_t bn_mont_n0(const BIGNUM *n);
+int bn_mod_exp_base_2_vartime(BIGNUM *r, unsigned p, const BIGNUM *n);
+
 #if defined(OPENSSL_X86_64) && defined(_MSC_VER)
 #define BN_UMULT_LOHI(low, high, a, b) ((low) = _umul128((a), (b), &(high)))
 #endif
@@ -228,6 +237,18 @@ int bn_mul_mont(BN_ULONG *rp, const BN_ULONG *ap, const BN_ULONG *bp,
 #if !defined(BN_ULLONG) && !defined(BN_UMULT_LOHI)
 #error "Either BN_ULLONG or BN_UMULT_LOHI must be defined on every platform."
 #endif
+
+/* bn_mod_inverse_prime sets |out| to the modular inverse of |a| modulo |p|,
+ * computed with Fermat's Little Theorem. It returns one on success and zero on
+ * error. If |mont_p| is NULL, one will be computed temporarily. */
+int bn_mod_inverse_prime(BIGNUM *out, const BIGNUM *a, const BIGNUM *p,
+                         BN_CTX *ctx, const BN_MONT_CTX *mont_p);
+
+/* bn_mod_inverse_secret_prime behaves like |bn_mod_inverse_prime| but uses
+ * |BN_mod_exp_mont_consttime| instead of |BN_mod_exp_mont| in hopes of
+ * protecting the exponent. */
+int bn_mod_inverse_secret_prime(BIGNUM *out, const BIGNUM *a, const BIGNUM *p,
+                                BN_CTX *ctx, const BN_MONT_CTX *mont_p);
 
 
 #if defined(__cplusplus)

@@ -72,6 +72,7 @@
 #include <openssl/sha.h>
 #include <openssl/thread.h>
 
+#include "../bn/internal.h"
 #include "../internal.h"
 
 
@@ -90,7 +91,7 @@ DSA *DSA_new(void) {
     return NULL;
   }
 
-  memset(dsa, 0, sizeof(DSA));
+  OPENSSL_memset(dsa, 0, sizeof(DSA));
 
   dsa->references = 1;
 
@@ -129,6 +130,29 @@ int DSA_up_ref(DSA *dsa) {
   return 1;
 }
 
+void DSA_get0_key(const DSA *dsa, const BIGNUM **out_pub_key,
+                  const BIGNUM **out_priv_key) {
+  if (out_pub_key != NULL) {
+    *out_pub_key = dsa->pub_key;
+  }
+  if (out_priv_key != NULL) {
+    *out_priv_key = dsa->priv_key;
+  }
+}
+
+void DSA_get0_pqg(const DSA *dsa, const BIGNUM **out_p, const BIGNUM **out_q,
+                  const BIGNUM **out_g) {
+  if (out_p != NULL) {
+    *out_p = dsa->p;
+  }
+  if (out_q != NULL) {
+    *out_q = dsa->q;
+  }
+  if (out_g != NULL) {
+    *out_g = dsa->g;
+  }
+}
+
 int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
                                size_t seed_len, int *out_counter,
                                unsigned long *out_h, BN_GENCB *cb) {
@@ -165,7 +189,7 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
       /* Only consume as much seed as is expected. */
       seed_len = qsize;
     }
-    memcpy(seed, seed_in, seed_len);
+    OPENSSL_memcpy(seed, seed_in, seed_len);
   }
 
   ctx = BN_CTX_new();
@@ -209,8 +233,8 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
         /* If we come back through, use random seed next time. */
         seed_in = NULL;
       }
-      memcpy(buf, seed, qsize);
-      memcpy(buf2, seed, qsize);
+      OPENSSL_memcpy(buf, seed, qsize);
+      OPENSSL_memcpy(buf2, seed, qsize);
       /* precompute "SEED + 1" for step 7: */
       for (i = qsize - 1; i < qsize; i--) {
         buf[i]++;
@@ -410,7 +434,6 @@ int DSA_generate_key(DSA *dsa) {
   int ok = 0;
   BN_CTX *ctx = NULL;
   BIGNUM *pub_key = NULL, *priv_key = NULL;
-  BIGNUM prk;
 
   ctx = BN_CTX_new();
   if (ctx == NULL) {
@@ -425,11 +448,9 @@ int DSA_generate_key(DSA *dsa) {
     }
   }
 
-  do {
-    if (!BN_rand_range(priv_key, dsa->q)) {
-      goto err;
-    }
-  } while (BN_is_zero(priv_key));
+  if (!BN_rand_range_ex(priv_key, 1, dsa->q)) {
+    goto err;
+  }
 
   pub_key = dsa->pub_key;
   if (pub_key == NULL) {
@@ -439,12 +460,9 @@ int DSA_generate_key(DSA *dsa) {
     }
   }
 
-  BN_init(&prk);
-  BN_with_flags(&prk, priv_key, BN_FLG_CONSTTIME);
-
   if (!BN_MONT_CTX_set_locked(&dsa->method_mont_p, &dsa->method_mont_lock,
                               dsa->p, ctx) ||
-      !BN_mod_exp_mont_consttime(pub_key, dsa->g, &prk, dsa->p, ctx,
+      !BN_mod_exp_mont_consttime(pub_key, dsa->g, priv_key, dsa->p, ctx,
                                  dsa->method_mont_p)) {
     goto err;
   }
@@ -742,7 +760,8 @@ int DSA_check_signature(int *out_valid, const uint8_t *digest,
 
   /* Ensure that the signature uses DER and doesn't have trailing garbage. */
   int der_len = i2d_DSA_SIG(s, &der);
-  if (der_len < 0 || (size_t)der_len != sig_len || memcmp(sig, der, sig_len)) {
+  if (der_len < 0 || (size_t)der_len != sig_len ||
+      OPENSSL_memcmp(sig, der, sig_len)) {
     goto err;
   }
 
@@ -792,7 +811,7 @@ int DSA_size(const DSA *dsa) {
 int DSA_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
                    BIGNUM **out_r) {
   BN_CTX *ctx;
-  BIGNUM k, kq, qm2, *kinv = NULL, *r = NULL;
+  BIGNUM k, kq, *kinv = NULL, *r = NULL;
   int ret = 0;
 
   if (!dsa->p || !dsa->q || !dsa->g) {
@@ -802,7 +821,6 @@ int DSA_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
 
   BN_init(&k);
   BN_init(&kq);
-  BN_init(&qm2);
 
   ctx = ctx_in;
   if (ctx == NULL) {
@@ -818,13 +836,9 @@ int DSA_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
   }
 
   /* Get random k */
-  do {
-    if (!BN_rand_range(&k, dsa->q)) {
-      goto err;
-    }
-  } while (BN_is_zero(&k));
-
-  BN_set_flags(&k, BN_FLG_CONSTTIME);
+  if (!BN_rand_range_ex(&k, 1, dsa->q)) {
+    goto err;
+  }
 
   if (!BN_MONT_CTX_set_locked((BN_MONT_CTX **)&dsa->method_mont_p,
                               (CRYPTO_MUTEX *)&dsa->method_mont_lock, dsa->p,
@@ -853,7 +867,6 @@ int DSA_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
     goto err;
   }
 
-  BN_set_flags(&kq, BN_FLG_CONSTTIME);
   if (!BN_mod_exp_mont_consttime(r, dsa->g, &kq, dsa->p, ctx,
                                  dsa->method_mont_p)) {
     goto err;
@@ -866,9 +879,7 @@ int DSA_sign_setup(const DSA *dsa, BN_CTX *ctx_in, BIGNUM **out_kinv,
    * Theorem. */
   kinv = BN_new();
   if (kinv == NULL ||
-      !BN_set_word(&qm2, 2) ||
-      !BN_sub(&qm2, dsa->q, &qm2) ||
-      !BN_mod_exp_mont(kinv, &k, &qm2, dsa->q, ctx, dsa->method_mont_q)) {
+      !bn_mod_inverse_prime(kinv, &k, dsa->q, ctx, dsa->method_mont_q)) {
     goto err;
   }
 
@@ -892,7 +903,7 @@ err:
   }
   BN_clear_free(&k);
   BN_clear_free(&kq);
-  BN_free(&qm2);
+  BN_clear_free(kinv);
   return ret;
 }
 

@@ -2,7 +2,7 @@
 
 ## Build Prerequisites
 
-  * [CMake](https://cmake.org/download/) 2.8.8 or later is required.
+  * [CMake](https://cmake.org/download/) 2.8.10 or later is required.
 
   * Perl 5.6.1 or later is required. On Windows,
     [Active State Perl](http://www.activestate.com/activeperl/) has been
@@ -33,7 +33,7 @@
     executable may be configured explicitly by setting `GO_EXECUTABLE`.
 
   * To build the x86 and x86\_64 assembly, your assembler must support AVX2
-    instructions. If using GNU binutils, you must have 2.22 or later.
+    instructions and MOVBE. If using GNU binutils, you must have 2.22 or later.
 
 ## Building
 
@@ -133,6 +133,18 @@ to enabling the corresponding ARM feature.
 
 Note that if a feature is enabled in this way, but not actually supported at
 run-time, BoringSSL will likely crash.
+
+## Assembling ARMv8 with Clang
+
+In order to support the ARMv8 crypto instructions, Clang requires that the
+architecture be `armv8-a+crypto`. However, setting that as a general build flag
+would allow the compiler to assume that crypto instructions are *always*
+supported, even without testing for them.
+
+It's possible to set the architecture in an assembly file using the `.arch`
+directive, but only very recent versions of Clang support this. If
+`BORINGSSL_CLANG_SUPPORTS_DOT_ARCH` is defined then `.arch` directives will be
+used with Clang, otherwise you may need to craft acceptable assembler flags.
 
 # Running tests
 
