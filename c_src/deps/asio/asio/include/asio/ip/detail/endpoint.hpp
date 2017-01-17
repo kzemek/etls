@@ -2,7 +2,7 @@
 // ip/detail/endpoint.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -111,15 +111,9 @@ public:
     return data_.base.sa_family == ASIO_OS_DEF(AF_INET);
   }
 
-  // Determine whether the endpoint is IPv6.
-  bool is_v6() const
-  {
-    return data_.base.sa_family == ASIO_OS_DEF(AF_INET6);
-  }
-
 #if !defined(ASIO_NO_IOSTREAM)
   // Convert to a string.
-  ASIO_DECL std::string to_string(asio::error_code& ec) const;
+  ASIO_DECL std::string to_string() const;
 #endif // !defined(ASIO_NO_IOSTREAM)
 
 private:

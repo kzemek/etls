@@ -2,7 +2,7 @@
 // ssl/impl/rfc2818_verification.ipp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -78,8 +78,7 @@ bool rfc2818_verification::operator()(
       {
         if (address.is_v4() && ip_address->length == 4)
         {
-          ip::address_v4::bytes_type bytes =
-            ip::address_cast<ip::address_v4>(address).to_bytes();
+          ip::address_v4::bytes_type bytes = address.to_v4().to_bytes();
           if (memcmp(bytes.data(), ip_address->data, 4) == 0)
           {
             GENERAL_NAMES_free(gens);
@@ -88,8 +87,7 @@ bool rfc2818_verification::operator()(
         }
         else if (address.is_v6() && ip_address->length == 16)
         {
-          ip::address_v6::bytes_type bytes =
-            ip::address_cast<ip::address_v6>(address).to_bytes();
+          ip::address_v6::bytes_type bytes = address.to_v6().to_bytes();
           if (memcmp(bytes.data(), ip_address->data, 16) == 0)
           {
             GENERAL_NAMES_free(gens);

@@ -2,7 +2,7 @@
 // spawn.hpp
 // ~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -17,14 +17,14 @@
 
 #include "asio/detail/config.hpp"
 #include <boost/coroutine/all.hpp>
+#include "asio/bind_executor.hpp"
 #include "asio/detail/memory.hpp"
 #include "asio/detail/type_traits.hpp"
 #include "asio/detail/wrapped_handler.hpp"
 #include "asio/executor.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/is_executor.hpp"
 #include "asio/strand.hpp"
-#include "asio/wrap.hpp"
 
 #include "asio/detail/push_options.hpp"
 
@@ -151,7 +151,7 @@ private:
 typedef basic_yield_context<unspecified> yield_context;
 #else // defined(GENERATING_DOCUMENTATION)
 typedef basic_yield_context<
-  executor_wrapper<void(*)(), executor> > yield_context;
+  executor_binder<void(*)(), executor> > yield_context;
 #endif // defined(GENERATING_DOCUMENTATION)
 
 /**
@@ -299,7 +299,7 @@ void spawn(const strand<Executor>& ex,
  * @param attributes Boost.Coroutine attributes used to customise the coroutine.
  */
 template <typename Function>
-void spawn(const asio::io_service::strand& s,
+void spawn(const asio::io_context::strand& s,
     ASIO_MOVE_ARG(Function) function,
     const boost::coroutines::attributes& attributes
       = boost::coroutines::attributes());

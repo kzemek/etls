@@ -2,7 +2,7 @@
 // tcp.cpp
 // ~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -20,12 +20,13 @@
 #include "asio/ip/tcp.hpp"
 
 #include <cstring>
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/read.hpp"
 #include "asio/write.hpp"
 #include "../unit_test.hpp"
-#include "../archetypes/gettable_socket_option.hpp"
 #include "../archetypes/async_result.hpp"
+#include "../archetypes/deprecated_async_result.hpp"
+#include "../archetypes/gettable_socket_option.hpp"
 #include "../archetypes/io_control_command.hpp"
 #include "../archetypes/settable_socket_option.hpp"
 
@@ -57,8 +58,8 @@ void test()
 
   try
   {
-    io_service ios;
-    ip::tcp::socket sock(ios);
+    io_context ioc;
+    ip::tcp::socket sock(ioc);
 
     // no_delay class.
 
@@ -91,8 +92,8 @@ void test()
   using namespace asio;
   namespace ip = asio::ip;
 
-  io_service ios;
-  ip::tcp::socket sock(ios, ip::tcp::v4());
+  io_context ioc;
+  ip::tcp::socket sock(ioc, ip::tcp::v4());
   asio::error_code ec;
 
   // no_delay class.
@@ -216,7 +217,7 @@ void test()
 
   try
   {
-    io_service ios;
+    io_context ioc;
     char mutable_char_buffer[128] = "";
     const char const_char_buffer[128] = "";
     array<asio::mutable_buffer, 2> mutable_buffers = {{
@@ -234,18 +235,22 @@ void test()
     archetypes::gettable_socket_option<double> gettable_socket_option3;
     archetypes::io_control_command io_control_command;
     archetypes::lazy_handler lazy;
+#if !defined(ASIO_NO_DEPRECATED)
+    archetypes::deprecated_lazy_handler dlazy;
+#endif // !defined(ASIO_NO_DEPRECATED)
     asio::error_code ec;
 
     // basic_stream_socket constructors.
 
-    ip::tcp::socket socket1(ios);
-    ip::tcp::socket socket2(ios, ip::tcp::v4());
-    ip::tcp::socket socket3(ios, ip::tcp::v6());
-    ip::tcp::socket socket4(ios, ip::tcp::endpoint(ip::tcp::v4(), 0));
-    ip::tcp::socket socket5(ios, ip::tcp::endpoint(ip::tcp::v6(), 0));
+    ip::tcp::socket socket1(ioc);
+    ip::tcp::socket socket2(ioc, ip::tcp::v4());
+    ip::tcp::socket socket3(ioc, ip::tcp::v6());
+    ip::tcp::socket socket4(ioc, ip::tcp::endpoint(ip::tcp::v4(), 0));
+    ip::tcp::socket socket5(ioc, ip::tcp::endpoint(ip::tcp::v6(), 0));
 #if !defined(ASIO_WINDOWS_RUNTIME)
-    int native_socket1 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    ip::tcp::socket socket6(ios, ip::tcp::v4(), native_socket1);
+    ip::tcp::socket::native_handle_type native_socket1
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::socket socket6(ioc, ip::tcp::v4(), native_socket1);
 #endif // !defined(ASIO_WINDOWS_RUNTIME)
 
 #if defined(ASIO_HAS_MOVE)
@@ -255,14 +260,16 @@ void test()
     // basic_stream_socket operators.
 
 #if defined(ASIO_HAS_MOVE)
-    socket1 = ip::tcp::socket(ios);
+    socket1 = ip::tcp::socket(ioc);
     socket1 = std::move(socket2);
 #endif // defined(ASIO_HAS_MOVE)
 
     // basic_io_object functions.
 
-    io_service& ios_ref = socket1.get_io_service();
-    (void)ios_ref;
+#if !defined(ASIO_NO_DEPRECATED)
+    io_context& ioc_ref = socket1.get_io_context();
+    (void)ioc_ref;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     ip::tcp::socket::executor_type ex = socket1.get_executor();
     (void)ex;
@@ -283,9 +290,11 @@ void test()
     socket1.open(ip::tcp::v6(), ec);
 
 #if !defined(ASIO_WINDOWS_RUNTIME)
-    int native_socket2 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::socket::native_handle_type native_socket2
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     socket1.assign(ip::tcp::v4(), native_socket2);
-    int native_socket3 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::socket::native_handle_type native_socket3
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     socket1.assign(ip::tcp::v4(), native_socket3, ec);
 #endif // !defined(ASIO_WINDOWS_RUNTIME)
 
@@ -330,6 +339,14 @@ void test()
     (void)i1;
     int i2 = socket1.async_connect(ip::tcp::endpoint(ip::tcp::v6(), 0), lazy);
     (void)i2;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d1 = socket1.async_connect(
+        ip::tcp::endpoint(ip::tcp::v4(), 0), dlazy);
+    (void)d1;
+    double d2 = socket1.async_connect(
+        ip::tcp::endpoint(ip::tcp::v6(), 0), dlazy);
+    (void)d2;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     socket1.set_option(settable_socket_option1);
     socket1.set_option(settable_socket_option1, ec);
@@ -373,6 +390,10 @@ void test()
     socket1.async_wait(socket_base::wait_read, wait_handler());
     int i3 = socket1.async_wait(socket_base::wait_write, lazy);
     (void)i3;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d3 = socket1.async_wait(socket_base::wait_write, dlazy);
+    (void)d3;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     // basic_stream_socket functions.
 
@@ -422,6 +443,29 @@ void test()
     (void)i12;
     int i13 = socket1.async_send(null_buffers(), in_flags, lazy);
     (void)i13;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d4 = socket1.async_send(buffer(mutable_char_buffer), dlazy);
+    (void)d4;
+    double d5 = socket1.async_send(buffer(const_char_buffer), dlazy);
+    (void)d5;
+    double d6 = socket1.async_send(mutable_buffers, dlazy);
+    (void)d6;
+    double d7 = socket1.async_send(const_buffers, dlazy);
+    (void)d7;
+    double d8 = socket1.async_send(null_buffers(), dlazy);
+    (void)d8;
+    double d9 = socket1.async_send(
+        buffer(mutable_char_buffer), in_flags, dlazy);
+    (void)d9;
+    double d10 = socket1.async_send(buffer(const_char_buffer), in_flags, dlazy);
+    (void)d10;
+    double d11 = socket1.async_send(mutable_buffers, in_flags, dlazy);
+    (void)d11;
+    double d12 = socket1.async_send(const_buffers, in_flags, dlazy);
+    (void)d12;
+    double d13 = socket1.async_send(null_buffers(), in_flags, dlazy);
+    (void)d13;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     socket1.receive(buffer(mutable_char_buffer));
     socket1.receive(mutable_buffers);
@@ -453,6 +497,21 @@ void test()
     (void)i18;
     int i19 = socket1.async_receive(null_buffers(), in_flags, lazy);
     (void)i19;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d14 = socket1.async_receive(buffer(mutable_char_buffer), dlazy);
+    (void)d14;
+    double d15 = socket1.async_receive(mutable_buffers, dlazy);
+    (void)d15;
+    double d16 = socket1.async_receive(null_buffers(), dlazy);
+    (void)d16;
+    double d17 = socket1.async_receive(buffer(mutable_char_buffer), in_flags,
+        dlazy);
+    (void)d17;
+    double d18 = socket1.async_receive(mutable_buffers, in_flags, dlazy);
+    (void)d18;
+    double d19 = socket1.async_receive(null_buffers(), in_flags, dlazy);
+    (void)d19;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     socket1.write_some(buffer(mutable_char_buffer));
     socket1.write_some(buffer(const_char_buffer));
@@ -480,6 +539,18 @@ void test()
     (void)i23;
     int i24 = socket1.async_write_some(null_buffers(), lazy);
     (void)i24;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d20 = socket1.async_write_some(buffer(mutable_char_buffer), dlazy);
+    (void)d20;
+    double d21 = socket1.async_write_some(buffer(const_char_buffer), dlazy);
+    (void)d21;
+    double d22 = socket1.async_write_some(mutable_buffers, dlazy);
+    (void)d22;
+    double d23 = socket1.async_write_some(const_buffers, dlazy);
+    (void)d23;
+    double d24 = socket1.async_write_some(null_buffers(), dlazy);
+    (void)d24;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     socket1.read_some(buffer(mutable_char_buffer));
     socket1.read_some(mutable_buffers);
@@ -497,6 +568,14 @@ void test()
     (void)i26;
     int i27 = socket1.async_read_some(null_buffers(), lazy);
     (void)i27;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d25 = socket1.async_read_some(buffer(mutable_char_buffer), dlazy);
+    (void)d25;
+    double d26 = socket1.async_read_some(mutable_buffers, dlazy);
+    (void)d26;
+    double d27 = socket1.async_read_some(null_buffers(), dlazy);
+    (void)d27;
+#endif // !defined(ASIO_NO_DEPRECATED)
   }
   catch (std::exception&)
   {
@@ -578,14 +657,14 @@ void test()
   using std::placeholders::_2;
 #endif // defined(ASIO_HAS_BOOST_BIND)
 
-  io_service ios;
+  io_context ioc;
 
-  ip::tcp::acceptor acceptor(ios, ip::tcp::endpoint(ip::tcp::v4(), 0));
+  ip::tcp::acceptor acceptor(ioc, ip::tcp::endpoint(ip::tcp::v4(), 0));
   ip::tcp::endpoint server_endpoint = acceptor.local_endpoint();
   server_endpoint.address(ip::address_v4::loopback());
 
-  ip::tcp::socket client_side_socket(ios);
-  ip::tcp::socket server_side_socket(ios);
+  ip::tcp::socket client_side_socket(ioc);
+  ip::tcp::socket server_side_socket(ioc);
 
   client_side_socket.connect(server_endpoint);
   acceptor.accept(server_side_socket);
@@ -594,23 +673,23 @@ void test()
 
   bool read_noop_completed = false;
   client_side_socket.async_read_some(
-      asio::mutable_buffers_1(0, 0),
+      asio::mutable_buffer(0, 0),
       bindns::bind(handle_read_noop,
         _1, _2, &read_noop_completed));
 
-  ios.run();
+  ioc.run();
   ASIO_CHECK(read_noop_completed);
 
   // No-op write.
 
   bool write_noop_completed = false;
   client_side_socket.async_write_some(
-      asio::const_buffers_1(0, 0),
+      asio::const_buffer(0, 0),
       bindns::bind(handle_write_noop,
         _1, _2, &write_noop_completed));
 
-  ios.restart();
-  ios.run();
+  ioc.restart();
+  ioc.run();
   ASIO_CHECK(write_noop_completed);
 
   // Read and write to transfer data.
@@ -628,8 +707,8 @@ void test()
       bindns::bind(handle_write,
         _1, _2, &write_completed));
 
-  ios.restart();
-  ios.run();
+  ioc.restart();
+  ioc.run();
   ASIO_CHECK(read_completed);
   ASIO_CHECK(write_completed);
   ASIO_CHECK(memcmp(read_buffer, write_data, sizeof(write_data)) == 0);
@@ -642,14 +721,14 @@ void test()
       bindns::bind(handle_read_cancel,
         _1, _2, &read_cancel_completed));
 
-  ios.restart();
-  ios.poll();
+  ioc.restart();
+  ioc.poll();
   ASIO_CHECK(!read_cancel_completed);
 
   server_side_socket.cancel();
 
-  ios.restart();
-  ios.run();
+  ioc.restart();
+  ioc.run();
   ASIO_CHECK(read_cancel_completed);
 
   // A read when the peer closes socket should fail with eof.
@@ -662,8 +741,8 @@ void test()
 
   server_side_socket.close();
 
-  ios.restart();
-  ios.run();
+  ioc.restart();
+  ioc.run();
   ASIO_CHECK(read_eof_completed);
 }
 
@@ -700,6 +779,18 @@ private:
 #endif // defined(ASIO_HAS_MOVE)
 };
 
+#if defined(ASIO_HAS_MOVE)
+struct move_accept_handler
+{
+  move_accept_handler() {}
+  void operator()(
+      const asio::error_code&, asio::ip::tcp::socket) {}
+  move_accept_handler(move_accept_handler&&) {}
+private:
+  move_accept_handler(const move_accept_handler&) {}
+};
+#endif // defined(ASIO_HAS_MOVE)
+
 void test()
 {
   using namespace asio;
@@ -707,8 +798,8 @@ void test()
 
   try
   {
-    io_service ios;
-    ip::tcp::socket peer_socket(ios);
+    io_context ioc;
+    ip::tcp::socket peer_socket(ioc);
     ip::tcp::endpoint peer_endpoint;
     archetypes::settable_socket_option<void> settable_socket_option1;
     archetypes::settable_socket_option<int> settable_socket_option2;
@@ -718,18 +809,22 @@ void test()
     archetypes::gettable_socket_option<double> gettable_socket_option3;
     archetypes::io_control_command io_control_command;
     archetypes::lazy_handler lazy;
+#if !defined(ASIO_NO_DEPRECATED)
+    archetypes::deprecated_lazy_handler dlazy;
+#endif // !defined(ASIO_NO_DEPRECATED)
     asio::error_code ec;
 
     // basic_socket_acceptor constructors.
 
-    ip::tcp::acceptor acceptor1(ios);
-    ip::tcp::acceptor acceptor2(ios, ip::tcp::v4());
-    ip::tcp::acceptor acceptor3(ios, ip::tcp::v6());
-    ip::tcp::acceptor acceptor4(ios, ip::tcp::endpoint(ip::tcp::v4(), 0));
-    ip::tcp::acceptor acceptor5(ios, ip::tcp::endpoint(ip::tcp::v6(), 0));
+    ip::tcp::acceptor acceptor1(ioc);
+    ip::tcp::acceptor acceptor2(ioc, ip::tcp::v4());
+    ip::tcp::acceptor acceptor3(ioc, ip::tcp::v6());
+    ip::tcp::acceptor acceptor4(ioc, ip::tcp::endpoint(ip::tcp::v4(), 0));
+    ip::tcp::acceptor acceptor5(ioc, ip::tcp::endpoint(ip::tcp::v6(), 0));
 #if !defined(ASIO_WINDOWS_RUNTIME)
-    int native_acceptor1 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    ip::tcp::acceptor acceptor6(ios, ip::tcp::v4(), native_acceptor1);
+    ip::tcp::acceptor::native_handle_type native_acceptor1
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::acceptor acceptor6(ioc, ip::tcp::v4(), native_acceptor1);
 #endif // !defined(ASIO_WINDOWS_RUNTIME)
 
 #if defined(ASIO_HAS_MOVE)
@@ -739,14 +834,19 @@ void test()
     // basic_socket_acceptor operators.
 
 #if defined(ASIO_HAS_MOVE)
-    acceptor1 = ip::tcp::acceptor(ios);
+    acceptor1 = ip::tcp::acceptor(ioc);
     acceptor1 = std::move(acceptor2);
 #endif // defined(ASIO_HAS_MOVE)
 
     // basic_io_object functions.
 
-    io_service& ios_ref = acceptor1.get_io_service();
-    (void)ios_ref;
+#if !defined(ASIO_NO_DEPRECATED)
+    io_context& ioc_ref = acceptor1.get_io_context();
+    (void)ioc_ref;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    ip::tcp::acceptor::executor_type ex = acceptor1.get_executor();
+    (void)ex;
 
     // basic_socket_acceptor functions.
 
@@ -756,9 +856,11 @@ void test()
     acceptor1.open(ip::tcp::v6(), ec);
 
 #if !defined(ASIO_WINDOWS_RUNTIME)
-    int native_acceptor2 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::acceptor::native_handle_type native_acceptor2
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     acceptor1.assign(ip::tcp::v4(), native_acceptor2);
-    int native_acceptor3 = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ip::tcp::acceptor::native_handle_type native_acceptor3
+      = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     acceptor1.assign(ip::tcp::v4(), native_acceptor3, ec);
 #endif // !defined(ASIO_WINDOWS_RUNTIME)
 
@@ -816,11 +918,23 @@ void test()
     acceptor1.async_wait(socket_base::wait_read, wait_handler());
     int i1 = acceptor1.async_wait(socket_base::wait_write, lazy);
     (void)i1;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d1 = acceptor1.async_wait(socket_base::wait_write, dlazy);
+    (void)d1;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     acceptor1.accept(peer_socket);
     acceptor1.accept(peer_socket, ec);
     acceptor1.accept(peer_socket, peer_endpoint);
     acceptor1.accept(peer_socket, peer_endpoint, ec);
+
+#if defined(ASIO_HAS_MOVE)
+    peer_socket = acceptor1.accept();
+    peer_socket = acceptor1.accept(ioc);
+    peer_socket = acceptor1.accept(peer_endpoint);
+    peer_socket = acceptor1.accept(ioc, peer_endpoint);
+    (void)peer_socket;
+#endif // defined(ASIO_HAS_MOVE)
 
     acceptor1.async_accept(peer_socket, accept_handler());
     acceptor1.async_accept(peer_socket, peer_endpoint, accept_handler());
@@ -828,6 +942,19 @@ void test()
     (void)i2;
     int i3 = acceptor1.async_accept(peer_socket, peer_endpoint, lazy);
     (void)i3;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d2 = acceptor1.async_accept(peer_socket, dlazy);
+    (void)d2;
+    double d3 = acceptor1.async_accept(peer_socket, peer_endpoint, dlazy);
+    (void)d3;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+#if defined(ASIO_HAS_MOVE)
+    acceptor1.async_accept(move_accept_handler());
+    acceptor1.async_accept(ioc, move_accept_handler());
+    acceptor1.async_accept(peer_endpoint, move_accept_handler());
+    acceptor1.async_accept(ioc, peer_endpoint, move_accept_handler());
+#endif // defined(ASIO_HAS_MOVE)
   }
   catch (std::exception&)
   {
@@ -860,14 +987,14 @@ void test()
   using namespace asio;
   namespace ip = asio::ip;
 
-  io_service ios;
+  io_context ioc;
 
-  ip::tcp::acceptor acceptor(ios, ip::tcp::endpoint(ip::tcp::v4(), 0));
+  ip::tcp::acceptor acceptor(ioc, ip::tcp::endpoint(ip::tcp::v4(), 0));
   ip::tcp::endpoint server_endpoint = acceptor.local_endpoint();
   server_endpoint.address(ip::address_v4::loopback());
 
-  ip::tcp::socket client_side_socket(ios);
-  ip::tcp::socket server_side_socket(ios);
+  ip::tcp::socket client_side_socket(ioc);
+  ip::tcp::socket server_side_socket(ioc);
 
   client_side_socket.connect(server_endpoint);
   acceptor.accept(server_side_socket);
@@ -894,7 +1021,7 @@ void test()
   acceptor.async_accept(server_side_socket, &handle_accept);
   client_side_socket.async_connect(server_endpoint, &handle_connect);
 
-  ios.run();
+  ioc.run();
 
   client_side_socket.close();
   server_side_socket.close();
@@ -902,8 +1029,8 @@ void test()
   acceptor.async_accept(server_side_socket, client_endpoint, &handle_accept);
   client_side_socket.async_connect(server_endpoint, &handle_connect);
 
-  ios.restart();
-  ios.run();
+  ioc.restart();
+  ioc.run();
 
   client_side_local_endpoint = client_side_socket.local_endpoint();
   ASIO_CHECK(client_side_local_endpoint.port() == client_endpoint.port());
@@ -928,7 +1055,7 @@ struct resolve_handler
 {
   resolve_handler() {}
   void operator()(const asio::error_code&,
-      asio::ip::tcp::resolver::iterator) {}
+      asio::ip::tcp::resolver::results_type) {}
 #if defined(ASIO_HAS_MOVE)
   resolve_handler(resolve_handler&&) {}
 private:
@@ -943,44 +1070,143 @@ void test()
 
   try
   {
-    io_service ios;
+    io_context ioc;
     archetypes::lazy_handler lazy;
+#if !defined(ASIO_NO_DEPRECATED)
+    archetypes::deprecated_lazy_handler dlazy;
+#endif // !defined(ASIO_NO_DEPRECATED)
     asio::error_code ec;
+#if !defined(ASIO_NO_DEPRECATED)
     ip::tcp::resolver::query q(ip::tcp::v4(), "localhost", "0");
+#endif // !defined(ASIO_NO_DEPRECATED)
     ip::tcp::endpoint e(ip::address_v4::loopback(), 0);
 
     // basic_resolver constructors.
 
-    ip::tcp::resolver resolver(ios);
+    ip::tcp::resolver resolver(ioc);
+
+#if defined(ASIO_HAS_MOVE)
+    ip::tcp::resolver resolver2(std::move(resolver));
+#endif // defined(ASIO_HAS_MOVE)
+
+    // basic_resolver operators.
+
+#if defined(ASIO_HAS_MOVE)
+    resolver = ip::tcp::resolver(ioc);
+    resolver = std::move(resolver2);
+#endif // defined(ASIO_HAS_MOVE)
 
     // basic_io_object functions.
 
-    io_service& ios_ref = resolver.get_io_service();
-    (void)ios_ref;
+#if !defined(ASIO_NO_DEPRECATED)
+    io_context& ioc_ref = resolver.get_io_context();
+    (void)ioc_ref;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    ip::tcp::resolver::executor_type ex = resolver.get_executor();
+    (void)ex;
 
     // basic_resolver functions.
 
     resolver.cancel();
 
-    ip::tcp::resolver::iterator iter1 = resolver.resolve(q);
-    (void)iter1;
+#if !defined(ASIO_NO_DEPRECATED)
+    ip::tcp::resolver::results_type results1 = resolver.resolve(q);
+    (void)results1;
 
-    ip::tcp::resolver::iterator iter2 = resolver.resolve(q, ec);
-    (void)iter2;
+    ip::tcp::resolver::results_type results2 = resolver.resolve(q, ec);
+    (void)results2;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
-    ip::tcp::resolver::iterator iter3 = resolver.resolve(e);
-    (void)iter3;
+    ip::tcp::resolver::results_type results3 = resolver.resolve("", "");
+    (void)results3;
 
-    ip::tcp::resolver::iterator iter4 = resolver.resolve(e, ec);
-    (void)iter4;
+    ip::tcp::resolver::results_type results4 = resolver.resolve("", "", ec);
+    (void)results4;
 
+    ip::tcp::resolver::results_type results5 =
+      resolver.resolve("", "", ip::tcp::resolver::flags());
+    (void)results5;
+
+    ip::tcp::resolver::results_type results6 =
+      resolver.resolve("", "", ip::tcp::resolver::flags(), ec);
+    (void)results6;
+
+    ip::tcp::resolver::results_type results7 =
+      resolver.resolve(ip::tcp::v4(), "", "");
+    (void)results7;
+
+    ip::tcp::resolver::results_type results8 =
+      resolver.resolve(ip::tcp::v4(), "", "", ec);
+    (void)results8;
+
+    ip::tcp::resolver::results_type results9 =
+      resolver.resolve(ip::tcp::v4(), "", "", ip::tcp::resolver::flags());
+    (void)results9;
+
+    ip::tcp::resolver::results_type results10 =
+      resolver.resolve(ip::tcp::v4(), "", "", ip::tcp::resolver::flags(), ec);
+    (void)results10;
+
+    ip::tcp::resolver::results_type results11 = resolver.resolve(e);
+    (void)results11;
+
+    ip::tcp::resolver::results_type results12 = resolver.resolve(e, ec);
+    (void)results12;
+
+#if !defined(ASIO_NO_DEPRECATED)
     resolver.async_resolve(q, resolve_handler());
     int i1 = resolver.async_resolve(q, lazy);
     (void)i1;
+    double d1 = resolver.async_resolve(q, dlazy);
+    (void)d1;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    resolver.async_resolve("", "", resolve_handler());
+    int i2 = resolver.async_resolve("", "", lazy);
+    (void)i2;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d2 = resolver.async_resolve("", "", dlazy);
+    (void)d2;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    resolver.async_resolve("", "",
+        ip::tcp::resolver::flags(), resolve_handler());
+    int i3 = resolver.async_resolve("", "",
+        ip::tcp::resolver::flags(), lazy);
+    (void)i3;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d3 = resolver.async_resolve("", "",
+        ip::tcp::resolver::flags(), dlazy);
+    (void)d3;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    resolver.async_resolve(ip::tcp::v4(), "", "", resolve_handler());
+    int i4 = resolver.async_resolve(ip::tcp::v4(), "", "", lazy);
+    (void)i4;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d4 = resolver.async_resolve(ip::tcp::v4(), "", "", dlazy);
+    (void)d4;
+#endif // !defined(ASIO_NO_DEPRECATED)
+
+    resolver.async_resolve(ip::tcp::v4(),
+        "", "", ip::tcp::resolver::flags(), resolve_handler());
+    int i5 = resolver.async_resolve(ip::tcp::v4(),
+        "", "", ip::tcp::resolver::flags(), lazy);
+    (void)i5;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d5 = resolver.async_resolve(ip::tcp::v4(),
+        "", "", ip::tcp::resolver::flags(), dlazy);
+    (void)d5;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     resolver.async_resolve(e, resolve_handler());
-    int i2 = resolver.async_resolve(e, lazy);
-    (void)i2;
+    int i6 = resolver.async_resolve(e, lazy);
+    (void)i6;
+#if !defined(ASIO_NO_DEPRECATED)
+    double d6 = resolver.async_resolve(e, dlazy);
+    (void)d6;
+#endif // !defined(ASIO_NO_DEPRECATED)
   }
   catch (std::exception&)
   {
@@ -988,6 +1214,145 @@ void test()
 }
 
 } // namespace ip_tcp_resolver_compile
+
+//------------------------------------------------------------------------------
+
+// ip_tcp_resolver_entry_compile test
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// The following test checks that all public member functions on the class
+// ip::tcp::resolver::entry compile and link correctly. Runtime failures are
+// ignored.
+
+namespace ip_tcp_resolver_entry_compile {
+
+void test()
+{
+  using namespace asio;
+  namespace ip = asio::ip;
+  const ip::tcp::endpoint endpoint;
+  const std::string host_name;
+  const std::string service_name;
+  const std::allocator<char> alloc;
+
+  try
+  {
+    // basic_resolver_entry constructors.
+
+    const ip::basic_resolver_entry<ip::tcp> entry1;
+    ip::basic_resolver_entry<ip::tcp> entry2(endpoint, host_name, service_name);
+    ip::basic_resolver_entry<ip::tcp> entry3(entry1);
+#if defined(ASIO_HAS_MOVE)
+    ip::basic_resolver_entry<ip::tcp> entry4(std::move(entry2));
+#endif // defined(ASIO_HAS_MOVE)
+
+    // basic_resolver_entry functions.
+
+    ip::tcp::endpoint e1 = entry1.endpoint();
+    (void)e1;
+
+    ip::tcp::endpoint e2 = entry1;
+    (void)e2;
+
+    std::string s1 = entry1.host_name();
+    (void)s1;
+
+    std::string s2 = entry1.host_name(alloc);
+    (void)s2;
+
+    std::string s3 = entry1.service_name();
+    (void)s3;
+
+    std::string s4 = entry1.service_name(alloc);
+    (void)s4;
+  }
+  catch (std::exception&)
+  {
+  }
+}
+
+} // namespace ip_tcp_resolver_entry_compile
+
+//------------------------------------------------------------------------------
+
+// ip_tcp_iostream_compile test
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// The following test checks that all public types and member functions on the
+// class ip::tcp::iostream compile and link correctly. Runtime failures are
+// ignored.
+
+namespace ip_tcp_iostream_compile {
+
+void test()
+{
+#if !defined(ASIO_NO_IOSTREAM)
+  using namespace asio;
+  namespace ip = asio::ip;
+
+  asio::io_context ioc;
+  asio::ip::tcp::socket sock(ioc);
+
+  // basic_socket_iostream typedefs.
+
+  (void)static_cast<ip::tcp::iostream::protocol_type*>(0);
+  (void)static_cast<ip::tcp::iostream::endpoint_type*>(0);
+  (void)static_cast<ip::tcp::iostream::clock_type*>(0);
+  (void)static_cast<ip::tcp::iostream::time_point*>(0);
+  (void)static_cast<ip::tcp::iostream::duration*>(0);
+  (void)static_cast<ip::tcp::iostream::traits_type*>(0);
+
+  // basic_socket_iostream constructors.
+
+  ip::tcp::iostream ios1;
+
+#if defined(ASIO_HAS_MOVE)
+  ip::tcp::iostream ios2(std::move(sock));
+#endif // defined(ASIO_HAS_MOVE)
+
+  ip::tcp::iostream ios3("hostname", "service");
+
+  // basic_socket_iostream operators.
+
+#if defined(ASIO_HAS_MOVE)
+  ios1 = ip::tcp::iostream();
+
+  ios2 = std::move(ios1);
+#endif // defined(ASIO_HAS_MOVE)
+
+  // basic_socket_iostream members.
+
+  ios1.connect("hostname", "service");
+
+  ios1.close();
+
+  (void)static_cast<std::streambuf*>(ios1.rdbuf());
+
+#if defined(ASIO_ENABLE_OLD_SERVICES)
+  basic_socket<ip::tcp, stream_socket_service<ip::tcp> >& sref = ios1.socket();
+#else // defined(ASIO_ENABLE_OLD_SERVICES)
+  basic_socket<ip::tcp>& sref = ios1.socket();
+#endif // defined(ASIO_ENABLE_OLD_SERVICES)
+  (void)sref;
+
+  error_code ec = ios1.error();
+  (void)ec;
+
+  ip::tcp::iostream::time_point tp = ios1.expiry();
+  (void)tp;
+
+  ios1.expires_at(tp);
+
+  ip::tcp::iostream::duration d;
+  ios1.expires_after(d);
+
+  // iostream operators.
+
+  int i = 0;
+  ios1 >> i;
+  ios1 << i;
+#endif // !defined(ASIO_NO_IOSTREAM)
+}
+
+} // namespace ip_tcp_iostream_compile
 
 //------------------------------------------------------------------------------
 
@@ -1001,4 +1366,7 @@ ASIO_TEST_SUITE
   ASIO_TEST_CASE(ip_tcp_acceptor_compile::test)
   ASIO_TEST_CASE(ip_tcp_acceptor_runtime::test)
   ASIO_TEST_CASE(ip_tcp_resolver_compile::test)
+  ASIO_TEST_CASE(ip_tcp_resolver_entry_compile::test)
+  ASIO_TEST_CASE(ip_tcp_resolver_entry_compile::test)
+  ASIO_COMPILE_TEST_CASE(ip_tcp_iostream_compile::test)
 )

@@ -2,7 +2,7 @@
 // detail/deadline_timer_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -18,7 +18,7 @@
 #include "asio/detail/config.hpp"
 #include <cstddef>
 #include "asio/error.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/detail/bind_handler.hpp"
 #include "asio/detail/fenced_block.hpp"
 #include "asio/detail/memory.hpp"
@@ -26,6 +26,7 @@
 #include "asio/detail/socket_ops.hpp"
 #include "asio/detail/socket_types.hpp"
 #include "asio/detail/timer_queue.hpp"
+#include "asio/detail/timer_queue_ptime.hpp"
 #include "asio/detail/timer_scheduler.hpp"
 #include "asio/detail/wait_handler.hpp"
 #include "asio/detail/wait_op.hpp"
@@ -42,6 +43,7 @@ namespace detail {
 
 template <typename Time_Traits>
 class deadline_timer_service
+  : public service_base<deadline_timer_service<Time_Traits> >
 {
 public:
   // The time type.
@@ -61,8 +63,9 @@ public:
   };
 
   // Constructor.
-  deadline_timer_service(asio::io_service& io_service)
-    : scheduler_(asio::use_service<timer_scheduler>(io_service))
+  deadline_timer_service(asio::io_context& io_context)
+    : service_base<deadline_timer_service<Time_Traits> >(io_context),
+      scheduler_(asio::use_service<timer_scheduler>(io_context))
   {
     scheduler_.init_task();
     scheduler_.add_timer_queue(timer_queue_);
@@ -75,7 +78,7 @@ public:
   }
 
   // Destroy all user-defined handler objects owned by the service.
-  void shutdown_service()
+  void shutdown()
   {
   }
 
@@ -134,7 +137,8 @@ public:
       return 0;
     }
 
-    ASIO_HANDLER_OPERATION(("deadline_timer", &impl, "cancel"));
+    ASIO_HANDLER_OPERATION((scheduler_.context(),
+          "deadline_timer", &impl, 0, "cancel"));
 
     std::size_t count = scheduler_.cancel_timer(timer_queue_, impl.timer_data);
     impl.might_have_pending_waits = false;
@@ -152,7 +156,8 @@ public:
       return 0;
     }
 
-    ASIO_HANDLER_OPERATION(("deadline_timer", &impl, "cancel_one"));
+    ASIO_HANDLER_OPERATION((scheduler_.context(),
+          "deadline_timer", &impl, 0, "cancel_one"));
 
     std::size_t count = scheduler_.cancel_timer(
         timer_queue_, impl.timer_data, 1);
@@ -168,6 +173,18 @@ public:
     return impl.expiry;
   }
 
+  // Get the expiry time for the timer as an absolute time.
+  time_type expires_at(const implementation_type& impl) const
+  {
+    return impl.expiry;
+  }
+
+  // Get the expiry time for the timer relative to now.
+  duration_type expires_from_now(const implementation_type& impl) const
+  {
+    return Time_Traits::subtract(this->expiry(impl), Time_Traits::now());
+  }
+
   // Set the expiry time for the timer as an absolute time.
   std::size_t expires_at(implementation_type& impl,
       const time_type& expiry_time, asio::error_code& ec)
@@ -180,6 +197,14 @@ public:
 
   // Set the expiry time for the timer relative to now.
   std::size_t expires_after(implementation_type& impl,
+      const duration_type& expiry_time, asio::error_code& ec)
+  {
+    return expires_at(impl,
+        Time_Traits::add(Time_Traits::now(), expiry_time), ec);
+  }
+
+  // Set the expiry time for the timer relative to now.
+  std::size_t expires_from_now(implementation_type& impl,
       const duration_type& expiry_time, asio::error_code& ec)
   {
     return expires_at(impl,
@@ -211,7 +236,8 @@ public:
 
     impl.might_have_pending_waits = true;
 
-    ASIO_HANDLER_CREATION((p.p, "deadline_timer", &impl, "async_wait"));
+    ASIO_HANDLER_CREATION((scheduler_.context(),
+          *p.p, "deadline_timer", &impl, 0, "async_wait"));
 
     scheduler_.schedule_timer(timer_queue_, impl.expiry, impl.timer_data, p.p);
     p.v = p.p = 0;

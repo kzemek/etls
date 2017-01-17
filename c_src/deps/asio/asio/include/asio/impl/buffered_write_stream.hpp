@@ -2,7 +2,7 @@
 // impl/buffered_write_stream.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -172,7 +172,7 @@ buffered_write_stream<Stream>::async_flush(
   async_write(next_layer_, buffer(storage_.data(), storage_.size()),
       detail::buffered_flush_handler<ASIO_HANDLER_TYPE(
         WriteHandler, void (asio::error_code, std::size_t))>(
-        storage_, init.handler));
+        storage_, init.completion_handler));
 
   return init.result.get();
 }
@@ -368,18 +368,18 @@ buffered_write_stream<Stream>::async_write_some(
   if (asio::buffer_size(buffers) == 0
       || storage_.size() < storage_.capacity())
   {
-    next_layer_.async_write_some(asio::const_buffers_1(0, 0),
+    next_layer_.async_write_some(ASIO_CONST_BUFFER(0, 0),
         detail::buffered_write_some_handler<
           ConstBufferSequence, ASIO_HANDLER_TYPE(
             WriteHandler, void (asio::error_code, std::size_t))>(
-            storage_, buffers, init.handler));
+            storage_, buffers, init.completion_handler));
   }
   else
   {
     this->async_flush(detail::buffered_write_some_handler<
           ConstBufferSequence, ASIO_HANDLER_TYPE(
             WriteHandler, void (asio::error_code, std::size_t))>(
-            storage_, buffers, init.handler));
+            storage_, buffers, init.completion_handler));
   }
 
   return init.result.get();

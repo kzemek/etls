@@ -2,7 +2,7 @@
 // detail/wait_handler.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,7 +21,7 @@
 #include "asio/detail/handler_invoke_helpers.hpp"
 #include "asio/detail/memory.hpp"
 #include "asio/detail/wait_op.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 
 #include "asio/detail/push_options.hpp"
 
@@ -50,7 +50,7 @@ public:
     ptr p = { asio::detail::addressof(h->handler_), h, h };
     handler_work<Handler> w(h->handler_);
 
-    ASIO_HANDLER_COMPLETION((h));
+    ASIO_HANDLER_COMPLETION((*h));
 
     // Make a copy of the handler so that the memory can be deallocated before
     // the upcall is made. Even if we're not about to make an upcall, a

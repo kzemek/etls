@@ -2,7 +2,7 @@
 // server.cpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -166,9 +166,8 @@ private:
 class server
 {
 public:
-  server(asio::io_service& io_service, short port)
-    : acceptor_(io_service, tcp::endpoint(tcp::v4(), port)),
-      socket_(io_service)
+  server(asio::io_context& io_context, short port)
+    : acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
   {
     do_accept();
   }
@@ -176,12 +175,12 @@ public:
 private:
   void do_accept()
   {
-    acceptor_.async_accept(socket_,
-        [this](std::error_code ec)
+    acceptor_.async_accept(
+        [this](std::error_code ec, tcp::socket socket)
         {
           if (!ec)
           {
-            std::make_shared<session>(std::move(socket_))->start();
+            std::make_shared<session>(std::move(socket))->start();
           }
 
           do_accept();
@@ -189,7 +188,6 @@ private:
   }
 
   tcp::acceptor acceptor_;
-  tcp::socket socket_;
 };
 
 int main(int argc, char* argv[])
@@ -202,9 +200,9 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    asio::io_service io_service;
-    server s(io_service, std::atoi(argv[1]));
-    io_service.run();
+    asio::io_context io_context;
+    server s(io_context, std::atoi(argv[1]));
+    io_context.run();
   }
   catch (std::exception& e)
   {

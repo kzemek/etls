@@ -2,7 +2,7 @@
 // stream.cpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -62,7 +62,7 @@ void test()
 
   try
   {
-    io_service ios;
+    io_context ioc;
     char mutable_char_buffer[128] = "";
     const char const_char_buffer[128] = "";
     asio::ssl::context context(asio::ssl::context::sslv23);
@@ -71,14 +71,22 @@ void test()
 
     // ssl::stream constructors.
 
-    ssl::stream<ip::tcp::socket> stream1(ios, context);
-    ip::tcp::socket socket1(ios, ip::tcp::v4());
+    ssl::stream<ip::tcp::socket> stream1(ioc, context);
+    ip::tcp::socket socket1(ioc, ip::tcp::v4());
     ssl::stream<ip::tcp::socket&> stream2(socket1, context);
 
     // basic_io_object functions.
 
-    io_service& ios_ref = stream1.get_io_service();
-    (void)ios_ref;
+    ssl::stream<ip::tcp::socket>::executor_type ex = stream1.get_executor();
+    (void)ex;
+
+#if !defined(ASIO_NO_DEPRECATED)
+    io_context& ioc_ref = stream1.get_io_context();
+    (void)ioc_ref;
+
+    io_context& ioc_ref2 = stream1.get_io_service();
+    (void)ioc_ref2;
+#endif // !defined(ASIO_NO_DEPRECATED)
 
     // ssl::stream functions.
 

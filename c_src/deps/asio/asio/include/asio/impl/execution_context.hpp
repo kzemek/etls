@@ -2,7 +2,7 @@
 // impl/execution_context.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -28,7 +28,6 @@ inline Service& use_service(execution_context& e)
 {
   // Check that Service meets the necessary type requirements.
   (void)static_cast<execution_context::service*>(static_cast<Service*>(0));
-  (void)static_cast<const execution_context::id*>(&Service::id);
 
   return e.service_registry_->template use_service<Service>();
 }
@@ -83,7 +82,6 @@ inline void add_service(execution_context& e, Service* svc)
 {
   // Check that Service meets the necessary type requirements.
   (void)static_cast<execution_context::service*>(static_cast<Service*>(0));
-  (void)static_cast<const execution_context::id*>(&Service::id);
 
   e.service_registry_->template add_service<Service>(svc);
 }
@@ -93,7 +91,6 @@ inline bool has_service(execution_context& e)
 {
   // Check that Service meets the necessary type requirements.
   (void)static_cast<execution_context::service*>(static_cast<Service*>(0));
-  (void)static_cast<const execution_context::id*>(&Service::id);
 
   return e.service_registry_->template has_service<Service>();
 }

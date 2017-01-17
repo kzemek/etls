@@ -2,7 +2,7 @@
 // ssl/detail/buffered_handshake_op.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -41,8 +41,27 @@ public:
       asio::error_code& ec,
       std::size_t& bytes_transferred) const
   {
-    typename ConstBufferSequence::const_iterator iter = buffers_.begin();
-    typename ConstBufferSequence::const_iterator end = buffers_.end();
+    return this->process(eng, ec, bytes_transferred,
+        asio::buffer_sequence_begin(buffers_),
+        asio::buffer_sequence_end(buffers_));
+  }
+
+  template <typename Handler>
+  void call_handler(Handler& handler,
+      const asio::error_code& ec,
+      const std::size_t& bytes_transferred) const
+  {
+    handler(ec, bytes_transferred);
+  }
+
+private:
+  template <typename Iterator>
+  engine::want process(engine& eng,
+      asio::error_code& ec,
+      std::size_t& bytes_transferred,
+      Iterator begin, Iterator end) const
+  {
+    Iterator iter = begin;
     std::size_t accumulated_size = 0;
 
     for (;;)
@@ -58,9 +77,9 @@ public:
         const_buffer buffer(*iter);
 
         // Skip over any buffers which have already been consumed by the engine.
-        if (bytes_transferred >= accumulated_size + buffer_size(buffer))
+        if (bytes_transferred >= accumulated_size + buffer.size())
         {
-          accumulated_size += buffer_size(buffer);
+          accumulated_size += buffer.size();
           ++iter;
           continue;
         }
@@ -73,23 +92,14 @@ public:
 
         // Pass the buffer to the engine, and update the bytes transferred to
         // reflect the total number of bytes consumed so far.
-        bytes_transferred += buffer_size(buffer);
+        bytes_transferred += buffer.size();
         buffer = eng.put_input(buffer);
-        bytes_transferred -= buffer_size(buffer);
+        bytes_transferred -= buffer.size();
         break;
       }
     }
   }
 
-  template <typename Handler>
-  void call_handler(Handler& handler,
-      const asio::error_code& ec,
-      const std::size_t& bytes_transferred) const
-  {
-    handler(ec, bytes_transferred);
-  }
-
-private:
   stream_base::handshake_type type_;
   ConstBufferSequence buffers_;
   std::size_t total_buffer_size_;

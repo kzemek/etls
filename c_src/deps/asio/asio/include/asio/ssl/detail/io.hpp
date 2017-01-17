@@ -2,7 +2,7 @@
 // ssl/detail/io.hpp
 // ~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -38,7 +38,7 @@ std::size_t io(Stream& next_layer, stream_core& core,
 
     // If the input buffer is empty then we need to read some more data from
     // the underlying transport.
-    if (asio::buffer_size(core.input_) == 0)
+    if (core.input_.size() == 0)
       core.input_ = asio::buffer(core.input_buffer_,
           next_layer.read_some(core.input_buffer_, ec));
 
@@ -138,7 +138,7 @@ public:
 
           // If the input buffer already has data in it we can pass it to the
           // engine and then retry the operation immediately.
-          if (asio::buffer_size(core_.input_) != 0)
+          if (core_.input_.size() != 0)
           {
             core_.input_ = core_.engine_.put_input(core_.input_);
             continue;
@@ -201,7 +201,7 @@ public:
           // have to keep in mind that this function might be being called from
           // the async operation's initiating function. In this case we're not
           // allowed to call the handler directly. Instead, issue a zero-sized
-          // read so the handler runs "as-if" posted using io_service::post().
+          // read so the handler runs "as-if" posted using io_context::post().
           if (start)
           {
             next_layer_.async_read_some(

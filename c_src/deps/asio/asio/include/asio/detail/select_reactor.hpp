@@ -2,7 +2,7 @@
 // detail/select_reactor.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -70,10 +70,10 @@ public:
   ASIO_DECL ~select_reactor();
 
   // Destroy all user-defined handler objects owned by the service.
-  ASIO_DECL void shutdown_service();
+  ASIO_DECL void shutdown();
 
   // Recreate internal descriptors following a fork.
-  ASIO_DECL void fork_service(
+  ASIO_DECL void notify_fork(
       asio::execution_context::fork_event fork_ev);
 
   // Initialise the task, but only if the reactor is not in its own thread.
@@ -148,7 +148,7 @@ public:
       typename timer_queue<Time_Traits>::per_timer_data& source);
 
   // Run select once until interrupted or events are ready to be dispatched.
-  ASIO_DECL void run(bool block, op_queue<operation>& ops);
+  ASIO_DECL void run(long usec, op_queue<operation>& ops);
 
   // Interrupt the select loop.
   ASIO_DECL void interrupt();
@@ -166,7 +166,7 @@ private:
   ASIO_DECL void do_remove_timer_queue(timer_queue_base& queue);
 
   // Get the timeout value for the select call.
-  ASIO_DECL timeval* get_timeout(timeval& tv);
+  ASIO_DECL timeval* get_timeout(long usec, timeval& tv);
 
   // Cancel all operations associated with the given descriptor. This function
   // does not acquire the select_reactor's mutex.
@@ -175,7 +175,7 @@ private:
 
   // The scheduler implementation used to post completions.
 # if defined(ASIO_HAS_IOCP)
-  typedef class win_iocp_io_service scheduler_type;
+  typedef class win_iocp_io_context scheduler_type;
 # else // defined(ASIO_HAS_IOCP)
   typedef class scheduler scheduler_type;
 # endif // defined(ASIO_HAS_IOCP)

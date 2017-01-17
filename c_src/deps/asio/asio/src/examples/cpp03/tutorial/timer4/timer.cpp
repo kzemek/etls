@@ -2,7 +2,7 @@
 // timer.cpp
 // ~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,7 +16,7 @@
 class printer
 {
 public:
-  printer(asio::io_service& io)
+  printer(asio::io_context& io)
     : timer_(io, boost::posix_time::seconds(1)),
       count_(0)
   {
@@ -47,7 +47,7 @@ private:
 
 int main()
 {
-  asio::io_service io;
+  asio::io_context io;
   printer p(io);
   io.run();
 

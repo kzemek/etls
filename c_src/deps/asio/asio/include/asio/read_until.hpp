@@ -2,7 +2,7 @@
 // read_until.hpp
 // ~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -16,14 +16,17 @@
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
 #include "asio/detail/config.hpp"
-
 #include <cstddef>
 #include <string>
 #include "asio/async_result.hpp"
-#include "asio/basic_streambuf_fwd.hpp"
 #include "asio/detail/regex_fwd.hpp"
+#include "asio/detail/string_view.hpp"
 #include "asio/detail/type_traits.hpp"
 #include "asio/error.hpp"
+
+#if !defined(ASIO_NO_EXTENSIONS)
+# include "asio/basic_streambuf_fwd.hpp"
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 #include "asio/detail/push_options.hpp"
 
@@ -123,9 +126,9 @@ struct is_match_condition
  * This data may be the start of a new line, to be extracted by a subsequent
  * @c read_until operation.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers, char delim);
+    ASIO_MOVE_ARG(DynamicBuffer) buffers, char delim);
 
 /// Read data into a dynamic buffer sequence until it contains a specified
 /// delimiter.
@@ -161,9 +164,9 @@ std::size_t read_until(SyncReadStream& s,
  * typically leave that data in the dynamic buffer sequence for a subsequent
  * read_until operation to examine.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     char delim, asio::error_code& ec);
 
 /// Read data into a dynamic buffer sequence until it contains a specified
@@ -217,11 +220,10 @@ std::size_t read_until(SyncReadStream& s,
  * This data may be the start of a new line, to be extracted by a subsequent
  * @c read_until operation.
  */
-template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename Allocator>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::basic_string<char, std::char_traits<char>, Allocator>& delim);
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim);
 
 /// Read data into a dynamic buffer sequence until it contains a specified
 /// delimiter.
@@ -257,13 +259,13 @@ std::size_t read_until(SyncReadStream& s,
  * typically leave that data in the dynamic buffer sequence for a subsequent
  * read_until operation to examine.
  */
-template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename Allocator>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::basic_string<char, std::char_traits<char>, Allocator>& delim,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim,
     asio::error_code& ec);
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if defined(ASIO_HAS_BOOST_REGEX) \
   || defined(GENERATING_DOCUMENTATION)
 
@@ -321,9 +323,9 @@ std::size_t read_until(SyncReadStream& s,
  * This data may be the start of a new line, to be extracted by a subsequent
  * @c read_until operation.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr);
 
 /// Read data into a dynamic buffer sequence until some part of the data it
@@ -362,9 +364,9 @@ std::size_t read_until(SyncReadStream& s,
  * expression. An application will typically leave that data in the dynamic
  * buffer sequence for a subsequent read_until operation to examine.
  */
-template <typename SyncReadStream, typename DynamicBufferSequence>
+template <typename SyncReadStream, typename DynamicBuffer>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr, asio::error_code& ec);
 
 #endif // defined(ASIO_HAS_BOOST_REGEX)
@@ -398,7 +400,7 @@ std::size_t read_until(SyncReadStream& s,
  * @code pair<iterator, bool> match_condition(iterator begin, iterator end);
  * @endcode
  * where @c iterator represents the type:
- * @code buffers_iterator<typename DynamicBufferSequence::const_buffers_type>
+ * @code buffers_iterator<typename DynamicBuffer::const_buffers_type>
  * @endcode
  * The iterator parameters @c begin and @c end define the range of bytes to be
  * scanned to determine whether there is a match. The @c first member of the
@@ -408,7 +410,7 @@ std::size_t read_until(SyncReadStream& s,
  * @c second member of the return value is true if a match has been found, false
  * otherwise.
  *
- * @returns The number of bytes in the dynamic_buffer_sequence's get area that
+ * @returns The number of bytes in the dynamic_buffer's get area that
  * have been fully consumed by the match function.
  *
  * @throws asio::system_error Thrown on failure.
@@ -473,9 +475,9 @@ std::size_t read_until(SyncReadStream& s,
  * @endcode
  */
 template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename MatchCondition>
+    typename DynamicBuffer, typename MatchCondition>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition,
     typename enable_if<is_match_condition<MatchCondition>::value>::type* = 0);
 
@@ -506,7 +508,7 @@ std::size_t read_until(SyncReadStream& s,
  * @code pair<iterator, bool> match_condition(iterator begin, iterator end);
  * @endcode
  * where @c iterator represents the type:
- * @code buffers_iterator<DynamicBufferSequence::const_buffers_type>
+ * @code buffers_iterator<DynamicBuffer::const_buffers_type>
  * @endcode
  * The iterator parameters @c begin and @c end define the range of bytes to be
  * scanned to determine whether there is a match. The @c first member of the
@@ -533,9 +535,9 @@ std::size_t read_until(SyncReadStream& s,
  * function objects.
  */
 template <typename SyncReadStream,
-    typename DynamicBufferSequence, typename MatchCondition>
+    typename DynamicBuffer, typename MatchCondition>
 std::size_t read_until(SyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition, asio::error_code& ec,
     typename enable_if<is_match_condition<MatchCondition>::value>::type* = 0);
 
@@ -678,7 +680,8 @@ std::size_t read_until(SyncReadStream& s,
  */
 template <typename SyncReadStream, typename Allocator>
 std::size_t read_until(SyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim);
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim);
 
 /// Read data into a streambuf until it contains a specified delimiter.
 /**
@@ -712,8 +715,8 @@ std::size_t read_until(SyncReadStream& s,
  */
 template <typename SyncReadStream, typename Allocator>
 std::size_t read_until(SyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim,
-    asio::error_code& ec);
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim, asio::error_code& ec);
 
 #if defined(ASIO_HAS_BOOST_REGEX) \
   || defined(GENERATING_DOCUMENTATION)
@@ -976,6 +979,7 @@ std::size_t read_until(SyncReadStream& s,
     typename enable_if<is_match_condition<MatchCondition>::value>::type* = 0);
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 /*@}*/
 /**
@@ -1034,7 +1038,7 @@ std::size_t read_until(SyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the dynamic buffer
  * sequence may contain additional data beyond the delimiter. An application
@@ -1070,11 +1074,11 @@ std::size_t read_until(SyncReadStream& s,
  * @c async_read_until operation.
  */
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     char delim, ASIO_MOVE_ARG(ReadHandler) handler);
 
 /// Start an asynchronous operation to read data into a dynamic buffer sequence
@@ -1124,7 +1128,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the dynamic buffer
  * sequence may contain additional data beyond the delimiter. An application
@@ -1160,14 +1164,15 @@ async_read_until(AsyncReadStream& s,
  * @c async_read_until operation.
  */
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
-    const std::string& delim,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
+    ASIO_STRING_VIEW_PARAM delim,
     ASIO_MOVE_ARG(ReadHandler) handler);
 
+#if !defined(ASIO_NO_EXTENSIONS)
 #if defined(ASIO_HAS_BOOST_REGEX) \
   || defined(GENERATING_DOCUMENTATION)
 
@@ -1220,7 +1225,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the dynamic buffer
  * sequence may contain additional data beyond that which matched the regular
@@ -1257,11 +1262,11 @@ async_read_until(AsyncReadStream& s,
  * @c async_read_until operation.
  */
 template <typename AsyncReadStream,
-    typename DynamicBufferSequence, typename ReadHandler>
+    typename DynamicBuffer, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     const boost::regex& expr,
     ASIO_MOVE_ARG(ReadHandler) handler);
 
@@ -1304,7 +1309,7 @@ async_read_until(AsyncReadStream& s,
  * @code pair<iterator, bool> match_condition(iterator begin, iterator end);
  * @endcode
  * where @c iterator represents the type:
- * @code buffers_iterator<typename DynamicBufferSequence::const_buffers_type>
+ * @code buffers_iterator<typename DynamicBuffer::const_buffers_type>
  * @endcode
  * The iterator parameters @c begin and @c end define the range of bytes to be
  * scanned to determine whether there is a match. The @c first member of the
@@ -1329,7 +1334,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the dynamic buffer
  * sequence may contain additional data beyond that which matched the function
@@ -1396,12 +1401,12 @@ async_read_until(AsyncReadStream& s,
  * asio::async_read_until(s, data, match_char('a'), handler);
  * @endcode
  */
-template <typename AsyncReadStream, typename DynamicBufferSequence,
+template <typename AsyncReadStream, typename DynamicBuffer,
     typename MatchCondition, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    ASIO_MOVE_ARG(DynamicBufferSequence) buffers,
+    ASIO_MOVE_ARG(DynamicBuffer) buffers,
     MatchCondition match_condition, ASIO_MOVE_ARG(ReadHandler) handler,
     typename enable_if<is_match_condition<MatchCondition>::value>::type* = 0);
 
@@ -1451,7 +1456,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the streambuf may
  * contain additional data beyond the delimiter. An application will typically
@@ -1536,7 +1541,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the streambuf may
  * contain additional data beyond the delimiter. An application will typically
@@ -1574,7 +1579,8 @@ template <typename AsyncReadStream, typename Allocator, typename ReadHandler>
 ASIO_INITFN_RESULT_TYPE(ReadHandler,
     void (asio::error_code, std::size_t))
 async_read_until(AsyncReadStream& s,
-    asio::basic_streambuf<Allocator>& b, const std::string& delim,
+    asio::basic_streambuf<Allocator>& b,
+    ASIO_STRING_VIEW_PARAM delim,
     ASIO_MOVE_ARG(ReadHandler) handler);
 
 #if defined(ASIO_HAS_BOOST_REGEX) \
@@ -1627,7 +1633,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the streambuf may
  * contain additional data beyond that which matched the regular expression. An
@@ -1729,7 +1735,7 @@ async_read_until(AsyncReadStream& s,
  * Regardless of whether the asynchronous operation completes immediately or
  * not, the handler will not be invoked from within this function. Invocation of
  * the handler will be performed in a manner equivalent to using
- * asio::io_service::post().
+ * asio::io_context::post().
  *
  * @note After a successful async_read_until operation, the streambuf may
  * contain additional data beyond that which matched the function object. An
@@ -1805,6 +1811,7 @@ async_read_until(AsyncReadStream& s,
     typename enable_if<is_match_condition<MatchCondition>::value>::type* = 0);
 
 #endif // !defined(ASIO_NO_IOSTREAM)
+#endif // !defined(ASIO_NO_EXTENSIONS)
 
 /*@}*/
 

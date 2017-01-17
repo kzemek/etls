@@ -2,7 +2,7 @@
 // detail/reactive_descriptor_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -22,7 +22,7 @@
   && !defined(__CYGWIN__)
 
 #include "asio/buffer.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/detail/bind_handler.hpp"
 #include "asio/detail/buffer_sequence_adapter.hpp"
 #include "asio/detail/descriptor_ops.hpp"
@@ -41,7 +41,8 @@
 namespace asio {
 namespace detail {
 
-class reactive_descriptor_service
+class reactive_descriptor_service :
+  public service_base<reactive_descriptor_service>
 {
 public:
   // The native type of a descriptor.
@@ -75,10 +76,10 @@ public:
 
   // Constructor.
   ASIO_DECL reactive_descriptor_service(
-      asio::io_service& io_service);
+      asio::io_context& io_context);
 
   // Destroy all user-defined handler objects owned by the service.
-  ASIO_DECL void shutdown_service();
+  ASIO_DECL void shutdown();
 
   // Construct a new descriptor implementation.
   ASIO_DECL void construct(implementation_type& impl);
@@ -202,7 +203,8 @@ public:
       op::ptr::allocate(handler), 0 };
     p.p = new (p.v) op(handler);
 
-    ASIO_HANDLER_CREATION((p.p, "descriptor", &impl, "async_wait"));
+    ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "descriptor",
+          &impl, impl.descriptor_, "async_wait"));
 
     int op_type;
     switch (w)
@@ -264,7 +266,8 @@ public:
       op::ptr::allocate(handler), 0 };
     p.p = new (p.v) op(impl.descriptor_, buffers, handler);
 
-    ASIO_HANDLER_CREATION((p.p, "descriptor", &impl, "async_write_some"));
+    ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "descriptor",
+          &impl, impl.descriptor_, "async_write_some"));
 
     start_op(impl, reactor::write_op, p.p, is_continuation, true,
         buffer_sequence_adapter<asio::const_buffer,
@@ -286,8 +289,8 @@ public:
       op::ptr::allocate(handler), 0 };
     p.p = new (p.v) op(handler);
 
-    ASIO_HANDLER_CREATION((p.p, "descriptor",
-          &impl, "async_write_some(null_buffers)"));
+    ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "descriptor",
+          &impl, impl.descriptor_, "async_write_some(null_buffers)"));
 
     start_op(impl, reactor::write_op, p.p, is_continuation, false, false);
     p.v = p.p = 0;
@@ -330,7 +333,8 @@ public:
       op::ptr::allocate(handler), 0 };
     p.p = new (p.v) op(impl.descriptor_, buffers, handler);
 
-    ASIO_HANDLER_CREATION((p.p, "descriptor", &impl, "async_read_some"));
+    ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "descriptor",
+          &impl, impl.descriptor_, "async_read_some"));
 
     start_op(impl, reactor::read_op, p.p, is_continuation, true,
         buffer_sequence_adapter<asio::mutable_buffer,
@@ -352,8 +356,8 @@ public:
       op::ptr::allocate(handler), 0 };
     p.p = new (p.v) op(handler);
 
-    ASIO_HANDLER_CREATION((p.p, "descriptor",
-          &impl, "async_read_some(null_buffers)"));
+    ASIO_HANDLER_CREATION((reactor_.context(), *p.p, "descriptor",
+          &impl, impl.descriptor_, "async_read_some(null_buffers)"));
 
     start_op(impl, reactor::read_op, p.p, is_continuation, false, false);
     p.v = p.p = 0;

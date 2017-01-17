@@ -2,7 +2,7 @@
 // impl/executor.hpp
 // ~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -197,9 +197,9 @@ public:
     executor_.defer(ASIO_MOVE_CAST(function)(f), allocator_);
   }
 
-  const std::type_info& target_type() const ASIO_NOEXCEPT
+  type_id_result_type target_type() const ASIO_NOEXCEPT
   {
-    return typeid(Executor);
+    return type_id<Executor>();
   }
 
   void* target() ASIO_NOEXCEPT
@@ -306,9 +306,9 @@ public:
     executor_.defer(ASIO_MOVE_CAST(function)(f), allocator_);
   }
 
-  const std::type_info& target_type() const ASIO_NOEXCEPT
+  type_id_result_type target_type() const ASIO_NOEXCEPT
   {
-    return typeid(system_executor);
+    return type_id<system_executor>();
   }
 
   void* target() ASIO_NOEXCEPT
@@ -344,7 +344,8 @@ executor::executor(allocator_arg_t, const Allocator& a, Executor e)
 }
 
 template <typename Function, typename Allocator>
-void executor::dispatch(ASIO_MOVE_ARG(Function) f, const Allocator& a)
+void executor::dispatch(ASIO_MOVE_ARG(Function) f,
+    const Allocator& a) const
 {
   impl_base* i = get_impl();
   if (i->fast_dispatch_)
@@ -354,13 +355,15 @@ void executor::dispatch(ASIO_MOVE_ARG(Function) f, const Allocator& a)
 }
 
 template <typename Function, typename Allocator>
-void executor::post(ASIO_MOVE_ARG(Function) f, const Allocator& a)
+void executor::post(ASIO_MOVE_ARG(Function) f,
+    const Allocator& a) const
 {
   get_impl()->post(function(ASIO_MOVE_CAST(Function)(f), a));
 }
 
 template <typename Function, typename Allocator>
-void executor::defer(ASIO_MOVE_ARG(Function) f, const Allocator& a)
+void executor::defer(ASIO_MOVE_ARG(Function) f,
+    const Allocator& a) const
 {
   get_impl()->defer(function(ASIO_MOVE_CAST(Function)(f), a));
 }
@@ -368,18 +371,18 @@ void executor::defer(ASIO_MOVE_ARG(Function) f, const Allocator& a)
 template <typename Executor>
 Executor* executor::target() ASIO_NOEXCEPT
 {
-  return impl_ && impl_->target_type() == typeid(Executor)
+  return impl_ && impl_->target_type() == type_id<Executor>()
     ? static_cast<Executor*>(impl_->target()) : 0;
 }
 
 template <typename Executor>
 const Executor* executor::target() const ASIO_NOEXCEPT
 {
-  return impl_ && impl_->target_type() == typeid(Executor)
+  return impl_ && impl_->target_type() == type_id<Executor>()
     ? static_cast<Executor*>(impl_->target()) : 0;
 }
 
-#endif // !defined(ASIO_NO_DEPRECATED)
+#endif // !defined(GENERATING_DOCUMENTATION)
 
 } // namespace asio
 

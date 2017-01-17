@@ -2,7 +2,7 @@
 // detail/null_socket_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,7 +21,7 @@
 
 #include "asio/buffer.hpp"
 #include "asio/error.hpp"
-#include "asio/io_service.hpp"
+#include "asio/io_context.hpp"
 #include "asio/socket_base.hpp"
 #include "asio/detail/bind_handler.hpp"
 
@@ -31,7 +31,8 @@ namespace asio {
 namespace detail {
 
 template <typename Protocol>
-class null_socket_service
+class null_socket_service :
+  public service_base<null_socket_service<Protocol> >
 {
 public:
   // The protocol type.
@@ -49,13 +50,14 @@ public:
   };
 
   // Constructor.
-  null_socket_service(asio::io_service& io_service)
-    : io_service_(io_service)
+  null_socket_service(asio::io_context& io_context)
+    : service_base<null_socket_service<Protocol> >(io_context),
+      io_context_(io_context)
   {
   }
 
   // Destroy all user-defined handler objects owned by the service.
-  void shutdown_service()
+  void shutdown()
   {
   }
 
@@ -267,7 +269,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Start an asynchronous wait until data can be sent without blocking.
@@ -277,7 +279,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Receive some data from the peer. Returns the number of bytes received.
@@ -305,7 +307,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Wait until data can be received without blocking.
@@ -315,7 +317,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Receive some data with associated flags. Returns the number of bytes
@@ -347,7 +349,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Wait until data can be received without blocking.
@@ -358,7 +360,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Send a datagram to the specified endpoint. Returns the number of bytes
@@ -390,7 +392,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Start an asynchronous wait until data can be sent without blocking.
@@ -400,7 +402,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Receive a datagram with the endpoint of the sender. Returns the number of
@@ -433,7 +435,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Wait until data can be received without blocking.
@@ -444,7 +446,7 @@ public:
   {
     asio::error_code ec = asio::error::operation_not_supported;
     const std::size_t bytes_transferred = 0;
-    io_service_.post(detail::bind_handler(handler, ec, bytes_transferred));
+    io_context_.post(detail::bind_handler(handler, ec, bytes_transferred));
   }
 
   // Accept a new connection.
@@ -463,7 +465,7 @@ public:
       endpoint_type*, Handler& handler)
   {
     asio::error_code ec = asio::error::operation_not_supported;
-    io_service_.post(detail::bind_handler(handler, ec));
+    io_context_.post(detail::bind_handler(handler, ec));
   }
 
   // Connect the socket to the specified endpoint.
@@ -480,11 +482,11 @@ public:
       const endpoint_type&, Handler& handler)
   {
     asio::error_code ec = asio::error::operation_not_supported;
-    io_service_.post(detail::bind_handler(handler, ec));
+    io_context_.post(detail::bind_handler(handler, ec));
   }
 
 private:
-  asio::io_service& io_service_;
+  asio::io_context& io_context_;
 };
 
 } // namespace detail

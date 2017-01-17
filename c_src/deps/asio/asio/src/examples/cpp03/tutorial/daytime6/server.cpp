@@ -2,7 +2,7 @@
 // server.cpp
 // ~~~~~~~~~~
 //
-// Copyright (c) 2003-2015 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2016 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -28,8 +28,8 @@ std::string make_daytime_string()
 class udp_server
 {
 public:
-  udp_server(asio::io_service& io_service)
-    : socket_(io_service, udp::endpoint(udp::v4(), 13))
+  udp_server(asio::io_context& io_context)
+    : socket_(io_context, udp::endpoint(udp::v4(), 13))
   {
     start_receive();
   }
@@ -76,9 +76,9 @@ int main()
 {
   try
   {
-    asio::io_service io_service;
-    udp_server server(io_service);
-    io_service.run();
+    asio::io_context io_context;
+    udp_server server(io_context);
+    io_context.run();
   }
   catch (std::exception& e)
   {
