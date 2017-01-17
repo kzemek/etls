@@ -9,7 +9,7 @@
 #ifndef ONE_ETLS_TLS_APPLICATION_HPP
 #define ONE_ETLS_TLS_APPLICATION_HPP
 
-#include <asio/executor_work.hpp>
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_service.hpp>
 #include <asio/ssl/context.hpp>
 
@@ -49,7 +49,8 @@ public:
 private:
     std::size_t m_threadsNum;
     std::vector<std::unique_ptr<asio::io_service>> m_ioServices;
-    std::vector<asio::executor_work<asio::io_service::executor_type>> m_works;
+    std::vector<asio::executor_work_guard<asio::io_service::executor_type>>
+        m_works;
     std::vector<std::thread> m_threads;
     std::atomic<std::size_t> m_nextService{0};
 };

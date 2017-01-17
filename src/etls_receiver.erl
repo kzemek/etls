@@ -417,7 +417,7 @@ handle_info({ok, Data}, receiving, State) ->
     end;
 
 handle_info({error, Closed}, _StateName, State)
-  when Closed =:= 'End of file'; Closed =:= 'UNEXPECTED_RECORD' ->
+  when Closed =:= 'End of file'; Closed =:= 'stream truncated' ->
     reply(State#state.caller, {error, closed}),
     {stop, {shutdown, closed}, State};
 

@@ -23,7 +23,7 @@ TLSApplication::TLSApplication(std::size_t n)
         [] { return std::make_unique<asio::io_service>(1); });
 
     for (auto &ios : m_ioServices) {
-        m_works.emplace_back(asio::make_work(*ios));
+        m_works.emplace_back(asio::make_work_guard(*ios));
         m_threads.emplace_back([&] {
             utils::nameThread("TLSApplication");
             ios->run();
