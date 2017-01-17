@@ -2,7 +2,7 @@
     [
         {pkg_name, etls},
         {description, "An alternative NIF-based implementation of Erlang ssl module."},
-        {vsn, "1.1.2"},
+        {vsn, "1.2.0"},
         {maintainers, ["Konrad Zemek"]},
         {registered, [etls_sup]},
         {applications, [
