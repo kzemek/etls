@@ -32,14 +32,24 @@ endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(C_CXX_FLAGS "-Wall -Wformat=2 -Wsign-compare -Wmissing-field-initializers -Wwrite-strings -ggdb -fvisibility=hidden -fno-common")
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(C_CXX_FLAGS "${C_CXX_FLAGS} -Wnewline-eof")
+  endif()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_CXX_FLAGS} -Wmissing-prototypes -Wold-style-definition -Wstrict-prototypes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ${C_CXX_FLAGS} -Wmissing-declarations")
+  # Clang's integerated assembler does not support debug symbols.
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -Wa,-g")
+  endif()
 elseif(MSVC)
   set(MSVC_DISABLED_WARNINGS_LIST
       "C4100" # 'exarg' : unreferenced formal parameter
       "C4127" # conditional expression is constant
       "C4200" # nonstandard extension used : zero-sized array in
               # struct/union.
+      "C4204" # nonstandard extension used: non-constant aggregate initializer
+      "C4221" # nonstandard extension used : 'identifier' : cannot be
+              # initialized using address of automatic variable
       "C4242" # 'function' : conversion from 'int' to 'uint8_t',
               # possible loss of data
       "C4244" # 'function' : conversion from 'int' to 'uint8_t',
@@ -86,6 +96,7 @@ elseif(MSVC)
                             ${MSVC_LEVEL4_WARNINGS_LIST})
   set(CMAKE_C_FLAGS   "-Wall -WX ${MSVC_DISABLED_WARNINGS_STR} ${MSVC_LEVEL4_WARNINGS_STR}")
   set(CMAKE_CXX_FLAGS "-Wall -WX ${MSVC_DISABLED_WARNINGS_STR} ${MSVC_LEVEL4_WARNINGS_STR}")
+  set(CMAKE_ASM_NASM_FLAGS "-g cv8")
   add_definitions(-D_HAS_EXCEPTIONS=0)
   add_definitions(-DWIN32_LEAN_AND_MEAN)
   add_definitions(-DNOMINMAX)
@@ -113,12 +124,17 @@ if(NOT WIN32)
 endif()
 
 if(FUZZ)
-  if(!CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message("You need to build with Clang for fuzzing to work")
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "You need to build with Clang for fuzzing to work")
   endif()
 
-  add_definitions(-DBORINGSSL_UNSAFE_FUZZER_MODE)
-  set(RUNNER_ARGS "-fuzzer")
+  add_definitions(-DBORINGSSL_UNSAFE_DETERMINISTIC_MODE)
+  set(RUNNER_ARGS "-deterministic")
+
+  if(NOT NO_FUZZER_MODE)
+    add_definitions(-DBORINGSSL_UNSAFE_FUZZER_MODE)
+    set(RUNNER_ARGS ${RUNNER_ARGS} "-fuzzer" "-shim-config" "fuzzer_mode.json")
+  endif()
 
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize-coverage=edge,indirect-calls,8bit-counters")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize-coverage=edge,indirect-calls,8bit-counters")
@@ -165,14 +181,14 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "i386")
   set(ARCH "x86")
 elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "i686")
   set(ARCH "x86")
-elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "arm")
-  set(ARCH "arm")
-elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "armv6")
-  set(ARCH "arm")
-elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "armv7-a")
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm*")
   set(ARCH "arm")
 elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
   set(ARCH "aarch64")
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "mips")
+  # Just to avoid the “unknown processor” error.
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "ppc64le")
+  set(ARCH "ppc64le")
 else()
   message(FATAL_ERROR "Unknown processor:" ${CMAKE_SYSTEM_PROCESSOR})
 endif()
@@ -189,6 +205,35 @@ if (${ARCH} STREQUAL "x86" AND APPLE)
   # but clang defaults to 64-bit builds on OS X unless otherwise told.
   # Set ARCH to x86_64 so clang and CMake agree. This is fixed in CMake 3.
   set(ARCH "x86_64")
+endif()
+
+if (MSAN)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "Cannot enable MSAN unless using Clang")
+  endif()
+
+  if (ASAN)
+    message(FATAL_ERROR "ASAN and MSAN are mutually exclusive")
+  endif()
+
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer")
+  set(OPENSSL_NO_ASM "1")
+endif()
+
+if (ASAN)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "Cannot enable ASAN unless using Clang")
+  endif()
+
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+  set(OPENSSL_NO_ASM "1")
+endif()
+
+if (GCOV)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-arcs -ftest-coverage")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
 endif()
 
 if (OPENSSL_NO_ASM)
@@ -219,9 +264,9 @@ add_custom_target(
     run_tests
     COMMAND ${GO_EXECUTABLE} run util/all_tests.go -build-dir
             ${CMAKE_BINARY_DIR}
-    COMMAND cd ssl/test/runner
-    COMMAND ${GO_EXECUTABLE} test -shim-path $<TARGET_FILE:bssl_shim>
-            ${RUNNER_ARGS}
+    COMMAND cd ssl/test/runner &&
+            ${GO_EXECUTABLE} test -shim-path $<TARGET_FILE:bssl_shim>
+              ${RUNNER_ARGS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     DEPENDS all_tests bssl_shim
     ${MAYBE_USES_TERMINAL})

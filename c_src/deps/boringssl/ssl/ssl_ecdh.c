@@ -23,10 +23,10 @@
 #include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
-#include <openssl/newhope.h>
 #include <openssl/nid.h>
 
 #include "internal.h"
+#include "../crypto/internal.h"
 
 
 /* |EC_POINT| implementation. */
@@ -59,12 +59,9 @@ static int ssl_ec_point_offer(SSL_ECDH_CTX *ctx, CBB *out) {
   }
 
   /* Generate a private key. */
-  const BIGNUM *order = EC_GROUP_get0_order(group);
-  do {
-    if (!BN_rand_range(private_key, order)) {
-      goto err;
-    }
-  } while (BN_is_zero(private_key));
+  if (!BN_rand_range_ex(private_key, 1, EC_GROUP_get0_order(group))) {
+    goto err;
+  }
 
   /* Compute the corresponding public key and serialize it. */
   public_key = EC_POINT_new(group);
@@ -222,153 +219,6 @@ static int ssl_x25519_accept(SSL_ECDH_CTX *ctx, CBB *out_public_key,
 }
 
 
-/* Combined X25119 + New Hope (post-quantum) implementation. */
-
-typedef struct {
-  uint8_t x25519_key[32];
-  NEWHOPE_POLY *newhope_sk;
-} cecpq1_data;
-
-#define CECPQ1_OFFERMSG_LENGTH (32 + NEWHOPE_OFFERMSG_LENGTH)
-#define CECPQ1_ACCEPTMSG_LENGTH (32 + NEWHOPE_ACCEPTMSG_LENGTH)
-#define CECPQ1_SECRET_LENGTH (32 + SHA256_DIGEST_LENGTH)
-
-static void ssl_cecpq1_cleanup(SSL_ECDH_CTX *ctx) {
-  if (ctx->data == NULL) {
-    return;
-  }
-  cecpq1_data *data = ctx->data;
-  NEWHOPE_POLY_free(data->newhope_sk);
-  OPENSSL_cleanse(data, sizeof(cecpq1_data));
-  OPENSSL_free(data);
-}
-
-static int ssl_cecpq1_offer(SSL_ECDH_CTX *ctx, CBB *out) {
-  assert(ctx->data == NULL);
-  cecpq1_data *data = OPENSSL_malloc(sizeof(cecpq1_data));
-  if (data == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-  ctx->data = data;
-  data->newhope_sk = NEWHOPE_POLY_new();
-  if (data->newhope_sk == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-
-  uint8_t x25519_public_key[32];
-  X25519_keypair(x25519_public_key, data->x25519_key);
-
-  uint8_t newhope_offermsg[NEWHOPE_OFFERMSG_LENGTH];
-  NEWHOPE_offer(newhope_offermsg, data->newhope_sk);
-
-  if (!CBB_add_bytes(out, x25519_public_key, sizeof(x25519_public_key)) ||
-      !CBB_add_bytes(out, newhope_offermsg, sizeof(newhope_offermsg))) {
-    return 0;
-  }
-  return 1;
-}
-
-static int ssl_cecpq1_accept(SSL_ECDH_CTX *ctx, CBB *cbb, uint8_t **out_secret,
-                             size_t *out_secret_len, uint8_t *out_alert,
-                             const uint8_t *peer_key, size_t peer_key_len) {
-  if (peer_key_len != CECPQ1_OFFERMSG_LENGTH) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    return 0;
-  }
-
-  *out_alert = SSL_AD_INTERNAL_ERROR;
-
-  assert(ctx->data == NULL);
-  cecpq1_data *data = OPENSSL_malloc(sizeof(cecpq1_data));
-  if (data == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-  data->newhope_sk = NULL;
-  ctx->data = data;
-
-  uint8_t *secret = OPENSSL_malloc(CECPQ1_SECRET_LENGTH);
-  if (secret == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-
-  /* Generate message to server, and secret key, at once. */
-
-  uint8_t x25519_public_key[32];
-  X25519_keypair(x25519_public_key, data->x25519_key);
-  if (!X25519(secret, data->x25519_key, peer_key)) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_ECPOINT);
-    goto err;
-  }
-
-  uint8_t newhope_acceptmsg[NEWHOPE_ACCEPTMSG_LENGTH];
-  if (!NEWHOPE_accept(secret + 32, newhope_acceptmsg, peer_key + 32,
-                      NEWHOPE_OFFERMSG_LENGTH)) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    goto err;
-  }
-
-  if (!CBB_add_bytes(cbb, x25519_public_key, sizeof(x25519_public_key)) ||
-      !CBB_add_bytes(cbb, newhope_acceptmsg, sizeof(newhope_acceptmsg))) {
-    goto err;
-  }
-
-  *out_secret = secret;
-  *out_secret_len = CECPQ1_SECRET_LENGTH;
-  return 1;
-
- err:
-  OPENSSL_cleanse(secret, CECPQ1_SECRET_LENGTH);
-  OPENSSL_free(secret);
-  return 0;
-}
-
-static int ssl_cecpq1_finish(SSL_ECDH_CTX *ctx, uint8_t **out_secret,
-                             size_t *out_secret_len, uint8_t *out_alert,
-                             const uint8_t *peer_key, size_t peer_key_len) {
-  if (peer_key_len != CECPQ1_ACCEPTMSG_LENGTH) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    return 0;
-  }
-
-  *out_alert = SSL_AD_INTERNAL_ERROR;
-
-  assert(ctx->data != NULL);
-  cecpq1_data *data = ctx->data;
-
-  uint8_t *secret = OPENSSL_malloc(CECPQ1_SECRET_LENGTH);
-  if (secret == NULL) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
-    return 0;
-  }
-
-  if (!X25519(secret, data->x25519_key, peer_key)) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    OPENSSL_PUT_ERROR(SSL, SSL_R_BAD_ECPOINT);
-    goto err;
-  }
-
-  if (!NEWHOPE_finish(secret + 32, data->newhope_sk, peer_key + 32,
-                      NEWHOPE_ACCEPTMSG_LENGTH)) {
-    *out_alert = SSL_AD_DECODE_ERROR;
-    goto err;
-  }
-
-  *out_secret = secret;
-  *out_secret_len = CECPQ1_SECRET_LENGTH;
-  return 1;
-
- err:
-  OPENSSL_cleanse(secret, CECPQ1_SECRET_LENGTH);
-  OPENSSL_free(secret);
-  return 0;
-}
-
-
 /* Legacy DHE-based implementation. */
 
 static void ssl_dhe_cleanup(SSL_ECDH_CTX *ctx) {
@@ -448,16 +298,6 @@ static const SSL_ECDH_METHOD kDHEMethod = {
     CBB_add_u16_length_prefixed,
 };
 
-static const SSL_ECDH_METHOD kCECPQ1Method = {
-    NID_undef, 0, "",
-    ssl_cecpq1_cleanup,
-    ssl_cecpq1_offer,
-    ssl_cecpq1_accept,
-    ssl_cecpq1_finish,
-    CBS_get_u16_length_prefixed,
-    CBB_add_u16_length_prefixed,
-};
-
 static const SSL_ECDH_METHOD kMethods[] = {
     {
         NID_X9_62_prime256v1,
@@ -506,8 +346,7 @@ static const SSL_ECDH_METHOD kMethods[] = {
 };
 
 static const SSL_ECDH_METHOD *method_from_group_id(uint16_t group_id) {
-  size_t i;
-  for (i = 0; i < sizeof(kMethods) / sizeof(kMethods[0]); i++) {
+  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMethods); i++) {
     if (kMethods[i].group_id == group_id) {
       return &kMethods[i];
     }
@@ -516,9 +355,18 @@ static const SSL_ECDH_METHOD *method_from_group_id(uint16_t group_id) {
 }
 
 static const SSL_ECDH_METHOD *method_from_nid(int nid) {
-  size_t i;
-  for (i = 0; i < sizeof(kMethods) / sizeof(kMethods[0]); i++) {
+  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMethods); i++) {
     if (kMethods[i].nid == nid) {
+      return &kMethods[i];
+    }
+  }
+  return NULL;
+}
+
+static const SSL_ECDH_METHOD *method_from_name(const char *name, size_t len) {
+  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMethods); i++) {
+    if (len == strlen(kMethods[i].name) &&
+        !strncmp(kMethods[i].name, name, len)) {
       return &kMethods[i];
     }
   }
@@ -535,6 +383,15 @@ const char* SSL_get_curve_name(uint16_t group_id) {
 
 int ssl_nid_to_group_id(uint16_t *out_group_id, int nid) {
   const SSL_ECDH_METHOD *method = method_from_nid(nid);
+  if (method == NULL) {
+    return 0;
+  }
+  *out_group_id = method->group_id;
+  return 1;
+}
+
+int ssl_name_to_group_id(uint16_t *out_group_id, const char *name, size_t len) {
+  const SSL_ECDH_METHOD *method = method_from_name(name, len);
   if (method == NULL) {
     return 0;
   }
@@ -559,12 +416,6 @@ void SSL_ECDH_CTX_init_for_dhe(SSL_ECDH_CTX *ctx, DH *params) {
 
   ctx->method = &kDHEMethod;
   ctx->data = params;
-}
-
-void SSL_ECDH_CTX_init_for_cecpq1(SSL_ECDH_CTX *ctx) {
-  SSL_ECDH_CTX_cleanup(ctx);
-
-  ctx->method = &kCECPQ1Method;
 }
 
 void SSL_ECDH_CTX_cleanup(SSL_ECDH_CTX *ctx) {

@@ -56,40 +56,53 @@
 
 #include <openssl/ssl.h>
 
+#include <assert.h>
 #include <string.h>
 
 #include <openssl/buf.h>
 
+#include "../crypto/internal.h"
 #include "internal.h"
 
 
-static uint16_t ssl3_version_from_wire(uint16_t wire_version) {
-  return wire_version;
-}
-
-static uint16_t ssl3_version_to_wire(uint16_t version) { return version; }
-
-static int ssl3_begin_handshake(SSL *ssl) {
-  if (ssl->init_buf != NULL) {
-    return 1;
+static int ssl3_version_from_wire(uint16_t *out_version,
+                                  uint16_t wire_version) {
+  switch (wire_version) {
+    case SSL3_VERSION:
+    case TLS1_VERSION:
+    case TLS1_1_VERSION:
+    case TLS1_2_VERSION:
+      *out_version = wire_version;
+      return 1;
+    case TLS1_3_DRAFT_VERSION:
+      *out_version = TLS1_3_VERSION;
+      return 1;
   }
 
-  BUF_MEM *buf = BUF_MEM_new();
-  if (buf == NULL || !BUF_MEM_reserve(buf, SSL3_RT_MAX_PLAIN_LENGTH)) {
-    BUF_MEM_free(buf);
-    return 0;
+  return 0;
+}
+
+static uint16_t ssl3_version_to_wire(uint16_t version) {
+  switch (version) {
+    case SSL3_VERSION:
+    case TLS1_VERSION:
+    case TLS1_1_VERSION:
+    case TLS1_2_VERSION:
+      return version;
+    case TLS1_3_VERSION:
+      return TLS1_3_DRAFT_VERSION;
   }
 
-  ssl->init_buf = buf;
-  ssl->init_num = 0;
-  return 1;
+  /* It is an error to use this function with an invalid version. */
+  assert(0);
+  return 0;
 }
 
-static void ssl3_finish_handshake(SSL *ssl) {
-  BUF_MEM_free(ssl->init_buf);
-  ssl->init_buf = NULL;
-  ssl->init_num = 0;
-}
+static int ssl3_supports_cipher(const SSL_CIPHER *cipher) { return 1; }
+
+static void ssl3_expect_flight(SSL *ssl) {}
+
+static void ssl3_received_flight(SSL *ssl) {}
 
 static int ssl3_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
   if (ssl->s3->rrec.length != 0) {
@@ -100,7 +113,7 @@ static int ssl3_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
     return 0;
   }
 
-  memset(ssl->s3->read_sequence, 0, sizeof(ssl->s3->read_sequence));
+  OPENSSL_memset(ssl->s3->read_sequence, 0, sizeof(ssl->s3->read_sequence));
 
   SSL_AEAD_CTX_free(ssl->s3->aead_read_ctx);
   ssl->s3->aead_read_ctx = aead_ctx;
@@ -108,7 +121,7 @@ static int ssl3_set_read_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
 }
 
 static int ssl3_set_write_state(SSL *ssl, SSL_AEAD_CTX *aead_ctx) {
-  memset(ssl->s3->write_sequence, 0, sizeof(ssl->s3->write_sequence));
+  OPENSSL_memset(ssl->s3->write_sequence, 0, sizeof(ssl->s3->write_sequence));
 
   SSL_AEAD_CTX_free(ssl->s3->aead_write_ctx);
   ssl->s3->aead_write_ctx = aead_ctx;
@@ -123,10 +136,9 @@ static const SSL_PROTOCOL_METHOD kTLSProtocolMethod = {
     ssl3_version_to_wire,
     ssl3_new,
     ssl3_free,
-    ssl3_begin_handshake,
-    ssl3_finish_handshake,
     ssl3_get_message,
-    ssl3_hash_current_message,
+    ssl3_get_current_message,
+    ssl3_release_current_message,
     ssl3_read_app_data,
     ssl3_read_change_cipher_spec,
     ssl3_read_close_notify,
@@ -135,6 +147,7 @@ static const SSL_PROTOCOL_METHOD kTLSProtocolMethod = {
     ssl3_supports_cipher,
     ssl3_init_message,
     ssl3_finish_message,
+    ssl3_queue_message,
     ssl3_write_message,
     ssl3_send_change_cipher_spec,
     ssl3_expect_flight,
@@ -229,4 +242,12 @@ const SSL_METHOD *SSLv23_server_method(void) {
 
 const SSL_METHOD *SSLv23_client_method(void) {
   return SSLv23_method();
+}
+
+const SSL_METHOD *TLS_server_method(void) {
+  return TLS_method();
+}
+
+const SSL_METHOD *TLS_client_method(void) {
+  return TLS_method();
 }

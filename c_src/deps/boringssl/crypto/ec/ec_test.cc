@@ -17,13 +17,13 @@
 
 #include <vector>
 
+#include <openssl/bn.h>
 #include <openssl/bytestring.h>
 #include <openssl/crypto.h>
 #include <openssl/ec_key.h>
 #include <openssl/err.h>
 #include <openssl/mem.h>
-
-#include "../test/scoped_types.h"
+#include <openssl/nid.h>
 
 
 // kECKeyWithoutPublic is an ECPrivateKey with the optional publicKey field
@@ -96,10 +96,11 @@ static const uint8_t kECKeyWithZeros[] = {
 
 // DecodeECPrivateKey decodes |in| as an ECPrivateKey structure and returns the
 // result or nullptr on error.
-static ScopedEC_KEY DecodeECPrivateKey(const uint8_t *in, size_t in_len) {
+static bssl::UniquePtr<EC_KEY> DecodeECPrivateKey(const uint8_t *in,
+                                                  size_t in_len) {
   CBS cbs;
   CBS_init(&cbs, in, in_len);
-  ScopedEC_KEY ret(EC_KEY_parse_private_key(&cbs, NULL));
+  bssl::UniquePtr<EC_KEY> ret(EC_KEY_parse_private_key(&cbs, NULL));
   if (!ret || CBS_len(&cbs) != 0) {
     return nullptr;
   }
@@ -109,7 +110,7 @@ static ScopedEC_KEY DecodeECPrivateKey(const uint8_t *in, size_t in_len) {
 // EncodeECPrivateKey encodes |key| as an ECPrivateKey structure into |*out|. It
 // returns true on success or false on error.
 static bool EncodeECPrivateKey(std::vector<uint8_t> *out, const EC_KEY *key) {
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   uint8_t *der;
   size_t der_len;
   if (!CBB_init(cbb.get(), 0) ||
@@ -123,7 +124,7 @@ static bool EncodeECPrivateKey(std::vector<uint8_t> *out, const EC_KEY *key) {
 }
 
 static bool Testd2i_ECPrivateKey() {
-  ScopedEC_KEY key = DecodeECPrivateKey(kECKeyWithoutPublic,
+  bssl::UniquePtr<EC_KEY> key = DecodeECPrivateKey(kECKeyWithoutPublic,
                                         sizeof(kECKeyWithoutPublic));
   if (!key) {
     fprintf(stderr, "Failed to parse private key.\n");
@@ -151,8 +152,8 @@ static bool Testd2i_ECPrivateKey() {
     return false;
   }
 
-  ScopedBIGNUM x(BN_new());
-  ScopedBIGNUM y(BN_new());
+  bssl::UniquePtr<BIGNUM> x(BN_new());
+  bssl::UniquePtr<BIGNUM> y(BN_new());
   if (!x || !y) {
     return false;
   }
@@ -161,8 +162,8 @@ static bool Testd2i_ECPrivateKey() {
     fprintf(stderr, "Failed to get public key in affine coordinates.\n");
     return false;
   }
-  ScopedOpenSSLString x_hex(BN_bn2hex(x.get()));
-  ScopedOpenSSLString y_hex(BN_bn2hex(y.get()));
+  bssl::UniquePtr<char> x_hex(BN_bn2hex(x.get()));
+  bssl::UniquePtr<char> y_hex(BN_bn2hex(y.get()));
   if (!x_hex || !y_hex) {
     return false;
   }
@@ -181,7 +182,7 @@ static bool Testd2i_ECPrivateKey() {
 
 static bool TestZeroPadding() {
   // Check that the correct encoding round-trips.
-  ScopedEC_KEY key = DecodeECPrivateKey(kECKeyWithZeros,
+  bssl::UniquePtr<EC_KEY> key = DecodeECPrivateKey(kECKeyWithZeros,
                                         sizeof(kECKeyWithZeros));
   std::vector<uint8_t> out;
   if (!key || !EncodeECPrivateKey(&out, key.get())) {
@@ -213,7 +214,7 @@ static bool TestZeroPadding() {
 
 static bool TestSpecifiedCurve() {
   // Test keys with specified curves may be decoded.
-  ScopedEC_KEY key =
+  bssl::UniquePtr<EC_KEY> key =
       DecodeECPrivateKey(kECKeySpecifiedCurve, sizeof(kECKeySpecifiedCurve));
   if (!key) {
     ERR_print_errors_fp(stderr);
@@ -244,7 +245,7 @@ static bool TestSpecifiedCurve() {
 }
 
 static bool TestSetAffine(const int nid) {
-  ScopedEC_KEY key(EC_KEY_new_by_curve_name(nid));
+  bssl::UniquePtr<EC_KEY> key(EC_KEY_new_by_curve_name(nid));
   if (!key) {
     return false;
   }
@@ -264,8 +265,8 @@ static bool TestSetAffine(const int nid) {
     return false;
   }
 
-  ScopedBIGNUM x(BN_new());
-  ScopedBIGNUM y(BN_new());
+  bssl::UniquePtr<BIGNUM> x(BN_new());
+  bssl::UniquePtr<BIGNUM> y(BN_new());
   if (!EC_POINT_get_affine_coordinates_GFp(group,
                                            EC_KEY_get0_public_key(key.get()),
                                            x.get(), y.get(), nullptr)) {
@@ -275,7 +276,7 @@ static bool TestSetAffine(const int nid) {
     return false;
   }
 
-  ScopedEC_POINT point(EC_POINT_new(group));
+  auto point = bssl::UniquePtr<EC_POINT>(EC_POINT_new(group));
   if (!point) {
     return false;
   }
@@ -293,7 +294,7 @@ static bool TestSetAffine(const int nid) {
     return false;
   }
 
-  ScopedEC_POINT invalid_point(EC_POINT_new(group));
+  bssl::UniquePtr<EC_POINT> invalid_point(EC_POINT_new(group));
   if (!invalid_point) {
     return false;
   }
@@ -313,7 +314,7 @@ static bool TestSetAffine(const int nid) {
 
 static bool TestArbitraryCurve() {
   // Make a P-256 key and extract the affine coordinates.
-  ScopedEC_KEY key(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
+  bssl::UniquePtr<EC_KEY> key(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
   if (!key || !EC_KEY_generate_key(key.get())) {
     return false;
   }
@@ -349,25 +350,25 @@ static bool TestArbitraryCurve() {
       0xff, 0xff, 0xff, 0xff, 0xff, 0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17,
       0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51,
   };
-  ScopedBN_CTX ctx(BN_CTX_new());
-  ScopedBIGNUM p(BN_bin2bn(kP, sizeof(kP), nullptr));
-  ScopedBIGNUM a(BN_bin2bn(kA, sizeof(kA), nullptr));
-  ScopedBIGNUM b(BN_bin2bn(kB, sizeof(kB), nullptr));
-  ScopedBIGNUM gx(BN_bin2bn(kX, sizeof(kX), nullptr));
-  ScopedBIGNUM gy(BN_bin2bn(kY, sizeof(kY), nullptr));
-  ScopedBIGNUM order(BN_bin2bn(kOrder, sizeof(kOrder), nullptr));
-  ScopedBIGNUM cofactor(BN_new());
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
+  bssl::UniquePtr<BIGNUM> p(BN_bin2bn(kP, sizeof(kP), nullptr));
+  bssl::UniquePtr<BIGNUM> a(BN_bin2bn(kA, sizeof(kA), nullptr));
+  bssl::UniquePtr<BIGNUM> b(BN_bin2bn(kB, sizeof(kB), nullptr));
+  bssl::UniquePtr<BIGNUM> gx(BN_bin2bn(kX, sizeof(kX), nullptr));
+  bssl::UniquePtr<BIGNUM> gy(BN_bin2bn(kY, sizeof(kY), nullptr));
+  bssl::UniquePtr<BIGNUM> order(BN_bin2bn(kOrder, sizeof(kOrder), nullptr));
+  bssl::UniquePtr<BIGNUM> cofactor(BN_new());
   if (!ctx || !p || !a || !b || !gx || !gy || !order || !cofactor ||
       !BN_set_word(cofactor.get(), 1)) {
     return false;
   }
 
-  ScopedEC_GROUP group(
+  bssl::UniquePtr<EC_GROUP> group(
       EC_GROUP_new_curve_GFp(p.get(), a.get(), b.get(), ctx.get()));
   if (!group) {
     return false;
   }
-  ScopedEC_POINT generator(EC_POINT_new(group.get()));
+  bssl::UniquePtr<EC_POINT> generator(EC_POINT_new(group.get()));
   if (!generator ||
       !EC_POINT_set_affine_coordinates_GFp(group.get(), generator.get(),
                                            gx.get(), gy.get(), ctx.get()) ||
@@ -382,9 +383,9 @@ static bool TestArbitraryCurve() {
   }
 
   // Copy |key| to |key2| using |group|.
-  ScopedEC_KEY key2(EC_KEY_new());
-  ScopedEC_POINT point(EC_POINT_new(group.get()));
-  ScopedBIGNUM x(BN_new()), y(BN_new());
+  bssl::UniquePtr<EC_KEY> key2(EC_KEY_new());
+  bssl::UniquePtr<EC_POINT> point(EC_POINT_new(group.get()));
+  bssl::UniquePtr<BIGNUM> x(BN_new()), y(BN_new());
   if (!key2 || !point || !x || !y ||
       !EC_KEY_set_group(key2.get(), group.get()) ||
       !EC_KEY_set_private_key(key2.get(), EC_KEY_get0_private_key(key.get())) ||
@@ -408,7 +409,7 @@ static bool TestArbitraryCurve() {
 }
 
 static bool TestAddingEqualPoints(int nid) {
-  ScopedEC_KEY key(EC_KEY_new_by_curve_name(nid));
+  bssl::UniquePtr<EC_KEY> key(EC_KEY_new_by_curve_name(nid));
   if (!key) {
     return false;
   }
@@ -421,10 +422,10 @@ static bool TestAddingEqualPoints(int nid) {
     return false;
   }
 
-  ScopedEC_POINT p1(EC_POINT_new(group));
-  ScopedEC_POINT p2(EC_POINT_new(group));
-  ScopedEC_POINT double_p1(EC_POINT_new(group));
-  ScopedEC_POINT p1_plus_p2(EC_POINT_new(group));
+  bssl::UniquePtr<EC_POINT> p1(EC_POINT_new(group));
+  bssl::UniquePtr<EC_POINT> p2(EC_POINT_new(group));
+  bssl::UniquePtr<EC_POINT> double_p1(EC_POINT_new(group));
+  bssl::UniquePtr<EC_POINT> p1_plus_p2(EC_POINT_new(group));
   if (!p1 || !p2 || !double_p1 || !p1_plus_p2) {
     return false;
   }
@@ -436,7 +437,7 @@ static bool TestAddingEqualPoints(int nid) {
     return false;
   }
 
-  ScopedBN_CTX ctx(BN_CTX_new());
+  bssl::UniquePtr<BN_CTX> ctx(BN_CTX_new());
   if (!ctx) {
     return false;
   }
@@ -450,6 +451,51 @@ static bool TestAddingEqualPoints(int nid) {
 
   if (EC_POINT_cmp(group, double_p1.get(), p1_plus_p2.get(), ctx.get()) != 0) {
     fprintf(stderr, "A+A != 2A for nid %d", nid);
+    return false;
+  }
+
+  return true;
+}
+
+static bool TestMulZero(int nid) {
+  bssl::UniquePtr<EC_GROUP> group(EC_GROUP_new_by_curve_name(nid));
+  if (!group) {
+    return false;
+  }
+
+  bssl::UniquePtr<EC_POINT> point(EC_POINT_new(group.get()));
+  bssl::UniquePtr<BIGNUM> zero(BN_new());
+  if (!point || !zero) {
+    return false;
+  }
+
+  BN_zero(zero.get());
+  if (!EC_POINT_mul(group.get(), point.get(), zero.get(), nullptr, nullptr,
+                    nullptr)) {
+    return false;
+  }
+
+  if (!EC_POINT_is_at_infinity(group.get(), point.get())) {
+    fprintf(stderr, "g * 0 did not return point at infinity.\n");
+    return false;
+  }
+
+  // Test that zero times an arbitrary point is also infinity. The generator is
+  // used as the arbitrary point.
+  bssl::UniquePtr<EC_POINT> generator(EC_POINT_new(group.get()));
+  bssl::UniquePtr<BIGNUM> one(BN_new());
+  if (!generator ||
+      !one ||
+      !BN_one(one.get()) ||
+      !EC_POINT_mul(group.get(), generator.get(), one.get(), nullptr, nullptr,
+                    nullptr) ||
+      !EC_POINT_mul(group.get(), point.get(), nullptr, generator.get(),
+                    zero.get(), nullptr)) {
+    return false;
+  }
+
+  if (!EC_POINT_is_at_infinity(group.get(), point.get())) {
+    fprintf(stderr, "p * 0 did not return point at infinity.\n");
     return false;
   }
 
@@ -471,7 +517,7 @@ static bool ForEachCurve(bool (*test_func)(int nid)) {
   return true;
 }
 
-int main(void) {
+int main() {
   CRYPTO_library_init();
 
   if (!Testd2i_ECPrivateKey() ||
@@ -479,6 +525,7 @@ int main(void) {
       !TestSpecifiedCurve() ||
       !ForEachCurve(TestSetAffine) ||
       !ForEachCurve(TestAddingEqualPoints) ||
+      !ForEachCurve(TestMulZero) ||
       !TestArbitraryCurve()) {
     fprintf(stderr, "failed\n");
     return 1;

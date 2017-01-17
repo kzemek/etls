@@ -65,6 +65,7 @@
 #include <openssl/mem.h>
 #include <openssl/type_check.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "internal.h"
 
@@ -133,13 +134,14 @@ static int ssl_set_pkey(CERT *c, EVP_PKEY *pkey) {
     return 0;
   }
 
-  if (c->x509 != NULL) {
+  X509 *x509_leaf = c->x509_leaf;
+  if (x509_leaf != NULL) {
     /* Sanity-check that the private key and the certificate match, unless the
      * key is opaque (in case of, say, a smartcard). */
     if (!EVP_PKEY_is_opaque(pkey) &&
-        !X509_check_private_key(c->x509, pkey)) {
-      X509_free(c->x509);
-      c->x509 = NULL;
+        !X509_check_private_key(x509_leaf, pkey)) {
+      X509_free(c->x509_leaf);
+      c->x509_leaf = NULL;
       return 0;
     }
   }
@@ -217,6 +219,19 @@ static int ssl_set_cert(CERT *c, X509 *x) {
     return 0;
   }
 
+  /* An ECC certificate may be usable for ECDH or ECDSA. We only support ECDSA
+   * certificates, so sanity-check the key usage extension. */
+  if (pkey->type == EVP_PKEY_EC) {
+    /* This call populates extension flags (ex_flags). */
+    X509_check_purpose(x, -1, 0);
+    if ((x->ex_flags & EXFLAG_KUSAGE) &&
+        !(x->ex_kusage & X509v3_KU_DIGITAL_SIGNATURE)) {
+      OPENSSL_PUT_ERROR(SSL, SSL_R_UNKNOWN_CERTIFICATE_TYPE);
+      EVP_PKEY_free(pkey);
+      return 0;
+    }
+  }
+
   if (c->privatekey != NULL) {
     /* Sanity-check that the private key and the certificate match, unless the
      * key is opaque (in case of, say, a smartcard). */
@@ -234,8 +249,9 @@ static int ssl_set_cert(CERT *c, X509 *x) {
 
   EVP_PKEY_free(pkey);
 
-  X509_free(c->x509);
-  c->x509 = X509_up_ref(x);
+  X509_free(c->x509_leaf);
+  X509_up_ref(x);
+  c->x509_leaf = x;
 
   return 1;
 }
@@ -335,17 +351,30 @@ void SSL_CTX_set_private_key_method(SSL_CTX *ctx,
   ctx->cert->key_method = key_method;
 }
 
-int SSL_set_signing_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
-                                    size_t prefs_len) {
-  ssl->cert->sigalgs_len = 0;
-  ssl->cert->sigalgs = BUF_memdup(prefs, prefs_len * sizeof(prefs[0]));
-  if (ssl->cert->sigalgs == NULL) {
+static int set_signing_algorithm_prefs(CERT *cert, const uint16_t *prefs,
+                                       size_t num_prefs) {
+  OPENSSL_free(cert->sigalgs);
+
+  cert->num_sigalgs = 0;
+  cert->sigalgs = BUF_memdup(prefs, num_prefs * sizeof(prefs[0]));
+  if (cert->sigalgs == NULL) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
     return 0;
   }
-  ssl->cert->sigalgs_len = prefs_len;
+  cert->num_sigalgs = num_prefs;
 
   return 1;
+}
+
+int SSL_CTX_set_signing_algorithm_prefs(SSL_CTX *ctx, const uint16_t *prefs,
+                                        size_t num_prefs) {
+  return set_signing_algorithm_prefs(ctx->cert, prefs, num_prefs);
+}
+
+
+int SSL_set_signing_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
+                                    size_t num_prefs) {
+  return set_signing_algorithm_prefs(ssl->cert, prefs, num_prefs);
 }
 
 OPENSSL_COMPILE_ASSERT(sizeof(int) >= 2 * sizeof(uint16_t),
@@ -355,7 +384,7 @@ int SSL_set_private_key_digest_prefs(SSL *ssl, const int *digest_nids,
                                      size_t num_digests) {
   OPENSSL_free(ssl->cert->sigalgs);
 
-  ssl->cert->sigalgs_len = 0;
+  ssl->cert->num_sigalgs = 0;
   ssl->cert->sigalgs = OPENSSL_malloc(sizeof(uint16_t) * 2 * num_digests);
   if (ssl->cert->sigalgs == NULL) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_MALLOC_FAILURE);
@@ -368,27 +397,27 @@ int SSL_set_private_key_digest_prefs(SSL *ssl, const int *digest_nids,
   for (size_t i = 0; i < num_digests; i++) {
     switch (digest_nids[i]) {
       case NID_sha1:
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len] = SSL_SIGN_RSA_PKCS1_SHA1;
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len + 1] = SSL_SIGN_ECDSA_SHA1;
-        ssl->cert->sigalgs_len += 2;
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs] = SSL_SIGN_RSA_PKCS1_SHA1;
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs + 1] = SSL_SIGN_ECDSA_SHA1;
+        ssl->cert->num_sigalgs += 2;
         break;
       case NID_sha256:
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len] = SSL_SIGN_RSA_PKCS1_SHA256;
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len + 1] =
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs] = SSL_SIGN_RSA_PKCS1_SHA256;
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs + 1] =
             SSL_SIGN_ECDSA_SECP256R1_SHA256;
-        ssl->cert->sigalgs_len += 2;
+        ssl->cert->num_sigalgs += 2;
         break;
       case NID_sha384:
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len] = SSL_SIGN_RSA_PKCS1_SHA384;
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len + 1] =
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs] = SSL_SIGN_RSA_PKCS1_SHA384;
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs + 1] =
             SSL_SIGN_ECDSA_SECP384R1_SHA384;
-        ssl->cert->sigalgs_len += 2;
+        ssl->cert->num_sigalgs += 2;
         break;
       case NID_sha512:
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len] = SSL_SIGN_RSA_PKCS1_SHA512;
-        ssl->cert->sigalgs[ssl->cert->sigalgs_len + 1] =
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs] = SSL_SIGN_RSA_PKCS1_SHA512;
+        ssl->cert->sigalgs[ssl->cert->num_sigalgs + 1] =
             SSL_SIGN_ECDSA_SECP521R1_SHA512;
-        ssl->cert->sigalgs_len += 2;
+        ssl->cert->num_sigalgs += 2;
         break;
     }
   }
@@ -652,7 +681,8 @@ enum ssl_private_key_result_t ssl_private_key_sign(
   }
 
   const EVP_MD *md;
-  if (is_rsa_pkcs1(&md, signature_algorithm)) {
+  if (is_rsa_pkcs1(&md, signature_algorithm) &&
+      ssl3_protocol_version(ssl) < TLS1_3_VERSION) {
     return ssl_sign_rsa_pkcs1(ssl, out, out_len, max_out, md, in, in_len)
                ? ssl_private_key_success
                : ssl_private_key_failure;
@@ -665,8 +695,7 @@ enum ssl_private_key_result_t ssl_private_key_sign(
                : ssl_private_key_failure;
   }
 
-  if (is_rsa_pss(&md, signature_algorithm) &&
-      ssl3_protocol_version(ssl) >= TLS1_3_VERSION) {
+  if (is_rsa_pss(&md, signature_algorithm)) {
     return ssl_sign_rsa_pss(ssl, out, out_len, max_out, md, in, in_len)
                ? ssl_private_key_success
                : ssl_private_key_failure;
@@ -680,7 +709,8 @@ int ssl_public_key_verify(SSL *ssl, const uint8_t *signature,
                           size_t signature_len, uint16_t signature_algorithm,
                           EVP_PKEY *pkey, const uint8_t *in, size_t in_len) {
   const EVP_MD *md;
-  if (is_rsa_pkcs1(&md, signature_algorithm)) {
+  if (is_rsa_pkcs1(&md, signature_algorithm) &&
+      ssl3_protocol_version(ssl) < TLS1_3_VERSION) {
     return ssl_verify_rsa_pkcs1(ssl, signature, signature_len, md, pkey, in,
                                 in_len);
   }
@@ -691,8 +721,7 @@ int ssl_public_key_verify(SSL *ssl, const uint8_t *signature,
                             in_len);
   }
 
-  if (is_rsa_pss(&md, signature_algorithm) &&
-      ssl3_protocol_version(ssl) >= TLS1_3_VERSION) {
+  if (is_rsa_pss(&md, signature_algorithm)) {
     return ssl_verify_rsa_pss(ssl, signature, signature_len, md, pkey, in,
                               in_len);
   }
@@ -734,7 +763,8 @@ enum ssl_private_key_result_t ssl_private_key_complete(SSL *ssl, uint8_t *out,
 int ssl_private_key_supports_signature_algorithm(SSL *ssl,
                                                  uint16_t signature_algorithm) {
   const EVP_MD *md;
-  if (is_rsa_pkcs1(&md, signature_algorithm)) {
+  if (is_rsa_pkcs1(&md, signature_algorithm) &&
+      ssl3_protocol_version(ssl) < TLS1_3_VERSION) {
     return ssl_private_key_type(ssl) == NID_rsaEncryption;
   }
 
@@ -750,13 +780,11 @@ int ssl_private_key_supports_signature_algorithm(SSL *ssl,
       return 1;
     }
 
-    /* TODO(davidben): Remove support for EVP_PKEY_EC keys. */
-    return curve != NID_undef && (type == EVP_PKEY_EC || type == curve);
+    return curve != NID_undef && type == curve;
   }
 
   if (is_rsa_pss(&md, signature_algorithm)) {
-    if (ssl3_protocol_version(ssl) < TLS1_3_VERSION ||
-        ssl_private_key_type(ssl) != NID_rsaEncryption) {
+    if (ssl_private_key_type(ssl) != NID_rsaEncryption) {
       return 0;
     }
 

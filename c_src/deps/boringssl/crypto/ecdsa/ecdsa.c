@@ -60,7 +60,9 @@
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
+#include "../bn/internal.h"
 #include "../ec/internal.h"
+#include "../internal.h"
 
 
 int ECDSA_sign(int type, const uint8_t *digest, size_t digest_len, uint8_t *sig,
@@ -88,7 +90,7 @@ int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
   /* Defend against potential laxness in the DER parser. */
   size_t der_len;
   if (!ECDSA_SIG_to_bytes(&der, &der_len, s) ||
-      der_len != sig_len || memcmp(sig, der, sig_len) != 0) {
+      der_len != sig_len || OPENSSL_memcmp(sig, der, sig_len) != 0) {
     /* This should never happen. crypto/bytestring is strictly DER. */
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_INTERNAL_ERROR);
     goto err;
@@ -176,7 +178,8 @@ int ECDSA_do_verify(const uint8_t *digest, size_t digest_len,
     goto err;
   }
   /* calculate tmp1 = inv(S) mod order */
-  if (!BN_mod_inverse(u2, sig->s, order, ctx)) {
+  int no_inverse;
+  if (!BN_mod_inverse_odd(u2, &no_inverse, sig->s, order, ctx)) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_BN_LIB);
     goto err;
   }
@@ -263,20 +266,18 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
     /* If possible, we'll include the private key and message digest in the k
      * generation. The |digest| argument is only empty if |ECDSA_sign_setup| is
      * being used. */
-    do {
-      int ok;
-
-      if (digest_len > 0) {
-        ok = BN_generate_dsa_nonce(k, order, EC_KEY_get0_private_key(eckey),
-                                   digest, digest_len, ctx);
-      } else {
-        ok = BN_rand_range(k, order);
-      }
-      if (!ok) {
-        OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_RANDOM_NUMBER_GENERATION_FAILED);
-        goto err;
-      }
-    } while (BN_is_zero(k));
+    if (digest_len > 0) {
+      do {
+        if (!BN_generate_dsa_nonce(k, order, EC_KEY_get0_private_key(eckey),
+                                   digest, digest_len, ctx)) {
+          OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_RANDOM_NUMBER_GENERATION_FAILED);
+          goto err;
+        }
+      } while (BN_is_zero(k));
+    } else if (!BN_rand_range_ex(k, 1, order)) {
+      OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_RANDOM_NUMBER_GENERATION_FAILED);
+      goto err;
+    }
 
     /* We do not want timing information to leak the length of k,
      * so we compute G*k using an equivalent scalar of fixed
@@ -309,12 +310,9 @@ static int ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
   } while (BN_is_zero(r));
 
   /* Compute the inverse of k. The order is a prime, so use Fermat's Little
-   * Theorem. */
-  if (!BN_set_word(tmp, 2) ||
-      !BN_sub(tmp, order, tmp) ||
-      /* Note |ec_group_get_mont_data| may return NULL but |BN_mod_exp_mont|
-       * allows it to be. */
-      !BN_mod_exp_mont(k, k, tmp, order, ctx, ec_group_get_mont_data(group))) {
+   * Theorem. Note |ec_group_get_mont_data| may return NULL but
+   * |bn_mod_inverse_prime| allows this. */
+  if (!bn_mod_inverse_prime(k, k, order, ctx, ec_group_get_mont_data(group))) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_BN_LIB);
     goto err;
   }

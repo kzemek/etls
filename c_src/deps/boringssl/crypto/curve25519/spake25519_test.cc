@@ -19,18 +19,19 @@
 #include <string.h>
 
 #include <openssl/curve25519.h>
-#include "../test/scoped_types.h"
+
+#include "../internal.h"
 
 
 struct SPAKE2Run {
   bool Run() {
-    ScopedSPAKE2_CTX alice(SPAKE2_CTX_new(
+    bssl::UniquePtr<SPAKE2_CTX> alice(SPAKE2_CTX_new(
         spake2_role_alice,
         reinterpret_cast<const uint8_t *>(alice_names.first.data()),
         alice_names.first.size(),
         reinterpret_cast<const uint8_t *>(alice_names.second.data()),
         alice_names.second.size()));
-    ScopedSPAKE2_CTX bob(SPAKE2_CTX_new(
+    bssl::UniquePtr<SPAKE2_CTX> bob(SPAKE2_CTX_new(
         spake2_role_bob,
         reinterpret_cast<const uint8_t *>(bob_names.first.data()),
         bob_names.first.size(),
@@ -72,7 +73,7 @@ struct SPAKE2Run {
     }
 
     key_matches_ = (alice_key_len == bob_key_len &&
-                    memcmp(alice_key, bob_key, alice_key_len) == 0);
+                    OPENSSL_memcmp(alice_key, bob_key, alice_key_len) == 0);
 
     return true;
   }

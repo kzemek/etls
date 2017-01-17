@@ -112,6 +112,8 @@
 #include <openssl/ex_data.h>
 #include <openssl/thread.h>
 
+#include <string.h>
+
 #if defined(_MSC_VER)
 #if !defined(__cplusplus) || _MSC_VER < 1900
 #define alignas(x) __declspec(align(x))
@@ -121,13 +123,18 @@
 #include <stdalign.h>
 #endif
 
-#if defined(OPENSSL_NO_THREADS)
-#elif defined(OPENSSL_WINDOWS)
+#if !defined(OPENSSL_NO_THREADS) && \
+    (!defined(OPENSSL_WINDOWS) || defined(__MINGW32__))
+#include <pthread.h>
+#define OPENSSL_PTHREADS
+#endif
+
+#if !defined(OPENSSL_NO_THREADS) && !defined(OPENSSL_PTHREADS) && \
+    defined(OPENSSL_WINDOWS)
+#define OPENSSL_WINDOWS_THREADS
 OPENSSL_MSVC_PRAGMA(warning(push, 3))
 #include <windows.h>
 OPENSSL_MSVC_PRAGMA(warning(pop))
-#else
-#include <pthread.h>
 #endif
 
 #if defined(__cplusplus)
@@ -136,8 +143,8 @@ extern "C" {
 
 
 #if defined(OPENSSL_X86) || defined(OPENSSL_X86_64) || defined(OPENSSL_ARM) || \
-    defined(OPENSSL_AARCH64)
-/* OPENSSL_cpuid_setup initializes OPENSSL_ia32cap_P. */
+    defined(OPENSSL_AARCH64) || defined(OPENSSL_PPC64LE)
+/* OPENSSL_cpuid_setup initializes the platform-specific feature cache. */
 void OPENSSL_cpuid_setup(void);
 #endif
 
@@ -147,6 +154,7 @@ typedef __int128_t int128_t;
 typedef __uint128_t uint128_t;
 #endif
 
+#define OPENSSL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
 /* buffers_alias returns one if |a| and |b| alias and zero otherwise. */
 static inline int buffers_alias(const uint8_t *a, size_t a_len,
@@ -303,25 +311,17 @@ static inline int constant_time_select_int(unsigned int mask, int a, int b) {
 
 /* Thread-safe initialisation. */
 
-/* Android's mingw-w64 has some prototypes for INIT_ONCE, but is missing
- * others. Work around the missing ones.
- *
- * TODO(davidben): Remove this once Android's mingw-w64 is upgraded. See
- * b/26523949. */
-#if defined(__MINGW32__) && !defined(INIT_ONCE_STATIC_INIT)
-typedef RTL_RUN_ONCE INIT_ONCE;
-#define INIT_ONCE_STATIC_INIT RTL_RUN_ONCE_INIT
-#endif
-
 #if defined(OPENSSL_NO_THREADS)
 typedef uint32_t CRYPTO_once_t;
 #define CRYPTO_ONCE_INIT 0
-#elif defined(OPENSSL_WINDOWS)
+#elif defined(OPENSSL_WINDOWS_THREADS)
 typedef INIT_ONCE CRYPTO_once_t;
 #define CRYPTO_ONCE_INIT INIT_ONCE_STATIC_INIT
-#else
+#elif defined(OPENSSL_PTHREADS)
 typedef pthread_once_t CRYPTO_once_t;
 #define CRYPTO_ONCE_INIT PTHREAD_ONCE_INIT
+#else
+#error "Unknown threading library"
 #endif
 
 /* CRYPTO_once calls |init| exactly once per process. This is thread-safe: if
@@ -372,16 +372,18 @@ struct CRYPTO_STATIC_MUTEX {
   char padding;  /* Empty structs have different sizes in C and C++. */
 };
 #define CRYPTO_STATIC_MUTEX_INIT { 0 }
-#elif defined(OPENSSL_WINDOWS)
+#elif defined(OPENSSL_WINDOWS_THREADS)
 struct CRYPTO_STATIC_MUTEX {
   SRWLOCK lock;
 };
 #define CRYPTO_STATIC_MUTEX_INIT { SRWLOCK_INIT }
-#else
+#elif defined(OPENSSL_PTHREADS)
 struct CRYPTO_STATIC_MUTEX {
   pthread_rwlock_t lock;
 };
 #define CRYPTO_STATIC_MUTEX_INIT { PTHREAD_RWLOCK_INITIALIZER }
+#else
+#error "Unknown threading library"
 #endif
 
 /* CRYPTO_MUTEX_init initialises |lock|. If |lock| is a static variable, use a
@@ -518,6 +520,85 @@ OPENSSL_EXPORT int CRYPTO_dup_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
  * object of the given class. */
 OPENSSL_EXPORT void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class,
                                         void *obj, CRYPTO_EX_DATA *ad);
+
+
+/* Language bug workarounds.
+ *
+ * Most C standard library functions are undefined if passed NULL, even when the
+ * corresponding length is zero. This gives them (and, in turn, all functions
+ * which call them) surprising behavior on empty arrays. Some compilers will
+ * miscompile code due to this rule. See also
+ * https://www.imperialviolet.org/2016/06/26/nonnull.html
+ *
+ * These wrapper functions behave the same as the corresponding C standard
+ * functions, but behave as expected when passed NULL if the length is zero.
+ *
+ * Note |OPENSSL_memcmp| is a different function from |CRYPTO_memcmp|. */
+
+/* C++ defines |memchr| as a const-correct overload. */
+#if defined(__cplusplus)
+extern "C++" {
+
+static inline const void *OPENSSL_memchr(const void *s, int c, size_t n) {
+  if (n == 0) {
+    return NULL;
+  }
+
+  return memchr(s, c, n);
+}
+
+static inline void *OPENSSL_memchr(void *s, int c, size_t n) {
+  if (n == 0) {
+    return NULL;
+  }
+
+  return memchr(s, c, n);
+}
+
+}  /* extern "C++" */
+#else  /* __cplusplus */
+
+static inline void *OPENSSL_memchr(const void *s, int c, size_t n) {
+  if (n == 0) {
+    return NULL;
+  }
+
+  return memchr(s, c, n);
+}
+
+#endif  /* __cplusplus */
+
+static inline int OPENSSL_memcmp(const void *s1, const void *s2, size_t n) {
+  if (n == 0) {
+    return 0;
+  }
+
+  return memcmp(s1, s2, n);
+}
+
+static inline void *OPENSSL_memcpy(void *dst, const void *src, size_t n) {
+  if (n == 0) {
+    return dst;
+  }
+
+  return memcpy(dst, src, n);
+}
+
+static inline void *OPENSSL_memmove(void *dst, const void *src, size_t n) {
+  if (n == 0) {
+    return dst;
+  }
+
+  return memmove(dst, src, n);
+}
+
+static inline void *OPENSSL_memset(void *dst, int c, size_t n) {
+  if (n == 0) {
+    return dst;
+  }
+
+  return memset(dst, c, n);
+}
 
 
 #if defined(__cplusplus)

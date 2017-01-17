@@ -91,7 +91,7 @@ EC_KEY *EC_KEY_new_method(const ENGINE *engine) {
     return NULL;
   }
 
-  memset(ret, 0, sizeof(EC_KEY));
+  OPENSSL_memset(ret, 0, sizeof(EC_KEY));
 
   if (engine) {
     ret->ecdsa_meth = ENGINE_get_ECDSA_method(engine);
@@ -425,11 +425,9 @@ int EC_KEY_generate_key(EC_KEY *eckey) {
   }
 
   const BIGNUM *order = EC_GROUP_get0_order(eckey->group);
-  do {
-    if (!BN_rand_range(priv_key, order)) {
-      goto err;
-    }
-  } while (BN_is_zero(priv_key));
+  if (!BN_rand_range_ex(priv_key, 1, order)) {
+    goto err;
+  }
 
   if (eckey->pub_key == NULL) {
     pub_key = EC_POINT_new(eckey->group);

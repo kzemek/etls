@@ -72,9 +72,9 @@ OPENSSL_MSVC_PRAGMA(warning(pop))
 #include <openssl/crypto.h>
 #include <openssl/digest.h>
 #include <openssl/err.h>
+#include <openssl/rsa.h>
 
 #include "../test/file_test.h"
-#include "../test/scoped_types.h"
 
 
 // evp_test dispatches between multiple test types. PrivateKey tests take a key
@@ -114,7 +114,24 @@ static int GetKeyType(FileTest *t, const std::string &name) {
   return EVP_PKEY_NONE;
 }
 
-using KeyMap = std::map<std::string, ScopedEVP_PKEY>;
+static int GetRSAPadding(FileTest *t, int *out, const std::string &name) {
+  if (name == "PKCS1") {
+    *out = RSA_PKCS1_PADDING;
+    return true;
+  }
+  if (name == "PSS") {
+    *out = RSA_PKCS1_PSS_PADDING;
+    return true;
+  }
+  if (name == "OAEP") {
+    *out = RSA_PKCS1_OAEP_PADDING;
+    return true;
+  }
+  t->PrintLine("Unknown RSA padding mode: '%s'", name.c_str());
+  return false;
+}
+
+using KeyMap = std::map<std::string, bssl::UniquePtr<EVP_PKEY>>;
 
 static bool ImportKey(FileTest *t, KeyMap *key_map,
                       EVP_PKEY *(*parse_func)(CBS *cbs),
@@ -126,7 +143,7 @@ static bool ImportKey(FileTest *t, KeyMap *key_map,
 
   CBS cbs;
   CBS_init(&cbs, input.data(), input.size());
-  ScopedEVP_PKEY pkey(parse_func(&cbs));
+  bssl::UniquePtr<EVP_PKEY> pkey(parse_func(&cbs));
   if (!pkey) {
     return false;
   }
@@ -141,7 +158,7 @@ static bool ImportKey(FileTest *t, KeyMap *key_map,
   }
 
   // The key must re-encode correctly.
-  ScopedCBB cbb;
+  bssl::ScopedCBB cbb;
   uint8_t *der;
   size_t der_len;
   if (!CBB_init(cbb.get(), 0) ||
@@ -149,7 +166,7 @@ static bool ImportKey(FileTest *t, KeyMap *key_map,
       !CBB_finish(cbb.get(), &der, &der_len)) {
     return false;
   }
-  ScopedOpenSSLBytes free_der(der);
+  bssl::UniquePtr<uint8_t> free_der(der);
 
   std::vector<uint8_t> output = input;
   if (t->HasAttribute("Output") &&
@@ -214,7 +231,7 @@ static bool TestEVP(FileTest *t, void *arg) {
   }
 
   // Set up the EVP_PKEY_CTX.
-  ScopedEVP_PKEY_CTX ctx(EVP_PKEY_CTX_new(key, nullptr));
+  bssl::UniquePtr<EVP_PKEY_CTX> ctx(EVP_PKEY_CTX_new(key, nullptr));
   if (!ctx || !key_op_init(ctx.get())) {
     return false;
   }
@@ -222,6 +239,25 @@ static bool TestEVP(FileTest *t, void *arg) {
     const EVP_MD *digest = GetDigest(t, t->GetAttributeOrDie("Digest"));
     if (digest == nullptr ||
         !EVP_PKEY_CTX_set_signature_md(ctx.get(), digest)) {
+      return false;
+    }
+  }
+  if (t->HasAttribute("RSAPadding")) {
+    int padding;
+    if (!GetRSAPadding(t, &padding, t->GetAttributeOrDie("RSAPadding")) ||
+        !EVP_PKEY_CTX_set_rsa_padding(ctx.get(), padding)) {
+      return false;
+    }
+  }
+  if (t->HasAttribute("PSSSaltLength") &&
+      !EVP_PKEY_CTX_set_rsa_pss_saltlen(
+          ctx.get(), atoi(t->GetAttributeOrDie("PSSSaltLength").c_str()))) {
+    return false;
+  }
+  if (t->HasAttribute("MGF1Digest")) {
+    const EVP_MD *digest = GetDigest(t, t->GetAttributeOrDie("MGF1Digest"));
+    if (digest == nullptr ||
+        !EVP_PKEY_CTX_set_rsa_mgf1_md(ctx.get(), digest)) {
       return false;
     }
   }
@@ -253,7 +289,7 @@ static bool TestEVP(FileTest *t, void *arg) {
   return true;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
   CRYPTO_library_init();
   if (argc != 2) {
     fprintf(stderr, "%s <test file.txt>\n", argv[0]);

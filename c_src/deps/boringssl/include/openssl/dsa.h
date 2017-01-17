@@ -71,7 +71,7 @@ extern "C" {
 #endif
 
 
-/* DSA contains functions for signing and verifing with the Digital Signature
+/* DSA contains functions for signing and verifying with the Digital Signature
  * Algorithm. */
 
 
@@ -84,8 +84,22 @@ OPENSSL_EXPORT DSA *DSA_new(void);
  * reference count drops to zero. */
 OPENSSL_EXPORT void DSA_free(DSA *dsa);
 
-/* DSA_up_ref increments the reference count of |dsa|. */
+/* DSA_up_ref increments the reference count of |dsa| and returns one. */
 OPENSSL_EXPORT int DSA_up_ref(DSA *dsa);
+
+
+/* Properties. */
+
+/* DSA_get0_key sets |*out_pub_key| and |*out_priv_key|, if non-NULL, to |dsa|'s
+ * public and private key, respectively. If |dsa| is a public key, the private
+ * key will be set to NULL. */
+OPENSSL_EXPORT void DSA_get0_key(const DSA *dsa, const BIGNUM **out_pub_key,
+                                 const BIGNUM **out_priv_key);
+
+/* DSA_get0_pqg sets |*out_p|, |*out_q|, and |*out_g|, if non-NULL, to |dsa|'s
+ * p, q, and g parameters, respectively. */
+OPENSSL_EXPORT void DSA_get0_pqg(const DSA *dsa, const BIGNUM **out_p,
+                                 const BIGNUM **out_q, const BIGNUM **out_g);
 
 
 /* Parameter generation. */
@@ -129,9 +143,9 @@ OPENSSL_EXPORT int DSA_generate_key(DSA *dsa);
 /* Signatures. */
 
 /* DSA_SIG_st (aka |DSA_SIG|) contains a DSA signature as a pair of integers. */
-typedef struct DSA_SIG_st {
+struct DSA_SIG_st {
   BIGNUM *r, *s;
-} DSA_SIG;
+};
 
 /* DSA_SIG_new returns a freshly allocated, DIG_SIG structure or NULL on error.
  * Both |r| and |s| in the signature will be NULL. */
@@ -337,10 +351,10 @@ OPENSSL_EXPORT int i2d_DSAPublicKey(const DSA *in, uint8_t **outp);
  * Use |DSA_parse_private_key| instead. */
 OPENSSL_EXPORT DSA *d2i_DSAPrivateKey(DSA **out, const uint8_t **inp, long len);
 
-/* i2d_DSAPrivateKey marshals a private key from |in| to an ASN.1, DER structure.
- * If |outp| is not NULL then the result is written to |*outp| and |*outp| is
- * advanced just past the output. It returns the number of bytes in the result,
- * whether written or not, or a negative value on error.
+/* i2d_DSAPrivateKey marshals a private key from |in| to an ASN.1, DER
+ * structure. If |outp| is not NULL then the result is written to |*outp| and
+ * |*outp| is advanced just past the output. It returns the number of bytes in
+ * the result, whether written or not, or a negative value on error.
  *
  * Use |DSA_marshal_private_key| instead. */
 OPENSSL_EXPORT int i2d_DSAPrivateKey(const DSA *in, uint8_t **outp);
@@ -397,6 +411,18 @@ struct dsa_st {
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(DSA, DSA_free)
+BORINGSSL_MAKE_DELETER(DSA_SIG, DSA_SIG_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define DSA_R_BAD_Q_VALUE 100

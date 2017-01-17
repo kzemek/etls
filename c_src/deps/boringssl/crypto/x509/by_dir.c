@@ -362,7 +362,7 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, X509_NAME *name,
                                  postfix, k);
                 }
 #ifndef OPENSSL_NO_POSIX_IO
-# ifdef _WIN32
+# if defined(_WIN32) && !defined(stat)
 #  define stat _stat
 # endif
                 {
@@ -433,7 +433,7 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, X509_NAME *name,
             if (tmp != NULL) {
                 ok = 1;
                 ret->type = tmp->type;
-                memcpy(&ret->data, &tmp->data, sizeof(ret->data));
+                OPENSSL_memcpy(&ret->data, &tmp->data, sizeof(ret->data));
                 /*
                  * If we were going to up the reference count, we would need
                  * to do it on a perl 'type' basis

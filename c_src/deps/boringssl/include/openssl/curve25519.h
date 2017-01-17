@@ -33,6 +33,10 @@ extern "C" {
  * sometimes referred to as “curve25519”, but “X25519” is a more precise name.
  * See http://cr.yp.to/ecdh.html and https://tools.ietf.org/html/rfc7748. */
 
+#define X25519_PRIVATE_KEY_LEN 32
+#define X25519_PUBLIC_VALUE_LEN 32
+#define X25519_SHARED_KEY_LEN 32
+
 /* X25519_keypair sets |out_public_value| and |out_private_key| to a freshly
  * generated, public–private key pair. */
 OPENSSL_EXPORT void X25519_keypair(uint8_t out_public_value[32],
@@ -81,6 +85,15 @@ OPENSSL_EXPORT int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
 OPENSSL_EXPORT int ED25519_verify(const uint8_t *message, size_t message_len,
                                   const uint8_t signature[64],
                                   const uint8_t public_key[32]);
+
+/* ED25519_keypair_from_seed calculates a public and private key from an
+ * Ed25519 “seed”. Seed values are not exposed by this API (although they
+ * happen to be the first 32 bytes of a private key) so this function is for
+ * interoperating with systems that may store just a seed instead of a full
+ * private key. */
+OPENSSL_EXPORT void ED25519_keypair_from_seed(uint8_t out_public_key[32],
+                                              uint8_t out_private_key[64],
+                                              const uint8_t seed[32]);
 
 
 /* SPAKE2.
@@ -167,6 +180,17 @@ OPENSSL_EXPORT int SPAKE2_process_msg(SPAKE2_CTX *ctx, uint8_t *out_key,
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(SPAKE2_CTX, SPAKE2_CTX_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #endif  /* OPENSSL_HEADER_CURVE25519_H */

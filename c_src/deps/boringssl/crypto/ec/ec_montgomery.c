@@ -71,6 +71,7 @@
 #include <openssl/err.h>
 #include <openssl/mem.h>
 
+#include "../bn/internal.h"
 #include "internal.h"
 
 
@@ -239,14 +240,18 @@ static int ec_GFp_mont_point_get_affine_coordinates(const EC_GROUP *group,
     /* The straightforward way to calculate the inverse of a Montgomery-encoded
      * value where the result is Montgomery-encoded is:
      *
-     *    |BN_from_montgomery| + |BN_mod_inverse| + |BN_to_montgomery|.
+     *    |BN_from_montgomery| + invert + |BN_to_montgomery|.
      *
      * This is equivalent, but more efficient, because |BN_from_montgomery|
      * is more efficient (at least in theory) than |BN_to_montgomery|, since it
-     * doesn't have to do the multiplication before the reduction. */
+     * doesn't have to do the multiplication before the reduction.
+     *
+     * Use Fermat's Little Theorem instead of |BN_mod_inverse_odd| since this
+     * inversion may be done as the final step of private key operations.
+     * Unfortunately, this is suboptimal for ECDSA verification. */
     if (!BN_from_montgomery(Z_1, &point->Z, group->mont, ctx) ||
         !BN_from_montgomery(Z_1, Z_1, group->mont, ctx) ||
-        !BN_mod_inverse(Z_1, Z_1, &group->field, ctx)) {
+        !bn_mod_inverse_prime(Z_1, Z_1, &group->field, ctx, group->mont)) {
       goto err;
     }
 
@@ -284,8 +289,7 @@ err:
   return ret;
 }
 
-const EC_METHOD *EC_GFp_mont_method(void) {
-  static const EC_METHOD ret = {
+const EC_METHOD EC_GFp_mont_method = {
     ec_GFp_mont_group_init,
     ec_GFp_mont_group_finish,
     ec_GFp_mont_group_copy,
@@ -296,7 +300,4 @@ const EC_METHOD *EC_GFp_mont_method(void) {
     ec_GFp_mont_field_sqr,
     ec_GFp_mont_field_encode,
     ec_GFp_mont_field_decode,
-  };
-
-  return &ret;
-}
+};

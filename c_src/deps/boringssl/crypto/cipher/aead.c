@@ -32,7 +32,7 @@ size_t EVP_AEAD_max_overhead(const EVP_AEAD *aead) { return aead->overhead; }
 size_t EVP_AEAD_max_tag_len(const EVP_AEAD *aead) { return aead->max_tag_len; }
 
 void EVP_AEAD_CTX_zero(EVP_AEAD_CTX *ctx) {
-  memset(ctx, 0, sizeof(EVP_AEAD_CTX));
+  OPENSSL_memset(ctx, 0, sizeof(EVP_AEAD_CTX));
 }
 
 int EVP_AEAD_CTX_init(EVP_AEAD_CTX *ctx, const EVP_AEAD *aead,
@@ -116,7 +116,7 @@ int EVP_AEAD_CTX_seal(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
 error:
   /* In the event of an error, clear the output buffer so that a caller
    * that doesn't check the return value doesn't send raw data. */
-  memset(out, 0, max_out_len);
+  OPENSSL_memset(out, 0, max_out_len);
   *out_len = 0;
   return 0;
 }
@@ -139,18 +139,12 @@ error:
   /* In the event of an error, clear the output buffer so that a caller
    * that doesn't check the return value doesn't try and process bad
    * data. */
-  memset(out, 0, max_out_len);
+  OPENSSL_memset(out, 0, max_out_len);
   *out_len = 0;
   return 0;
 }
 
-int EVP_AEAD_CTX_get_rc4_state(const EVP_AEAD_CTX *ctx, const RC4_KEY **out_key) {
-  if (ctx->aead->get_rc4_state == NULL) {
-    return 0;
-  }
-
-  return ctx->aead->get_rc4_state(ctx, out_key);
-}
+const EVP_AEAD *EVP_AEAD_CTX_aead(const EVP_AEAD_CTX *ctx) { return ctx->aead; }
 
 int EVP_AEAD_CTX_get_iv(const EVP_AEAD_CTX *ctx, const uint8_t **out_iv,
                         size_t *out_len) {

@@ -66,7 +66,7 @@ extern "C" {
  * Algorithm over elliptic curves. */
 
 
-/* Signing and verifing. */
+/* Signing and verifying. */
 
 /* ECDSA_sign signs |digest_len| bytes from |digest| with |key| and writes the
  * resulting signature to |sig|, which must have |ECDSA_size(key)| bytes of
@@ -80,7 +80,7 @@ OPENSSL_EXPORT int ECDSA_sign(int type, const uint8_t *digest,
 /* ECDSA_verify verifies that |sig_len| bytes from |sig| constitute a valid
  * signature by |key| of |digest|. (The |type| argument should be zero.) It
  * returns one on success or zero if the signature is invalid or an error
- * occured. */
+ * occurred. */
 OPENSSL_EXPORT int ECDSA_verify(int type, const uint8_t *digest,
                                 size_t digest_len, const uint8_t *sig,
                                 size_t sig_len, EC_KEY *key);
@@ -194,6 +194,17 @@ OPENSSL_EXPORT int i2d_ECDSA_SIG(const ECDSA_SIG *sig, uint8_t **outp);
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(ECDSA_SIG, ECDSA_SIG_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define ECDSA_R_BAD_SIGNATURE 100
