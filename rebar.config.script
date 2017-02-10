@@ -1,0 +1,15 @@
+{_, PreHooks} = lists:keyfind(pre_hooks, 1, CONFIG),
+NewPreHooks = lists:map(
+    fun({Hook, Command}) ->
+        case string:str(Command, "cmake ../c_src") of
+            0 -> {Hook, Command};
+            _ ->
+                case os:cmd("ninja --help") of
+                    "usage: ninja" ++ _ -> {Hook, Command ++ " -GNinja"};
+                    _ -> {Hook, Command}
+                end
+        end
+    end,
+    PreHooks),
+
+lists:keystore(pre_hooks, 1, CONFIG, {pre_hooks, NewPreHooks}).

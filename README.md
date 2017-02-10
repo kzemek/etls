@@ -37,14 +37,18 @@ Dependencies:
 * `cmake` >= 3.1.0
 * `erlang` >= 17.0
 * `g++` >= 4.9.0 (or `clang`)
-* `git`
 * `perl`
-* `golang`
 * `make`
-* `ninja-build`
 * `openssl`
 
-To build the project, simply run `make` from its directory.
+Most of those dependencies are probably already present on your system. For
+example to install *all* needed dependencies on Ubuntu 16.10, you only need to
+run `apt-get install build-essentials cmake erlang`. Builds can be also sped up
+by installing `ninja-build` - `etls` will make use of it automatically while
+building.
+
+Once you have all of the dependencies, simply run `make` in `etls` directory to
+build it.
 
 # User Guide
 
