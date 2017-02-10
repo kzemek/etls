@@ -14,7 +14,7 @@ The main (and very important) benefit of using this project instead of Erlang's
 built-in [`ssl`] is hardware acceleration. `etls` module achieves an order of
 magnitude higher bandwidth when encoding/decoding data.
 
-Currently only `TLSv1.2` is supported, and default [BoringSSL] cipher is used.
+Currently only `TLSv1.2` is supported.
 
 ## Performance
 
