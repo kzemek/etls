@@ -27,7 +27,7 @@ else()
 endif()
 
 if (NOT GO_EXECUTABLE)
-  message(FATAL_ERROR "Could not find Go")
+  #message(FATAL_ERROR "Could not find Go")
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
